@@ -138,6 +138,16 @@ function getReportSidebar() {
         name: 'trial-balance',
         route: '/report/TrialBalance',
       },
+      {
+        label: t`Loan Register`,
+        name: 'loan-register',
+        route: '/report/LoanRegister',
+      },
+      {
+        label: t`Loan Ledger`,
+        name: 'loan-ledger',
+        route: '/report/LoanLedger',
+      },
     ],
   };
 }
@@ -164,6 +174,7 @@ function getCompleteSidebar(): SidebarConfig {
       name: 'sales',
       icon: 'sales',
       route: '/list/SalesInvoice',
+      hidden: () => true,
       items: [
         {
           label: t`Sales Quotes`,
@@ -233,6 +244,7 @@ function getCompleteSidebar(): SidebarConfig {
       name: 'purchases',
       icon: 'purchase',
       route: '/list/PurchaseInvoice',
+      hidden: () => true,
       items: [
         {
           label: t`Purchase Invoices`,
@@ -276,11 +288,18 @@ function getCompleteSidebar(): SidebarConfig {
           schemaName: 'JournalEntry',
         },
         {
+          label: t`Loan Profiles`,
+          name: 'loan-profile',
+          route: '/list/LoanProfile',
+          schemaName: 'LoanProfile',
+        },
+        {
           label: t`Party`,
           name: 'party',
           route: '/list/Party',
           schemaName: 'Party',
           filters: { role: ['in', ['Customer', 'Supplier', 'Both']] },
+          hidden: () => true,
         },
         {
           label: t`Items`,
@@ -288,6 +307,7 @@ function getCompleteSidebar(): SidebarConfig {
           route: `/list/Item/${t`Items`}`,
           schemaName: 'Item',
           filters: { for: 'Both' },
+          hidden: () => true,
         },
         {
           label: t`Price List`,
@@ -318,6 +338,7 @@ function getCompleteSidebar(): SidebarConfig {
           name: 'taxes',
           route: '/list/Tax',
           schemaName: 'Tax',
+          hidden: () => true,
         },
         {
           label: t`Import Wizard`,

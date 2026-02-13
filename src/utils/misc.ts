@@ -109,12 +109,15 @@ export const docsPathMap: Record<string, string | undefined> = {
   ProfitAndLoss: 'books/profit-and-loss',
   BalanceSheet: 'books/balance-sheet',
   TrialBalance: 'books/trial-balance',
+  LoanRegister: 'books/reports',
+  LoanLedger: 'books/reports',
 
   // Transactions
   [ModelNameEnum.SalesInvoice]: 'books/sales-invoices',
   [ModelNameEnum.PurchaseInvoice]: 'books/purchase-invoices',
   [ModelNameEnum.Payment]: 'books/payments',
   [ModelNameEnum.JournalEntry]: 'books/journal-entries',
+  [ModelNameEnum.LoanProfile]: 'books/books',
 
   // Inventory
   [ModelNameEnum.StockMovement]: 'books/stock-movement',

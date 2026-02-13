@@ -66,6 +66,13 @@
           />
         </div>
         <hr class="dark:border-gray-800" />
+        <LoanSummary
+          class="w-full p-4"
+          :common-period="period"
+          :dark-mode="darkMode"
+          @period-change="handlePeriodChange"
+        />
+        <hr class="dark:border-gray-800" />
       </div>
     </div>
   </div>
@@ -76,6 +83,7 @@ import PageHeader from 'src/components/PageHeader.vue';
 import UnpaidInvoices from './UnpaidInvoices.vue';
 import Cashflow from './Cashflow.vue';
 import Expenses from './Expenses.vue';
+import LoanSummary from './LoanSummary.vue';
 import PeriodSelector from './PeriodSelector.vue';
 import ProfitAndLoss from './ProfitAndLoss.vue';
 import { docsPathRef } from 'src/utils/refs';
@@ -87,6 +95,7 @@ export default {
     Cashflow,
     ProfitAndLoss,
     Expenses,
+    LoanSummary,
     PeriodSelector,
     UnpaidInvoices,
   },
