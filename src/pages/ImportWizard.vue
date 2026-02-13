@@ -606,13 +606,9 @@ export default defineComponent({
     },
     importableSchemaNames(): ModelNameEnum[] {
       const importables = [
-        ModelNameEnum.SalesInvoice,
-        ModelNameEnum.PurchaseInvoice,
         ModelNameEnum.Payment,
-        ModelNameEnum.Party,
-        ModelNameEnum.Item,
+        ModelNameEnum.LoanProfile,
         ModelNameEnum.JournalEntry,
-        ModelNameEnum.Tax,
         ModelNameEnum.Account,
         ModelNameEnum.Address,
         ModelNameEnum.NumberSeries,

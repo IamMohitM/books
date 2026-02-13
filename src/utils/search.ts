@@ -87,12 +87,11 @@ function getCreateAction(fyo: Fyo, schemaName: string, initData?: RawValueMap) {
 function getCreateList(fyo: Fyo): SearchItem[] {
   const hasInventory = fyo.doc.singles.AccountingSettings?.enableInventory;
   const formEditCreateList = [
-    ModelNameEnum.SalesInvoice,
-    ModelNameEnum.PurchaseInvoice,
     ModelNameEnum.JournalEntry,
+    ModelNameEnum.LoanProfile,
     ...(hasInventory
       ? [
-          ModelNameEnum.Shipment,
+        ModelNameEnum.Shipment,
           ModelNameEnum.PurchaseReceipt,
           ModelNameEnum.StockMovement,
         ]
@@ -109,44 +108,9 @@ function getCreateList(fyo: Fyo): SearchItem[] {
 
   const filteredCreateList = [
     {
-      label: t`Sales Payment`,
-      schemaName: ModelNameEnum.Payment,
-      create: createFilters.SalesPayments,
-    },
-    {
-      label: t`Purchase Payment`,
+      label: t`Payment`,
       schemaName: ModelNameEnum.Payment,
       create: createFilters.PurchasePayments,
-    },
-    {
-      label: t`Customer`,
-      schemaName: ModelNameEnum.Party,
-      create: createFilters.Customers,
-    },
-    {
-      label: t`Supplier`,
-      schemaName: ModelNameEnum.Party,
-      create: createFilters.Suppliers,
-    },
-    {
-      label: t`Party`,
-      schemaName: ModelNameEnum.Party,
-      create: createFilters.Party,
-    },
-    {
-      label: t`Sales Item`,
-      schemaName: ModelNameEnum.Item,
-      create: createFilters.SalesItems,
-    },
-    {
-      label: t`Purchase Item`,
-      schemaName: ModelNameEnum.Item,
-      create: createFilters.PurchaseItems,
-    },
-    {
-      label: t`Item`,
-      schemaName: ModelNameEnum.Item,
-      create: createFilters.Items,
     },
   ].map(({ label, create, schemaName }) => {
     return {
@@ -229,6 +193,14 @@ function getListViewList(fyo: Fyo): SearchItem[] {
   }
 
   schemaNames = Object.keys(fyo.schemaMap) as ModelNameEnum[];
+  const hiddenSchemas = new Set<ModelNameEnum>([
+    ModelNameEnum.SalesInvoice,
+    ModelNameEnum.PurchaseInvoice,
+    ModelNameEnum.Party,
+    ModelNameEnum.Item,
+    ModelNameEnum.Tax,
+  ]);
+  schemaNames = schemaNames.filter((s) => !hiddenSchemas.has(s));
 
   const standardLists = schemaNames
     .map((s) => fyo.schemaMap[s])
@@ -244,43 +216,8 @@ function getListViewList(fyo: Fyo): SearchItem[] {
 
   const filteredLists = [
     {
-      label: t`Customers`,
-      route: `/list/Party/${t`Customers`}`,
-      filters: routeFilters.Customers,
-    },
-    {
-      label: t`Suppliers`,
-      route: `/list/Party/${t`Suppliers`}`,
-      filters: routeFilters.Suppliers,
-    },
-    {
-      label: t`Party`,
-      route: `/list/Party/${t`Party`}`,
-      filters: routeFilters.Party,
-    },
-    {
-      label: t`Sales Items`,
-      route: `/list/Item/${t`Sales Items`}`,
-      filters: routeFilters.SalesItems,
-    },
-    {
-      label: t`Sales Payments`,
-      route: `/list/Payment/${t`Sales Payments`}`,
-      filters: routeFilters.SalesPayments,
-    },
-    {
-      label: t`Purchase Items`,
-      route: `/list/Item/${t`Purchase Items`}`,
-      filters: routeFilters.PurchaseItems,
-    },
-    {
-      label: t`Items`,
-      route: `/list/Item/${t`Items`}`,
-      filters: routeFilters.Items,
-    },
-    {
-      label: t`Purchase Payments`,
-      route: `/list/Payment/${t`Purchase Payments`}`,
+      label: t`Payments`,
+      route: `/list/Payment/${t`Payments`}`,
       filters: routeFilters.PurchasePayments,
     },
   ].map((i) => {
