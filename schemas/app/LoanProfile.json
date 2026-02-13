@@ -1,0 +1,90 @@
+{
+  "name": "LoanProfile",
+  "label": "Loan Profile",
+  "naming": "manual",
+  "linkDisplayField": "liabilityAccount",
+  "isSingle": false,
+  "isChild": false,
+  "fields": [
+    {
+      "fieldname": "name",
+      "label": "Loan ID",
+      "fieldtype": "Data",
+      "required": true
+    },
+    {
+      "fieldname": "lenderName",
+      "label": "Lender Name",
+      "fieldtype": "Data",
+      "required": true
+    },
+    {
+      "fieldname": "startDate",
+      "label": "Start Date",
+      "fieldtype": "Date",
+      "required": true
+    },
+    {
+      "fieldname": "liabilityAccount",
+      "label": "Liability Account",
+      "fieldtype": "Link",
+      "target": "Account",
+      "required": true
+    },
+    {
+      "fieldname": "interestExpenseAccount",
+      "label": "Interest Expense Account",
+      "fieldtype": "Link",
+      "target": "Account",
+      "required": true
+    },
+    {
+      "fieldname": "annualInterestRate",
+      "label": "Annual Interest Rate (%)",
+      "fieldtype": "Float",
+      "required": true
+    },
+    {
+      "fieldname": "openingPrincipal",
+      "label": "Opening Principal",
+      "fieldtype": "Currency",
+      "default": 0
+    },
+    {
+      "fieldname": "openingAccruedInterest",
+      "label": "Opening Accrued Interest",
+      "fieldtype": "Currency",
+      "default": 0
+    },
+    {
+      "fieldname": "recordCashReceiptNow",
+      "label": "Record Cash Receipt Now",
+      "fieldtype": "Check",
+      "default": false
+    },
+    {
+      "fieldname": "active",
+      "label": "Active",
+      "fieldtype": "Check",
+      "default": true
+    },
+    {
+      "fieldname": "notes",
+      "label": "Notes",
+      "fieldtype": "Text"
+    }
+  ],
+  "quickEditFields": [
+    "lenderName",
+    "startDate",
+    "liabilityAccount",
+    "interestExpenseAccount",
+    "annualInterestRate",
+    "openingPrincipal",
+    "openingAccruedInterest",
+    "recordCashReceiptNow",
+    "active",
+    "notes"
+  ],
+  "keywordFields": ["name", "lenderName"]
+}

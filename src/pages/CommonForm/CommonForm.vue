@@ -170,9 +170,19 @@
         />
       </Transition>
     </template>
+    <LoanCashReceiptModal
+      v-if="showLoanCashReceiptModal && hasDoc"
+      :open-modal="showLoanCashReceiptModal"
+      :loan-profile-name="doc?.name ?? ''"
+      :default-date="loanCashReceiptDefaults.date"
+      :default-amount="loanCashReceiptDefaults.amount"
+      @close="closeLoanCashReceiptModal"
+      @submit="handleLoanCashReceiptSubmit"
+    />
   </FormContainer>
 </template>
 <script lang="ts">
+import { t } from 'fyo';
 import { DocValue } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
 import { DEFAULT_CURRENCY } from 'fyo/utils/consts';
@@ -186,8 +196,11 @@ import ExchangeRate from 'src/components/Controls/ExchangeRate.vue';
 import DropdownWithActions from 'src/components/DropdownWithActions.vue';
 import FormContainer from 'src/components/FormContainer.vue';
 import FormHeader from 'src/components/FormHeader.vue';
+import LoanCashReceiptModal from 'src/components/LoanCashReceiptModal.vue';
 import StatusPill from 'src/components/StatusPill.vue';
 import { getErrorMessage } from 'src/utils';
+import { handleErrorWithDialog } from 'src/errorHandling';
+import { showToast } from 'src/utils/interactive';
 import { shortcutsKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
@@ -202,6 +215,7 @@ import {
   isPrintable,
   routeTo,
 } from 'src/utils/ui';
+import { fyo } from 'src/initFyo';
 import { useDocShortcuts } from 'src/utils/vueUtils';
 import { computed, defineComponent, inject, nextTick, ref } from 'vue';
 import CommonFormSection from './CommonFormSection.vue';
@@ -219,6 +233,7 @@ export default defineComponent({
     ExchangeRate,
     LinkedEntries,
     RowEditForm,
+    LoanCashReceiptModal,
     StatusPill,
   },
   provide() {
@@ -254,6 +269,13 @@ export default defineComponent({
       showLinks: false,
       useFullWidth: false,
       row: null,
+      showLoanCashReceiptModal: false,
+      loanCashReceiptDefaults: {
+        date: '',
+        amount: 0,
+      },
+      suppressLoanCashReceiptPrompt: false,
+      loanCashReceiptListener: null,
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -262,6 +284,10 @@ export default defineComponent({
       showLinks: boolean;
       useFullWidth: boolean;
       row: null | { index: number; fieldname: string };
+      showLoanCashReceiptModal: boolean;
+      loanCashReceiptDefaults: { date: string; amount: number };
+      suppressLoanCashReceiptPrompt: boolean;
+      loanCashReceiptListener: null | (() => Promise<void>);
     };
   },
   computed: {
@@ -422,6 +448,22 @@ export default defineComponent({
   },
   methods: {
     routeTo,
+    attachLoanCashReceiptListener() {
+      if (!this.doc || this.schemaName !== ModelNameEnum.LoanProfile) {
+        return;
+      }
+
+      if (!this.loanCashReceiptListener) {
+        this.loanCashReceiptListener = this.onLoanProfileAfterSync.bind(this);
+      }
+
+      if (!this.doc.hasListener('afterSync', this.loanCashReceiptListener)) {
+        this.doc.on('afterSync', this.loanCashReceiptListener);
+      }
+    },
+    async onLoanProfileAfterSync() {
+      await this.maybePromptLoanCashReceipt();
+    },
     async toggleWidth() {
       const value = !this.useFullWidth;
       await this.fyo.singles.Misc?.setAndSync('useFullWidth', value);
@@ -440,6 +482,7 @@ export default defineComponent({
     async sync(useDialog?: boolean) {
       if (await commonDocSync(this.doc, useDialog)) {
         this.updateGroupedFields();
+        await this.maybePromptLoanCashReceipt();
       }
     },
     async submit() {
@@ -456,6 +499,7 @@ export default defineComponent({
         this.schemaName,
         this.name
       );
+      this.attachLoanCashReceiptListener();
     },
     replacePathAfterSync() {
       if (!this.hasDoc || this.doc.inserted) {
@@ -494,7 +538,124 @@ export default defineComponent({
         this.errors[fieldname] = getErrorMessage(err, this.doc);
       }
 
+      if (
+        this.schemaName === ModelNameEnum.LoanProfile &&
+        fieldname === 'recordCashReceiptNow' &&
+        value === true
+      ) {
+        const hasLiabilityAccount = !!this.doc.get('liabilityAccount');
+        const hasName = !!this.doc.name;
+        if (!hasLiabilityAccount || !hasName || this.doc.dirty) {
+          showToast({
+            type: 'warning',
+            message: t`Save the Loan Profile before recording a cash receipt.`,
+            duration: 'short',
+          });
+        } else {
+          await this.maybePromptLoanCashReceipt();
+        }
+      }
+
       this.updateGroupedFields();
+    },
+    async maybePromptLoanCashReceipt() {
+      if (this.schemaName !== ModelNameEnum.LoanProfile) {
+        return;
+      }
+
+      if (this.suppressLoanCashReceiptPrompt) {
+        return;
+      }
+
+      if (!this.doc?.get('recordCashReceiptNow')) {
+        return;
+      }
+
+      if (!this.doc.get('liabilityAccount')) {
+        return;
+      }
+
+      this.loanCashReceiptDefaults = {
+        date: (this.doc.get('startDate') as string) ?? '',
+        amount: Number(this.doc.get('openingPrincipal') ?? 0),
+      };
+      this.showLoanCashReceiptModal = true;
+    },
+    closeLoanCashReceiptModal() {
+      this.showLoanCashReceiptModal = false;
+    },
+    async handleLoanCashReceiptSubmit(payload: {
+      date: string;
+      amount: number;
+      cashAccount: string;
+    }) {
+      try {
+        await this.createLoanCashReceiptEntry(payload);
+        this.showLoanCashReceiptModal = false;
+        this.suppressLoanCashReceiptPrompt = true;
+        await this.doc?.set('recordCashReceiptNow', false);
+        await this.doc?.sync();
+        showToast({
+          type: 'success',
+          message: t`Loan cash receipt recorded.`,
+          duration: 'short',
+        });
+      } catch (error) {
+        await handleErrorWithDialog(error as Error, this.doc);
+      } finally {
+        this.suppressLoanCashReceiptPrompt = false;
+      }
+    },
+    async createLoanCashReceiptEntry(payload: {
+      date: string;
+      amount: number;
+      cashAccount: string;
+    }) {
+      if (!this.doc) {
+        return;
+      }
+
+      const { date, amount, cashAccount } = payload;
+      const loanProfileName = this.doc.name as string;
+      const liabilityAccount = this.doc.get('liabilityAccount') as string;
+
+      if (!loanProfileName || !liabilityAccount || !cashAccount || amount <= 0) {
+        throw new ValidationError(t`Please fill all required fields.`);
+      }
+
+      const accountType = (await fyo.getValue(
+        ModelNameEnum.Account,
+        cashAccount,
+        'accountType'
+      )) as string | undefined;
+
+      const entryType = 'Opening Entry';
+
+      const jv = fyo.doc.getNewDoc(ModelNameEnum.JournalEntry, {
+        entryType,
+        date,
+        userRemark: t`Loan receipt for ${loanProfileName}`,
+        accounts: [
+          {
+            account: cashAccount,
+            debit: fyo.pesa(amount),
+            credit: fyo.pesa(0),
+          },
+          {
+            account: liabilityAccount,
+            debit: fyo.pesa(0),
+            credit: fyo.pesa(amount),
+            loanProfile: loanProfileName,
+            loanComponent: 'Principal',
+          },
+        ],
+      });
+
+      await jv.sync();
+      await jv.submit();
+
+      await this.doc?.set('openingPrincipal', fyo.pesa(0));
+      await this.doc?.sync();
     },
   },
 });

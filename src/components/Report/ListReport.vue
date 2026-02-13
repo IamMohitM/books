@@ -92,7 +92,11 @@
         text-base
       "
     >
-      {{ report.loading ? t`Loading Report...` : t`No Values to be Displayed` }}
+      {{
+        report.loading
+          ? t`Loading Report...`
+          : report.emptyMessage ?? t`No Values to be Displayed`
+      }}
     </p>
 
     <!-- Pagination Footer -->

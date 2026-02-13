@@ -48,8 +48,25 @@ export default {
         return (this.linkValue = value);
       }
 
+      if (!this.doc) {
+        if (!value || !target) {
+          this.linkValue = value;
+          return;
+        }
+
+        try {
+          const linkDoc = await fyo.db.get(target, value, [linkDisplayField]);
+          // @ts-ignore
+          this.linkValue = linkDoc?.[linkDisplayField] ?? value;
+          return;
+        } catch {
+          this.linkValue = value;
+          return;
+        }
+      }
+
       const linkDoc = await this.doc?.loadAndGetLink(fieldname);
-      this.linkValue = linkDoc?.get(linkDisplayField) ?? '';
+      this.linkValue = linkDoc?.get(linkDisplayField) ?? value ?? '';
     },
     getTargetSchemaName() {
       return this.df.target;

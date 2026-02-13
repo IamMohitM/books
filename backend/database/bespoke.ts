@@ -1,18 +1,45 @@
 import {
   Cashflow,
   IncomeExpense,
+  LoanLedgerRow,
+  LoanSnapshot,
   TopExpenses,
   TotalCreditAndDebit,
   TotalOutstanding,
 } from 'utils/db/types';
 import { ModelNameEnum } from '../../models/types';
 import DatabaseCore from './core';
-import { BespokeFunction } from './types';
+import { BespokeFunction, SqliteTableInfo } from './types';
 import { DocItem, ReturnDocItem } from 'models/inventory/types';
 import { safeParseFloat } from 'utils/index';
 
 export class BespokeQueries {
   [key: string]: BespokeFunction;
+
+  static async ensureLoanLedgerColumns(db: DatabaseCore): Promise<void> {
+    const info = (await db.knex!.raw(
+      `PRAGMA table_info(${ModelNameEnum.AccountingLedgerEntry})`
+    )) as SqliteTableInfo[];
+    const existing = new Set((info ?? []).map((row) => row.name));
+    const needsLoanProfile = !existing.has('loanProfile');
+    const needsLoanComponent = !existing.has('loanComponent');
+
+    if (!needsLoanProfile && !needsLoanComponent) {
+      return;
+    }
+
+    await db.knex!.schema.alterTable(
+      ModelNameEnum.AccountingLedgerEntry,
+      (table) => {
+        if (needsLoanProfile) {
+          table.text('loanProfile');
+        }
+        if (needsLoanComponent) {
+          table.text('loanComponent');
+        }
+      }
+    );
+  }
 
   static async getLastInserted(
     db: DatabaseCore,
@@ -139,6 +166,263 @@ export class BespokeQueries {
     from AccountingLedgerEntry
     group by account
     `)) as unknown as TotalCreditAndDebit;
+  }
+
+  static async getLoanLedger(
+    db: DatabaseCore,
+    loanProfile: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<LoanLedgerRow[]> {
+    await BespokeQueries.ensureLoanLedgerColumns(db);
+    const query = db
+      .knex!(ModelNameEnum.AccountingLedgerEntry)
+      .select('name', 'date', 'referenceName', 'loanProfile', 'loanComponent')
+      .select({
+        debit: db.knex!.raw('cast(debit as real)'),
+        credit: db.knex!.raw('cast(credit as real)'),
+      })
+      .where('reverted', false)
+      .andWhere('loanProfile', loanProfile)
+      .andWhere('loanComponent', 'in', ['Principal', 'Interest'])
+      .orderBy('date', 'asc')
+      .orderBy('name', 'asc');
+
+    if (fromDate) {
+      query.andWhereRaw('date(date) >= date(?)', [fromDate]);
+    }
+
+    if (toDate) {
+      query.andWhereRaw('date(date) <= date(?)', [toDate]);
+    }
+
+    return (await query) as LoanLedgerRow[];
+  }
+
+  static async getLoanSnapshot(
+    db: DatabaseCore,
+    loanProfileName: string,
+    asOfDate: string
+  ): Promise<LoanSnapshot | null> {
+    const loanProfile = (await db
+      .knex!(ModelNameEnum.LoanProfile)
+      .select(
+        'name',
+        'lenderName',
+        'liabilityAccount',
+        'annualInterestRate',
+        'startDate',
+        'openingPrincipal',
+        'openingAccruedInterest'
+      )
+      .where('name', loanProfileName)
+      .first()) as
+      | {
+          name: string;
+          lenderName: string;
+          liabilityAccount: string;
+          annualInterestRate: number | string;
+          startDate: string;
+          openingPrincipal: number | string;
+          openingAccruedInterest: number | string;
+        }
+      | undefined;
+
+    if (!loanProfile) {
+      return null;
+    }
+
+    const ledgerRows = await BespokeQueries.getLoanLedger(
+      db,
+      loanProfileName,
+      undefined,
+      asOfDate
+    );
+
+    return BespokeQueries.computeLoanSnapshot(loanProfile, ledgerRows, asOfDate);
+  }
+
+  static async getLoanPortfolioSnapshot(
+    db: DatabaseCore,
+    asOfDate: string
+  ): Promise<LoanSnapshot[]> {
+    const loanProfiles = (await db.knex!(ModelNameEnum.LoanProfile)
+      .select(
+        'name',
+        'lenderName',
+        'liabilityAccount',
+        'annualInterestRate',
+        'startDate',
+        'openingPrincipal',
+        'openingAccruedInterest'
+      )
+      .where('active', true)
+      .andWhere('startDate', '<=', asOfDate)
+      .orderBy('name', 'asc')) as {
+      name: string;
+      lenderName: string;
+      annualInterestRate: number | string;
+      startDate: string;
+      openingPrincipal: number | string;
+      openingAccruedInterest: number | string;
+    }[];
+
+    const snapshots: LoanSnapshot[] = [];
+    for (const loanProfile of loanProfiles) {
+      const ledgerRows = await BespokeQueries.getLoanLedger(
+        db,
+        loanProfile.name,
+        undefined,
+        asOfDate
+      );
+
+      snapshots.push(
+        BespokeQueries.computeLoanSnapshot(loanProfile, ledgerRows, asOfDate)
+      );
+    }
+
+    return snapshots;
+  }
+
+  static computeLoanSnapshot(
+    loanProfile: {
+      name: string;
+      lenderName: string;
+      liabilityAccount?: string;
+      annualInterestRate: number | string;
+      startDate: string;
+      openingPrincipal: number | string;
+      openingAccruedInterest: number | string;
+    },
+    ledgerRows: LoanLedgerRow[],
+    asOfDate: string
+  ): LoanSnapshot {
+    const asOf = BespokeQueries.toUtcDate(asOfDate);
+    const start = BespokeQueries.toUtcDate(loanProfile.startDate);
+    if (asOf.getTime() < start.getTime()) {
+      return {
+        loanProfile: loanProfile.name,
+        liabilityAccount: loanProfile.liabilityAccount,
+        lenderName: loanProfile.lenderName,
+        annualInterestRate: Number(loanProfile.annualInterestRate ?? 0),
+        principalOutstanding: 0,
+        interestPaid: 0,
+        accruedInterest: 0,
+        interestOwed: 0,
+        totalDue: 0,
+      };
+    }
+
+    const annualRate = Number(loanProfile.annualInterestRate ?? 0);
+    const openingPrincipal = Number(loanProfile.openingPrincipal ?? 0);
+    const openingAccruedInterest = Number(loanProfile.openingAccruedInterest ?? 0);
+
+    let principalOutstanding = openingPrincipal;
+    let interestPaid = 0;
+
+    for (const row of ledgerRows) {
+      if (row.loanComponent === 'Principal') {
+        principalOutstanding += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+      } else if (row.loanComponent === 'Interest') {
+        interestPaid += Number(row.debit ?? 0) - Number(row.credit ?? 0);
+      }
+    }
+
+    const accruedInterest = BespokeQueries.computeAccruedInterest(
+      annualRate,
+      openingPrincipal,
+      loanProfile.startDate,
+      asOfDate,
+      ledgerRows.filter((r) => r.loanComponent === 'Principal')
+    );
+
+    const interestOwed = openingAccruedInterest + accruedInterest - interestPaid;
+    return {
+      loanProfile: loanProfile.name,
+      liabilityAccount: loanProfile.liabilityAccount,
+      lenderName: loanProfile.lenderName,
+      annualInterestRate: annualRate,
+      principalOutstanding,
+      interestPaid,
+      accruedInterest,
+      interestOwed,
+      totalDue: principalOutstanding + interestOwed,
+    };
+  }
+
+  static computeAccruedInterest(
+    annualRatePercent: number,
+    openingPrincipal: number,
+    startDate: string,
+    asOfDate: string,
+    principalRows: LoanLedgerRow[]
+  ): number {
+    const annualRate = annualRatePercent / 100;
+    const start = BespokeQueries.toUtcDate(startDate);
+    const endExclusive = BespokeQueries.addDays(
+      BespokeQueries.toUtcDate(asOfDate),
+      1
+    );
+    if (start.getTime() >= endExclusive.getTime()) {
+      return 0;
+    }
+
+    let cursor = BespokeQueries.addDays(start, 1);
+    let principal = openingPrincipal;
+    let accrued = 0;
+
+    const sortedRows = [...principalRows].sort((a, b) => {
+      const dA = BespokeQueries.toUtcDate(a.date).getTime();
+      const dB = BespokeQueries.toUtcDate(b.date).getTime();
+      if (dA !== dB) {
+        return dA - dB;
+      }
+
+      return Number(a.name) - Number(b.name);
+    });
+
+    for (const row of sortedRows) {
+      const rowDate = BespokeQueries.toUtcDate(row.date);
+      const eventDate = rowDate.getTime() < start.getTime() ? start : rowDate;
+      if (eventDate.getTime() >= endExclusive.getTime()) {
+        break;
+      }
+
+      const daySpan = BespokeQueries.diffDays(cursor, eventDate);
+      if (daySpan > 0) {
+        accrued += principal * annualRate * (daySpan / 365);
+      }
+
+      principal += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+      cursor = BespokeQueries.addDays(eventDate, 1);
+    }
+
+    const remainingDays = BespokeQueries.diffDays(cursor, endExclusive);
+    if (remainingDays > 0) {
+      accrued += principal * annualRate * (remainingDays / 365);
+    }
+
+    return accrued;
+  }
+
+  static toUtcDate(value: string) {
+    const date = new Date(value);
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  }
+
+  static addDays(date: Date, days: number) {
+    const value = new Date(date);
+    value.setUTCDate(value.getUTCDate() + days);
+    return value;
+  }
+
+  static diffDays(from: Date, to: Date) {
+    const diff = to.getTime() - from.getTime();
+    if (diff <= 0) {
+      return 0;
+    }
+
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
   }
 
   static async getStockQuantity(

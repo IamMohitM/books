@@ -18,6 +18,7 @@ export abstract class Report extends Observable<RawValue> {
   reportData: ReportData;
   usePagination = false;
   shouldRefresh = false;
+  emptyMessage?: string;
   abstract loading: boolean;
 
   constructor(fyo: Fyo) {
