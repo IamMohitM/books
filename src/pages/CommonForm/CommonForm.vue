@@ -218,6 +218,7 @@ import {
 import { fyo } from 'src/initFyo';
 import { useDocShortcuts } from 'src/utils/vueUtils';
 import { computed, defineComponent, inject, nextTick, ref } from 'vue';
+import { Money } from 'pesa';
 import CommonFormSection from './CommonFormSection.vue';
 import LinkedEntries from './LinkedEntries.vue';
 import RowEditForm from './RowEditForm.vue';
@@ -418,6 +419,7 @@ export default defineComponent({
     await this.setDoc();
     this.replacePathAfterSync();
     this.updateGroupedFields();
+    await this.maybePromptLoanCashReceipt();
     if (this.groupedFields) {
       this.activeTab = [...this.groupedFields.keys()][0];
     }
@@ -575,9 +577,18 @@ export default defineComponent({
         return;
       }
 
+      const openingPrincipal = this.doc.get('openingPrincipal');
+      let amount =
+        openingPrincipal instanceof Money
+          ? openingPrincipal.float
+          : Number(openingPrincipal ?? 0);
+      if (!Number.isFinite(amount)) {
+        amount = 0;
+      }
+
       this.loanCashReceiptDefaults = {
         date: (this.doc.get('startDate') as string) ?? '',
-        amount: Number(this.doc.get('openingPrincipal') ?? 0),
+        amount,
       };
       this.showLoanCashReceiptModal = true;
     },

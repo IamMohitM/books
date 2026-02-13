@@ -13,6 +13,7 @@
       :readonly="isReadOnly"
       :tabindex="isReadOnly ? '-1' : '0'"
       @blur="onBlur"
+      @change="onChange"
       @focus="onFocus"
       @input="(e) => $emit('input', e)"
     />
@@ -100,6 +101,22 @@ export default defineComponent({
     },
   },
   methods: {
+    onChange(e: Event) {
+      const target = e.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      if (this.isReadOnly) {
+        return;
+      }
+
+      let value: Date | null = DateTime.fromISO(target.value).toJSDate();
+      if (Number.isNaN(value.valueOf())) {
+        value = null;
+      }
+
+      this.triggerChange(value);
+    },
     onFocus(e: FocusEvent) {
       const target = e.target;
       if (!(target instanceof HTMLInputElement)) {

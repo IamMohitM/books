@@ -11,7 +11,7 @@ export default {
   name: 'Link',
   extends: AutoComplete,
   data() {
-    return { results: [], filtersDisabled: false };
+    return { results: [], filtersDisabled: false, linkValueRequestId: 0 };
   },
   watch: {
     value: {
@@ -37,7 +37,11 @@ export default {
   },
   methods: {
     async setLinkValue(newValue, isInput) {
+      const requestId = (this.linkValueRequestId += 1);
       if (isInput) {
+        if (requestId !== this.linkValueRequestId) {
+          return;
+        }
         return (this.linkValue = newValue || '');
       }
 
@@ -45,11 +49,17 @@ export default {
       const { fieldname, target } = this.df ?? {};
       const linkDisplayField = fyo.schemaMap[target ?? '']?.linkDisplayField;
       if (!linkDisplayField) {
+        if (requestId !== this.linkValueRequestId) {
+          return;
+        }
         return (this.linkValue = value);
       }
 
       if (!this.doc) {
         if (!value || !target) {
+          if (requestId !== this.linkValueRequestId) {
+            return;
+          }
           this.linkValue = value;
           return;
         }
@@ -57,15 +67,24 @@ export default {
         try {
           const linkDoc = await fyo.db.get(target, value, [linkDisplayField]);
           // @ts-ignore
+          if (requestId !== this.linkValueRequestId) {
+            return;
+          }
           this.linkValue = linkDoc?.[linkDisplayField] ?? value;
           return;
         } catch {
+          if (requestId !== this.linkValueRequestId) {
+            return;
+          }
           this.linkValue = value;
           return;
         }
       }
 
       const linkDoc = await this.doc?.loadAndGetLink(fieldname);
+      if (requestId !== this.linkValueRequestId) {
+        return;
+      }
       this.linkValue = linkDoc?.get(linkDisplayField) ?? value ?? '';
     },
     getTargetSchemaName() {

@@ -347,6 +347,8 @@ export class LoanLedger extends Report {
 
           if (column.fieldtype === 'Currency' && isNumeric) {
             display = this.fyo.format(value as number, 'Currency');
+          } else if (column.fieldtype === 'Date' && value) {
+            display = this.fyo.format(value, 'Date');
           }
 
           return {

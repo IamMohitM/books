@@ -175,16 +175,57 @@ export class BespokeQueries {
     toDate?: string
   ): Promise<LoanLedgerRow[]> {
     await BespokeQueries.ensureLoanLedgerColumns(db);
+    const loanProfileRow = (await db
+      .knex!(ModelNameEnum.LoanProfile)
+      .select('liabilityAccount')
+      .where('name', loanProfile)
+      .first()) as { liabilityAccount?: string } | undefined;
+    const liabilityAccount = loanProfileRow?.liabilityAccount;
+
     const query = db
       .knex!(ModelNameEnum.AccountingLedgerEntry)
-      .select('name', 'date', 'referenceName', 'loanProfile', 'loanComponent')
+      .select(
+        'name',
+        'date',
+        'referenceName',
+        db.knex!.raw(
+          'case when loanProfile is null and account = ? then ? else loanProfile end as loanProfile',
+          [liabilityAccount, loanProfile]
+        ),
+        db.knex!.raw(
+          'case when loanProfile is null and account = ? then ? else loanComponent end as loanComponent',
+          [liabilityAccount, 'Principal']
+        )
+      )
       .select({
         debit: db.knex!.raw('cast(debit as real)'),
         credit: db.knex!.raw('cast(credit as real)'),
       })
       .where('reverted', false)
-      .andWhere('loanProfile', loanProfile)
-      .andWhere('loanComponent', 'in', ['Principal', 'Interest'])
+      .andWhere((builder) => {
+        builder
+          .where((sub) => {
+            sub
+              .where('loanProfile', loanProfile)
+              .andWhere('loanComponent', 'in', ['Principal', 'Interest']);
+          })
+          .orWhere((sub) => {
+            if (!liabilityAccount) {
+              sub.whereRaw('0 = 1');
+              return;
+            }
+
+            sub
+              .whereNull('loanProfile')
+              .andWhere('account', liabilityAccount)
+              .andWhere((component) => {
+                component
+                  .whereNull('loanComponent')
+                  .orWhere('loanComponent', '')
+                  .orWhere('loanComponent', 'None');
+              });
+          });
+      })
       .orderBy('date', 'asc')
       .orderBy('name', 'asc');
 
