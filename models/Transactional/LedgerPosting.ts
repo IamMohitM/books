@@ -4,7 +4,7 @@ import { AccountingLedgerEntry } from 'models/baseModels/AccountingLedgerEntry/A
 import { ModelNameEnum } from 'models/types';
 import { Money } from 'pesa';
 import { Transactional } from './Transactional';
-import { TransactionType } from './types';
+import { LedgerEntryMeta, TransactionType } from './types';
 
 /**
  * # LedgerPosting
@@ -37,13 +37,13 @@ export class LedgerPosting {
     this.reverted = false;
   }
 
-  async debit(account: string, amount: Money) {
-    const ledgerEntry = this._getLedgerEntry(account, 'debit');
+  async debit(account: string, amount: Money, meta?: LedgerEntryMeta) {
+    const ledgerEntry = this._getLedgerEntry(account, 'debit', meta);
     await ledgerEntry.set('debit', ledgerEntry.debit!.add(amount));
   }
 
-  async credit(account: string, amount: Money) {
-    const ledgerEntry = this._getLedgerEntry(account, 'credit');
+  async credit(account: string, amount: Money, meta?: LedgerEntryMeta) {
+    const ledgerEntry = this._getLedgerEntry(account, 'credit', meta);
     await ledgerEntry.set('credit', ledgerEntry.credit!.add(amount));
   }
 
@@ -94,15 +94,17 @@ export class LedgerPosting {
 
   _getLedgerEntry(
     account: string,
-    type: TransactionType
+    type: TransactionType,
+    meta?: LedgerEntryMeta
   ): AccountingLedgerEntry {
     let map = this.creditMap;
     if (type === 'debit') {
       map = this.debitMap;
     }
 
-    if (map[account]) {
-      return map[account];
+    const entryKey = this._getEntryKey(account, meta);
+    if (map[entryKey]) {
+      return map[entryKey];
     }
 
     // end ugly timezone fix code
@@ -118,14 +120,22 @@ export class LedgerPosting {
         reverted: this.reverted,
         debit: this.fyo.pesa(0),
         credit: this.fyo.pesa(0),
+        loanProfile: meta?.loanProfile,
+        loanComponent: meta?.loanComponent,
       },
       false
     ) as AccountingLedgerEntry;
 
     this.entries.push(ledgerEntry);
-    map[account] = ledgerEntry;
+    map[entryKey] = ledgerEntry;
 
-    return map[account];
+    return map[entryKey];
+  }
+
+  _getEntryKey(account: string, meta?: LedgerEntryMeta) {
+    const loanProfile = meta?.loanProfile ?? '';
+    const loanComponent = meta?.loanComponent ?? '';
+    return `${account}::${loanProfile}::${loanComponent}`;
   }
 
   _validateIsEqual() {

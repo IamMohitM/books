@@ -6,7 +6,9 @@ import {
   FiltersMap,
   HiddenMap,
   ListViewSettings,
+  ValidationMap,
 } from 'fyo/model/types';
+import { ValidationError } from 'fyo/utils/errors';
 import {
   getDocStatus,
   getLedgerLinkAction,
@@ -15,6 +17,7 @@ import {
   statusColor,
 } from 'models/helpers';
 import { Transactional } from 'models/Transactional/Transactional';
+import { ModelNameEnum } from 'models/types';
 import { Money } from 'pesa';
 import { LedgerPosting } from '../../Transactional/LedgerPosting';
 
@@ -28,11 +31,22 @@ export class JournalEntry extends Transactional {
       const debit = row.debit as Money;
       const credit = row.credit as Money;
       const account = row.account as string;
+      const loanProfile = (row.loanProfile as string) || undefined;
+      const loanComponent = (row.loanComponent as string) || undefined;
+      const meta = loanProfile
+        ? {
+            loanProfile,
+            loanComponent:
+              loanComponent && loanComponent !== 'None'
+                ? loanComponent
+                : undefined,
+          }
+        : undefined;
 
       if (!debit.isZero()) {
-        await posting.debit(account, debit);
+        await posting.debit(account, debit, meta);
       } else if (!credit.isZero()) {
-        await posting.credit(account, credit);
+        await posting.credit(account, credit, meta);
       }
     }
 
@@ -58,6 +72,71 @@ export class JournalEntry extends Transactional {
   static filters: FiltersMap = {
     numberSeries: () => ({ referenceType: 'JournalEntry' }),
   };
+
+  validations: ValidationMap = {
+    accounts: async () => {
+      await this.validateLoanRows();
+    },
+  };
+
+  async validate() {
+    await super.validate();
+    await this.validateLoanRows();
+  }
+
+  async validateLoanRows() {
+    const loanRows = (this.accounts ?? []).filter((row) => !!row.loanProfile);
+    if (!loanRows.length) {
+      return;
+    }
+
+    const loanProfiles = new Set(loanRows.map((row) => row.loanProfile as string));
+    if (loanProfiles.size > 1) {
+      throw new ValidationError(
+        t`All loan rows in one journal entry must use the same Loan Profile.`
+      );
+    }
+
+    const loanProfileName = loanRows[0].loanProfile as string;
+    const loanProfile = await this.fyo.doc.getDoc(
+      ModelNameEnum.LoanProfile,
+      loanProfileName
+    );
+    const active = loanProfile.get('active') as boolean;
+    const liabilityAccount = loanProfile.get('liabilityAccount') as string;
+    const interestExpenseAccount = loanProfile.get(
+      'interestExpenseAccount'
+    ) as string;
+
+    if (active === false) {
+      throw new ValidationError(
+        t`Cannot post against inactive Loan Profile ${loanProfileName}.`
+      );
+    }
+
+    for (const row of loanRows) {
+      const component = row.loanComponent as string;
+      if (!component || component === 'None') {
+        throw new ValidationError(
+          t`Loan rows must have Loan Component set to Principal or Interest.`
+        );
+      }
+
+      if (component === 'Principal') {
+        if (row.account !== liabilityAccount) {
+          throw new ValidationError(
+            t`Principal rows must use Liability Account ${liabilityAccount}.`
+          );
+        }
+      } else if (component === 'Interest') {
+        if (row.account !== interestExpenseAccount) {
+          throw new ValidationError(
+            t`Interest rows must use Interest Expense Account ${interestExpenseAccount}.`
+          );
+        }
+      }
+    }
+  }
 
   static getActions(fyo: Fyo): Action[] {
     return [getLedgerLinkAction(fyo)];

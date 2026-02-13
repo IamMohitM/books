@@ -15,6 +15,13 @@ export interface LedgerEntry {
   reverted: boolean;
   debit: Money;
   credit: Money;
+  loanProfile?: string;
+  loanComponent?: string;
+}
+
+export interface LedgerEntryMeta {
+  loanProfile?: string;
+  loanComponent?: string;
 }
 
 export type TransactionType = 'credit' | 'debit';

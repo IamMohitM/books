@@ -33,6 +33,7 @@ export enum ModelNameEnum {
   Party = 'Party',
   LoyaltyProgram = 'LoyaltyProgram',
   LoyaltyPointEntry = 'LoyaltyPointEntry',
+  LoanProfile = 'LoanProfile',
   CollectionRulesItems = 'CollectionRulesItems',
   CouponCode = 'CouponCode',
   IntegrationErrorLog = 'IntegrationErrorLog',

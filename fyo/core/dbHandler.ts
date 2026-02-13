@@ -12,6 +12,8 @@ import {
   DatabaseDemuxBase,
   GetAllOptions,
   IncomeExpense,
+  LoanLedgerRow,
+  LoanSnapshot,
   QueryFilter,
   TopExpenses,
   TotalCreditAndDebit,
@@ -311,6 +313,37 @@ export class DatabaseHandler extends DatabaseBase {
     return (await this.#demux.callBespoke(
       'getTotalCreditAndDebit'
     )) as TotalCreditAndDebit[];
+  }
+
+  async getLoanLedger(
+    loanProfile: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<LoanLedgerRow[]> {
+    return (await this.#demux.callBespoke(
+      'getLoanLedger',
+      loanProfile,
+      fromDate,
+      toDate
+    )) as LoanLedgerRow[];
+  }
+
+  async getLoanSnapshot(
+    loanProfile: string,
+    asOfDate: string
+  ): Promise<LoanSnapshot | null> {
+    return (await this.#demux.callBespoke(
+      'getLoanSnapshot',
+      loanProfile,
+      asOfDate
+    )) as LoanSnapshot | null;
+  }
+
+  async getLoanPortfolioSnapshot(asOfDate: string): Promise<LoanSnapshot[]> {
+    return (await this.#demux.callBespoke(
+      'getLoanPortfolioSnapshot',
+      asOfDate
+    )) as LoanSnapshot[];
   }
 
   async getStockQuantity(

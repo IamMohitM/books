@@ -82,6 +82,21 @@
       "target": "AccountingLedgerEntry",
       "readOnly": true,
       "section": "Reference"
+    },
+    {
+      "fieldname": "loanProfile",
+      "label": "Loan Profile",
+      "fieldtype": "Link",
+      "target": "LoanProfile",
+      "readOnly": true,
+      "section": "Reference"
+    },
+    {
+      "fieldname": "loanComponent",
+      "label": "Loan Component",
+      "fieldtype": "Data",
+      "readOnly": true,
+      "section": "Reference"
     }
   ],
   "quickEditFields": [
@@ -93,6 +108,8 @@
     "referenceType",
     "referenceName",
     "reverted",
-    "reverts"
+    "reverts",
+    "loanProfile",
+    "loanComponent"
   ]
 }

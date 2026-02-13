@@ -12,6 +12,8 @@ export class AccountingLedgerEntry extends Doc {
   referenceType?: string;
   referenceName?: string;
   reverted?: boolean;
+  loanProfile?: string;
+  loanComponent?: string;
 
   async revert() {
     if (this.reverted) {

@@ -105,3 +105,25 @@ export type TotalCreditAndDebit = {
   totalCredit: number;
   totalDebit: number;
 };
+
+export type LoanLedgerRow = {
+  name: string;
+  date: string;
+  debit: number;
+  credit: number;
+  referenceName: string;
+  loanProfile: string;
+  loanComponent: string;
+};
+
+export type LoanSnapshot = {
+  loanProfile: string;
+  liabilityAccount?: string;
+  lenderName: string;
+  annualInterestRate: number;
+  principalOutstanding: number;
+  interestPaid: number;
+  accruedInterest: number;
+  interestOwed: number;
+  totalDue: number;
+};

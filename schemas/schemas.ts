@@ -19,6 +19,7 @@ import Party from './app/Party.json';
 import Lead from './app/Lead.json';
 import LoyaltyProgram from './app/LoyaltyProgram.json';
 import LoyaltyPointEntry from './app/LoyaltyPointEntry.json';
+import LoanProfile from './app/LoanProfile.json';
 import CollectionRulesItems from './app/CollectionRulesItems.json';
 import CouponCode from './app/CouponCode.json';
 import AppliedCouponCodes from './app/AppliedCouponCodes.json';
@@ -125,6 +126,7 @@ export const appSchemas: Schema[] | SchemaStub[] = [
 
   LoyaltyProgram as Schema,
   LoyaltyPointEntry as Schema,
+  LoanProfile as Schema,
   CollectionRulesItems as Schema,
 
   Payment as Schema,

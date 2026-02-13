@@ -11,6 +11,7 @@ import { Misc } from './baseModels/Misc';
 import { Party } from './baseModels/Party/Party';
 import { LoyaltyProgram } from './baseModels/LoyaltyProgram/LoyaltyProgram';
 import { LoyaltyPointEntry } from './baseModels/LoyaltyPointEntry/LoyaltyPointEntry';
+import { LoanProfile } from './baseModels/LoanProfile/LoanProfile';
 import { CollectionRulesItems } from './baseModels/CollectionRulesItems/CollectionRulesItems';
 import { Lead } from './baseModels/Lead/Lead';
 import { AppliedCouponCodes } from './baseModels/AppliedCouponCodes/AppliedCouponCodes';
@@ -76,6 +77,7 @@ export const models = {
   Party,
   LoyaltyProgram,
   LoyaltyPointEntry,
+  LoanProfile,
   CollectionRulesItems,
   CouponCode,
   Payment,

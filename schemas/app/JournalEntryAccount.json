@@ -21,8 +21,41 @@
       "fieldname": "credit",
       "label": "Credit",
       "fieldtype": "Currency"
+    },
+    {
+      "fieldname": "loanProfile",
+      "label": "Loan Account",
+      "placeholder": "Loan Account",
+      "fieldtype": "Link",
+      "target": "LoanProfile"
+    },
+    {
+      "fieldname": "loanComponent",
+      "label": "Loan Component",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "None",
+          "label": "None"
+        },
+        {
+          "value": "Principal",
+          "label": "Principal"
+        },
+        {
+          "value": "Interest",
+          "label": "Interest"
+        }
+      ],
+      "default": "None"
     }
   ],
-  "tableFields": ["account", "debit", "credit"],
+  "tableFields": [
+    "account",
+    "debit",
+    "credit",
+    "loanProfile",
+    "loanComponent"
+  ],
   "keywordFields": ["account"]
 }
