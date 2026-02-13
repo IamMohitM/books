@@ -48,10 +48,10 @@ export class LoanRegister extends Report {
   getColumns(): ColumnField[] {
     return [
       {
-        fieldname: 'liabilityAccount',
-        label: t`Liability Account`,
-        fieldtype: 'Data',
-        width: 1.5,
+        fieldname: 'startDate',
+        label: t`Start Date`,
+        fieldtype: 'Date',
+        width: 1.1,
       },
       {
         fieldname: 'lenderName',
@@ -95,6 +95,12 @@ export class LoanRegister extends Report {
         fieldtype: 'Currency',
         align: 'right',
       },
+      {
+        fieldname: 'liabilityAccount',
+        label: t`Liability Account`,
+        fieldtype: 'Data',
+        width: 1.5,
+      },
     ];
   }
 
@@ -119,7 +125,7 @@ export class LoanRegister extends Report {
   getRows(rows: LoanSnapshot[]): ReportData {
     const data: ReportData = rows.map((row) => {
       const values = [
-        row.liabilityAccount ?? row.loanProfile,
+        row.startDate ?? '',
         row.lenderName,
         row.annualInterestRate,
         row.principalOutstanding,
@@ -127,6 +133,7 @@ export class LoanRegister extends Report {
         row.accruedInterest,
         row.interestOwed,
         row.totalDue,
+        row.liabilityAccount ?? row.loanProfile,
       ];
 
       return {
@@ -137,6 +144,8 @@ export class LoanRegister extends Report {
 
           if (column.fieldname === 'annualInterestRate') {
             display = Number(value ?? 0).toFixed(2);
+          } else if (column.fieldtype === 'Date' && value) {
+            display = this.fyo.format(value, 'Date');
           } else if (isNumeric) {
             display = this.fyo.format(value as number, 'Currency');
           }
@@ -225,6 +234,11 @@ export class LoanRegister extends Report {
           align: 'right',
           bold: true,
           width: this.columns[7]?.width,
+        },
+        {
+          value: '',
+          rawValue: '',
+          width: this.columns[8]?.width,
         },
       ],
     });

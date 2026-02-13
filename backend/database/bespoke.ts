@@ -177,10 +177,13 @@ export class BespokeQueries {
     await BespokeQueries.ensureLoanLedgerColumns(db);
     const loanProfileRow = (await db
       .knex!(ModelNameEnum.LoanProfile)
-      .select('liabilityAccount')
+      .select('liabilityAccount', 'interestExpenseAccount')
       .where('name', loanProfile)
-      .first()) as { liabilityAccount?: string } | undefined;
+      .first()) as
+      | { liabilityAccount?: string; interestExpenseAccount?: string }
+      | undefined;
     const liabilityAccount = loanProfileRow?.liabilityAccount;
+    const interestExpenseAccount = loanProfileRow?.interestExpenseAccount;
 
     const query = db
       .knex!(ModelNameEnum.AccountingLedgerEntry)
@@ -189,12 +192,20 @@ export class BespokeQueries {
         'date',
         'referenceName',
         db.knex!.raw(
-          'case when loanProfile is null and account = ? then ? else loanProfile end as loanProfile',
-          [liabilityAccount, loanProfile]
+          `case
+            when loanProfile is null and account = ? then ?
+            when loanProfile is null and account = ? then ?
+            else loanProfile
+          end as loanProfile`,
+          [liabilityAccount, loanProfile, interestExpenseAccount, loanProfile]
         ),
         db.knex!.raw(
-          'case when loanProfile is null and account = ? then ? else loanComponent end as loanComponent',
-          [liabilityAccount, 'Principal']
+          `case
+            when loanProfile is null and account = ? then ?
+            when loanProfile is null and account = ? then ?
+            else loanComponent
+          end as loanComponent`,
+          [liabilityAccount, 'Principal', interestExpenseAccount, 'Interest']
         )
       )
       .select({
@@ -210,14 +221,25 @@ export class BespokeQueries {
               .andWhere('loanComponent', 'in', ['Principal', 'Interest']);
           })
           .orWhere((sub) => {
-            if (!liabilityAccount) {
+            if (!liabilityAccount && !interestExpenseAccount) {
               sub.whereRaw('0 = 1');
               return;
             }
 
             sub
               .whereNull('loanProfile')
-              .andWhere('account', liabilityAccount)
+              .andWhere((accountBuilder) => {
+                if (liabilityAccount && interestExpenseAccount) {
+                  accountBuilder.whereIn('account', [
+                    liabilityAccount,
+                    interestExpenseAccount,
+                  ]);
+                } else if (liabilityAccount) {
+                  accountBuilder.where('account', liabilityAccount);
+                } else if (interestExpenseAccount) {
+                  accountBuilder.where('account', interestExpenseAccount);
+                }
+              })
               .andWhere((component) => {
                 component
                   .whereNull('loanComponent')
@@ -346,6 +368,7 @@ export class BespokeQueries {
         liabilityAccount: loanProfile.liabilityAccount,
         lenderName: loanProfile.lenderName,
         annualInterestRate: Number(loanProfile.annualInterestRate ?? 0),
+        startDate: loanProfile.startDate,
         principalOutstanding: 0,
         interestPaid: 0,
         accruedInterest: 0,
@@ -383,6 +406,7 @@ export class BespokeQueries {
       liabilityAccount: loanProfile.liabilityAccount,
       lenderName: loanProfile.lenderName,
       annualInterestRate: annualRate,
+      startDate: loanProfile.startDate,
       principalOutstanding,
       interestPaid,
       accruedInterest,

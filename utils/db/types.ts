@@ -121,6 +121,7 @@ export type LoanSnapshot = {
   liabilityAccount?: string;
   lenderName: string;
   annualInterestRate: number;
+  startDate?: string;
   principalOutstanding: number;
   interestPaid: number;
   accruedInterest: number;

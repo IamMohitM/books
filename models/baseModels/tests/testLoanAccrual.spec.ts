@@ -214,4 +214,41 @@ test('principal inferred from liability account when loanProfile missing', async
   );
 });
 
+test('interest inferred from expense account when loanProfile missing', async (t) => {
+  const loanProfile = fyo.doc.getNewDoc(ModelNameEnum.LoanProfile, {
+    name: 'L-INFER-INT',
+    lenderName: 'Lender Infer Interest',
+    startDate: '2026-02-01',
+    liabilityAccount: 'Creditors',
+    interestExpenseAccount: 'Cost of Goods Sold',
+    annualInterestRate: 12,
+    openingPrincipal: fyo.pesa(0),
+    openingAccruedInterest: fyo.pesa(0),
+    active: true,
+  });
+  await loanProfile.sync();
+
+  const jv = fyo.doc.getNewDoc(ModelNameEnum.JournalEntry, {
+    entryType: 'Journal Entry',
+    date: '2026-02-05',
+    accounts: [
+      {
+        account: 'Cost of Goods Sold',
+        debit: fyo.pesa(100),
+        credit: fyo.pesa(0),
+      },
+      {
+        account: 'Cash',
+        debit: fyo.pesa(0),
+        credit: fyo.pesa(100),
+      },
+    ],
+  });
+  await jv.sync();
+  await jv.submit();
+
+  const snapshot = await fyo.db.getLoanSnapshot('L-INFER-INT', '2026-02-10');
+  t.equal(snapshot?.interestPaid, 100, 'interest inferred from expense account');
+});
+
 closeTestFyo(fyo, __filename);
