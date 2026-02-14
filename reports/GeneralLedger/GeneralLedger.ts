@@ -28,6 +28,7 @@ export class GeneralLedger extends LedgerReport {
   loading = false;
 
   ascending = false;
+  sortByDate?: string;
   reverted = false;
   referenceType: ReferenceType = 'All';
   groupBy: 'none' | 'party' | 'account' | 'referenceName' = 'none';
@@ -42,10 +43,15 @@ export class GeneralLedger extends LedgerReport {
       this.toDate = DateTime.now().plus({ days: 1 }).toISODate();
       this.fromDate = DateTime.now().minus({ years: 1 }).toISODate();
     }
+    if (!this.sortByDate) {
+      this.sortByDate = 'desc';
+    }
+    this.ascending = this.sortByDate === 'asc';
   }
 
   async setReportData(filter?: string, force?: boolean) {
     this.loading = true;
+    this.ascending = this.sortByDate === 'asc';
     let sort = true;
     if (force || filter !== 'grouped' || this._rawData.length === 0) {
       await this._setRawData();
@@ -348,9 +354,13 @@ export class GeneralLedger extends LedgerReport {
         fieldname: 'reverted',
       },
       {
-        fieldtype: 'Check',
-        label: t`Ascending Order`,
-        fieldname: 'ascending',
+        fieldtype: 'Select',
+        label: t`Sort By Date`,
+        fieldname: 'sortByDate',
+        options: [
+          { label: t`Oldest First`, value: 'asc' },
+          { label: t`Newest First`, value: 'desc' },
+        ],
       },
     ] as Field[];
   }
