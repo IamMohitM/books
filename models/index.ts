@@ -12,6 +12,7 @@ import { Party } from './baseModels/Party/Party';
 import { LoyaltyProgram } from './baseModels/LoyaltyProgram/LoyaltyProgram';
 import { LoyaltyPointEntry } from './baseModels/LoyaltyPointEntry/LoyaltyPointEntry';
 import { LoanProfile } from './baseModels/LoanProfile/LoanProfile';
+import { LoanProfileHistoricalPayment } from './baseModels/LoanProfileHistoricalPayment/LoanProfileHistoricalPayment';
 import { CollectionRulesItems } from './baseModels/CollectionRulesItems/CollectionRulesItems';
 import { Lead } from './baseModels/Lead/Lead';
 import { AppliedCouponCodes } from './baseModels/AppliedCouponCodes/AppliedCouponCodes';
@@ -78,6 +79,7 @@ export const models = {
   LoyaltyProgram,
   LoyaltyPointEntry,
   LoanProfile,
+  LoanProfileHistoricalPayment,
   CollectionRulesItems,
   CouponCode,
   Payment,

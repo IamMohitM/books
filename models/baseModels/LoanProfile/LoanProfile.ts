@@ -65,6 +65,13 @@ export class LoanProfile extends Doc {
         );
       }
     },
+    historicalInterestPaid: (value: DocValue) => {
+      if ((value as Money)?.isNegative?.() ?? false) {
+        throw new ValidationError(
+          this.fyo.t`Historical Interest Paid cannot be less than 0.`
+        );
+      }
+    },
   };
 
   async beforeSync() {
@@ -204,33 +211,7 @@ export class LoanProfile extends Doc {
     };
   }
 
-  static getActions(fyo: Fyo): Action[] {
-    return [
-      {
-        group: fyo.t`Actions`,
-        label: fyo.t`Record Opening Principal`,
-        condition: (doc) => !doc.notInserted,
-        action: async (doc) => {
-          const openingPrincipal = doc.get('openingPrincipal');
-          const amount =
-            openingPrincipal instanceof Money
-              ? openingPrincipal.float
-              : Number(openingPrincipal ?? 0);
-
-          if (!amount || amount <= 0) {
-            const { showToast } = await import('src/utils/interactive');
-            showToast({
-              type: 'warning',
-              message: fyo.t`Opening Principal must be greater than 0.`,
-              duration: 'short',
-            });
-            return;
-          }
-
-          await doc.set('recordCashReceiptNow', true);
-          await doc.sync();
-        },
-      },
-    ];
+  static getActions(_fyo: Fyo): Action[] {
+    return [];
   }
 }

@@ -34,6 +34,7 @@ export enum ModelNameEnum {
   LoyaltyProgram = 'LoyaltyProgram',
   LoyaltyPointEntry = 'LoyaltyPointEntry',
   LoanProfile = 'LoanProfile',
+  LoanProfileHistoricalPayment = 'LoanProfileHistoricalPayment',
   CollectionRulesItems = 'CollectionRulesItems',
   CouponCode = 'CouponCode',
   IntegrationErrorLog = 'IntegrationErrorLog',

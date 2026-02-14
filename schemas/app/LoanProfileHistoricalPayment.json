@@ -1,0 +1,32 @@
+{
+  "name": "LoanProfileHistoricalPayment",
+  "label": "Loan Profile Historical Payment",
+  "isSingle": false,
+  "isChild": true,
+  "fields": [
+    {
+      "fieldname": "date",
+      "label": "Date",
+      "fieldtype": "Date",
+      "required": true
+    },
+    {
+      "fieldname": "paymentType",
+      "label": "Type",
+      "fieldtype": "Select",
+      "options": [
+        { "value": "Principal", "label": "Principal" },
+        { "value": "Interest", "label": "Interest" }
+      ],
+      "required": true
+    },
+    {
+      "fieldname": "amount",
+      "label": "Amount",
+      "fieldtype": "Currency",
+      "required": true
+    }
+  ],
+  "tableFields": ["date", "paymentType", "amount"],
+  "keywordFields": ["paymentType"]
+}
