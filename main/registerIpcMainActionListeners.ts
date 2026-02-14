@@ -55,7 +55,24 @@ export default function registerIpcMainActionListeners(main: Main) {
         root = 'dbs';
       }
 
-      const dbsPath = path.join(root, 'Frappe Books');
+      const legacyAppName = 'Frappe Books';
+      const appName = 'Frappe Cash Books';
+      const legacyPath = path.join(root, legacyAppName);
+      let dbsPath = path.join(root, appName);
+
+      if (
+        legacyPath !== dbsPath &&
+        (await fs.pathExists(legacyPath)) &&
+        !(await fs.pathExists(dbsPath))
+      ) {
+        try {
+          await fs.move(legacyPath, dbsPath, { overwrite: false });
+        } catch {
+          // If migration fails, fall back to legacy path.
+          dbsPath = legacyPath;
+        }
+      }
+
       const backupPath = path.join(dbsPath, 'backups');
       await fs.ensureDir(backupPath);
 

@@ -1,7 +1,7 @@
 # Cash and Loan Tracking Guide
 
 ## Goal
-Use Frappe Books as a cash-first ledger with clear loan principal and interest tracking.
+Use Frappe Cash Books as a cash-first ledger with clear loan principal and interest tracking.
 
 ## Setup
 1. Go to `Common -> Loan Profiles`.
