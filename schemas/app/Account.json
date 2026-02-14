@@ -136,7 +136,19 @@
       "label": "Is Group",
       "fieldtype": "Check",
       "default": false
+    },
+    {
+      "fieldname": "description",
+      "label": "Description",
+      "fieldtype": "Text"
     }
   ],
-  "quickEditFields": ["rootType", "parentAccount", "accountType", "isGroup"]
+  "quickEditFields": [
+    "name",
+    "rootType",
+    "parentAccount",
+    "accountType",
+    "isGroup",
+    "description"
+  ]
 }

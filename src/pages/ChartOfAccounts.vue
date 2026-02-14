@@ -5,6 +5,9 @@
       <Button v-if="!isAllCollapsed" @click="collapse">{{
         t`Collapse`
       }}</Button>
+      <Button @click="exportAccountsForImport">{{
+        t`Export (Import Wizard)`
+      }}</Button>
     </PageHeader>
 
     <!-- Chart of Accounts -->
@@ -187,7 +190,9 @@ import { languageDirectionKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { commongDocDelete, openQuickEdit } from 'src/utils/ui';
+import { getSavePath, showExportInFolder } from 'src/utils/ui';
 import { getMapFromList, removeAtIndex } from 'utils/index';
+import { generateCSV, parseCSV } from 'utils/csvParser';
 import { defineComponent, nextTick } from 'vue';
 import Button from '../components/Button.vue';
 import { inject } from 'vue';
@@ -198,6 +203,7 @@ import { Doc } from 'fyo/model/doc';
 import { Component } from 'vue';
 import { uicolors } from 'src/utils/colors';
 import { showDialog } from 'src/utils/interactive';
+import { Importer } from 'src/importer';
 
 type AccountItem = {
   name: string;
@@ -353,6 +359,162 @@ export default defineComponent({
         currency,
       };
       this.accounts = await this.getChildren();
+    },
+    async exportAccountsForImport() {
+      const exportChoice = (await showDialog({
+        title: this.t`Export Chart of Accounts`,
+        detail: this.t`Include description column in the export?`,
+        buttons: [
+          {
+            label: this.t`Include Description`,
+            action: () => 'include',
+            isPrimary: true,
+          },
+          {
+            label: this.t`Exclude Description`,
+            action: () => 'exclude',
+          },
+          {
+            label: this.t`Cancel`,
+            action: () => null,
+            isEscape: true,
+          },
+        ],
+      })) as 'include' | 'exclude' | null;
+
+      if (!exportChoice) {
+        return;
+      }
+
+      const includeDescription = exportChoice === 'include';
+      const fields = [
+        'name',
+        'rootType',
+        'parentAccount',
+        'accountType',
+        'isGroup',
+      ];
+      if (includeDescription) {
+        fields.push('description');
+      }
+
+      const accountRows = (await fyo.db.getAll(ModelNameEnum.Account, {
+        fields,
+      })) as {
+        name: string;
+        rootType?: AccountRootType;
+        parentAccount?: string | null;
+        accountType?: AccountType;
+        isGroup?: boolean;
+        description?: string | null;
+      }[];
+
+      if (!accountRows.length) {
+        await showDialog({
+          title: this.t`Cannot Export`,
+          type: 'error',
+          detail: this.t`No accounts found to export.`,
+        });
+        return;
+      }
+
+      const importer = new Importer(ModelNameEnum.Account, fyo);
+      let headerRows = parseCSV(importer.getCSVTemplate());
+      let fieldKeys = importer.assignedTemplateFields;
+      const descriptionKey = 'Account.description';
+
+      if (!includeDescription) {
+        const keyRow = headerRows[2] ?? [];
+        const dropIndices = new Set<number>();
+        keyRow.forEach((key, index) => {
+          if (key === descriptionKey) {
+            dropIndices.add(index);
+          }
+        });
+
+        headerRows = headerRows.map((row) =>
+          row.filter((_, index) => !dropIndices.has(index))
+        );
+        fieldKeys = fieldKeys.filter((_, index) => !dropIndices.has(index));
+      }
+
+      const rootOrder: Record<string, number> = {
+        Asset: 1,
+        Liability: 2,
+        Equity: 3,
+        Income: 4,
+        Expense: 5,
+      };
+      const childrenMap = new Map<string | null, typeof accountRows>();
+      const normalized = accountRows.map((row) => ({
+        ...row,
+        parentAccount: row.parentAccount || null,
+      }));
+
+      for (const row of normalized) {
+        const key = row.parentAccount ?? null;
+        if (!childrenMap.has(key)) {
+          childrenMap.set(key, []);
+        }
+        childrenMap.get(key)!.push(row);
+      }
+
+      for (const rows of childrenMap.values()) {
+        rows.sort((a, b) => {
+          const orderA = rootOrder[a.rootType ?? ''] ?? 99;
+          const orderB = rootOrder[b.rootType ?? ''] ?? 99;
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+          return (a.name ?? '').localeCompare(b.name ?? '');
+        });
+      }
+
+      const flattened: typeof accountRows = [];
+      const visited = new Set<string>();
+      const visit = (parent: string | null) => {
+        const children = childrenMap.get(parent) ?? [];
+        for (const child of children) {
+          flattened.push(child);
+          visited.add(child.name);
+          visit(child.name);
+        }
+      };
+      visit(null);
+      for (const row of normalized) {
+        if (visited.has(row.name)) {
+          continue;
+        }
+        flattened.push(row);
+        visited.add(row.name);
+        visit(row.name);
+      }
+
+      const rows = flattened.map((account) => {
+        const values: Record<string, string | number> = {
+          'Account.name': account.name,
+          'Account.rootType': account.rootType ?? '',
+          'Account.parentAccount': account.parentAccount ?? '',
+          'Account.accountType': account.accountType ?? '',
+          'Account.isGroup': account.isGroup ? 1 : 0,
+        };
+        if (includeDescription) {
+          values['Account.description'] = account.description ?? '';
+        }
+
+        return fieldKeys.map((key) => (key ? values[key] ?? '' : ''));
+      });
+
+      const csv = generateCSV([...headerRows, ...rows]);
+      const dateString = new Date().toISOString().split('T')[0];
+      const fileName = `chart-of-accounts_${dateString}`;
+      const { canceled, filePath } = await getSavePath(fileName, 'csv');
+      if (canceled || !filePath) {
+        return;
+      }
+
+      await ipc.saveData(csv, filePath);
+      showExportInFolder(this.t`Export Successful`, filePath);
     },
     async onClick(account: AccountItem) {
       let shouldOpen = !account.isGroup;

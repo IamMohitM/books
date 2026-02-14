@@ -9,6 +9,7 @@ import {
   ReadOnlyMap,
   FormulaMap,
 } from 'fyo/model/types';
+import { ValidationError } from 'fyo/utils/errors';
 import { ModelNameEnum } from 'models/types';
 import { QueryFilter } from 'utils/db/types';
 import { AccountRootType, AccountRootTypeEnum, AccountType } from './types';
@@ -17,6 +18,7 @@ export class Account extends Doc {
   rootType?: AccountRootType;
   accountType?: AccountType;
   parentAccount?: string;
+  originalName?: string;
 
   get isDebit() {
     if (this.rootType === AccountRootTypeEnum.Asset) {
@@ -54,13 +56,46 @@ export class Account extends Doc {
     rgt: () => 0,
   };
 
+  async load() {
+    await super.load();
+    this.originalName = this.name;
+  }
+
   async beforeSync() {
+    if (
+      this.originalName &&
+      this.name &&
+      this.originalName !== this.name
+    ) {
+      const newName = this.name;
+      this.name = this.originalName;
+      await this.rename(newName);
+      this.originalName = newName;
+    }
+
+    if (this.parentAccount) {
+      const parent = await this.fyo.db.get('Account', this.parentAccount);
+      if (
+        parent?.rootType &&
+        this.rootType &&
+        parent.rootType !== this.rootType
+      ) {
+        throw new ValidationError(
+          this.fyo.t`Accounts can only be moved within the same category.`
+        );
+      }
+    }
+
     if (this.accountType || !this.parentAccount) {
       return;
     }
 
     const account = await this.fyo.db.get('Account', this.parentAccount);
     this.accountType = account.accountType as AccountType;
+  }
+
+  async afterSync() {
+    this.originalName = this.name;
   }
 
   static getListViewSettings(): ListViewSettings {
@@ -111,7 +146,6 @@ export class Account extends Doc {
 
   readOnly: ReadOnlyMap = {
     rootType: () => this.inserted,
-    parentAccount: () => this.inserted,
     accountType: () => !!this.accountType && this.inserted,
     isGroup: () => this.inserted,
   };

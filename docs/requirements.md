@@ -1,23 +1,21 @@
-# Loan Tracking Enhancements Requirements
+# Requirements
 
-## Goal
-Make loan tracking easier by showing user friendly loan account names, auto creating required accounts, and providing a loan ledger with interest owed.
+## Context
+User needs improvements in Chart of Accounts import/export and editing capabilities for Accounts.
 
-## In Scope
-- Fix Loan Register "Database error" when loan columns are missing in existing databases.
-- Show liability account name instead of loan ID in Loan Register.
-- Auto create liability and interest expense accounts when creating a Loan Profile.
-- Auto map loan rows in Journal Entry: user selects Loan Account + Component, account is set automatically.
-- Add Loan Ledger report with running principal and interest owed.
-
-## Out of Scope
-- Sales and Purchase flows.
-- Tax templates.
-- Party and Item specific features beyond current scope.
+## Goals
+- Allow optional export of account descriptions in the Chart of Accounts export that is compatible with Import Wizard.
+- Ensure account descriptions are available in Import Wizard (column assignment and values grid), but not shown in Chart of Accounts list.
+- Allow editing of account names.
+- Allow moving accounts between groups as long as the account remains within the same root category (rootType).
+- Ignore current group import error for now.
 
 ## Acceptance Criteria
-- Loan Register opens without database errors on existing databases.
-- Loan Register displays liability account name for each loan row.
-- New Loan Profiles can be created without manually creating accounts.
-- Journal Entry loan rows only require Loan Account + Component; account is auto set and validated.
-- Loan Ledger shows transactions in chronological order and includes current interest owed as of a selected date.
+- Export flow prompts for including description; if excluded, CSV has no description column. If included, description column is present with values.
+- Import Wizard shows Description field in column assignment (step 2) and data grid (step 3) when provided in data/template.
+- Chart of Accounts list does not display description.
+- Account name can be edited and persists correctly.
+- Changing parent group is allowed only when the parent account has the same rootType as the account.
+
+## Non-Goals
+- Fixing the group import error at this time.
