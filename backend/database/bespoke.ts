@@ -276,7 +276,9 @@ export class BespokeQueries {
         'annualInterestRate',
         'startDate',
         'openingPrincipal',
-        'openingAccruedInterest'
+        'openingAccruedInterest',
+        'historicalInterestPaid',
+        'includeHistoricalInterestPaid'
       )
       .where('name', loanProfileName)
       .first()) as
@@ -288,6 +290,8 @@ export class BespokeQueries {
           startDate: string;
           openingPrincipal: number | string;
           openingAccruedInterest: number | string;
+          historicalInterestPaid?: number | string;
+          includeHistoricalInterestPaid?: number | boolean | string;
         }
       | undefined;
 
@@ -302,7 +306,17 @@ export class BespokeQueries {
       asOfDate
     );
 
-    return BespokeQueries.computeLoanSnapshot(loanProfile, ledgerRows, asOfDate);
+    const preSystemTotals = await BespokeQueries.getLoanHistoricalPaymentTotals(
+      db,
+      loanProfileName
+    );
+
+    return BespokeQueries.computeLoanSnapshot(
+      loanProfile,
+      ledgerRows,
+      asOfDate,
+      preSystemTotals
+    );
   }
 
   static async getLoanPortfolioSnapshot(
@@ -317,7 +331,9 @@ export class BespokeQueries {
         'annualInterestRate',
         'startDate',
         'openingPrincipal',
-        'openingAccruedInterest'
+        'openingAccruedInterest',
+        'historicalInterestPaid',
+        'includeHistoricalInterestPaid'
       )
       .where('active', true)
       .andWhere('startDate', '<=', asOfDate)
@@ -328,6 +344,8 @@ export class BespokeQueries {
       startDate: string;
       openingPrincipal: number | string;
       openingAccruedInterest: number | string;
+      historicalInterestPaid?: number | string;
+      includeHistoricalInterestPaid?: number | boolean | string;
     }[];
 
     const snapshots: LoanSnapshot[] = [];
@@ -339,8 +357,18 @@ export class BespokeQueries {
         asOfDate
       );
 
+      const preSystemTotals = await BespokeQueries.getLoanHistoricalPaymentTotals(
+        db,
+        loanProfile.name
+      );
+
       snapshots.push(
-        BespokeQueries.computeLoanSnapshot(loanProfile, ledgerRows, asOfDate)
+        BespokeQueries.computeLoanSnapshot(
+          loanProfile,
+          ledgerRows,
+          asOfDate,
+          preSystemTotals
+        )
       );
     }
 
@@ -356,19 +384,41 @@ export class BespokeQueries {
       startDate: string;
       openingPrincipal: number | string;
       openingAccruedInterest: number | string;
+      historicalInterestPaid?: number | string;
+      includeHistoricalInterestPaid?: number | boolean | string;
     },
     ledgerRows: LoanLedgerRow[],
-    asOfDate: string
+    asOfDate: string,
+    preSystemTotals: { interestPaid: number; principalPaid: number } = {
+      interestPaid: 0,
+      principalPaid: 0,
+    }
   ): LoanSnapshot {
     const asOf = BespokeQueries.toUtcDate(asOfDate);
     const start = BespokeQueries.toUtcDate(loanProfile.startDate);
+
+    const annualRate = Number(loanProfile.annualInterestRate ?? 0);
+    const openingPrincipal = Number(loanProfile.openingPrincipal ?? 0);
+    const openingAccruedInterest = Number(loanProfile.openingAccruedInterest ?? 0);
+    const historicalInterestPaid = Number(loanProfile.historicalInterestPaid ?? 0);
+    const includeHistoricalInterestPaid = Boolean(
+      loanProfile.includeHistoricalInterestPaid ?? false
+    );
+    const preSystemInterestPaid =
+      historicalInterestPaid + (preSystemTotals?.interestPaid ?? 0);
+    const preSystemPrincipalPaid = preSystemTotals?.principalPaid ?? 0;
+
     if (asOf.getTime() < start.getTime()) {
       return {
         loanProfile: loanProfile.name,
         liabilityAccount: loanProfile.liabilityAccount,
         lenderName: loanProfile.lenderName,
-        annualInterestRate: Number(loanProfile.annualInterestRate ?? 0),
+        annualInterestRate: annualRate,
         startDate: loanProfile.startDate,
+        historicalInterestPaid,
+        includeHistoricalInterestPaid,
+        preSystemInterestPaid,
+        preSystemPrincipalPaid,
         principalOutstanding: 0,
         interestPaid: 0,
         accruedInterest: 0,
@@ -377,12 +427,8 @@ export class BespokeQueries {
       };
     }
 
-    const annualRate = Number(loanProfile.annualInterestRate ?? 0);
-    const openingPrincipal = Number(loanProfile.openingPrincipal ?? 0);
-    const openingAccruedInterest = Number(loanProfile.openingAccruedInterest ?? 0);
-
     let principalOutstanding = openingPrincipal;
-    let interestPaid = 0;
+    let interestPaid = includeHistoricalInterestPaid ? preSystemInterestPaid : 0;
 
     for (const row of ledgerRows) {
       if (row.loanComponent === 'Principal') {
@@ -407,12 +453,42 @@ export class BespokeQueries {
       lenderName: loanProfile.lenderName,
       annualInterestRate: annualRate,
       startDate: loanProfile.startDate,
+      historicalInterestPaid,
+      includeHistoricalInterestPaid,
+      preSystemInterestPaid,
+      preSystemPrincipalPaid,
       principalOutstanding,
       interestPaid,
       accruedInterest,
       interestOwed,
       totalDue: principalOutstanding + interestOwed,
     };
+  }
+
+  static async getLoanHistoricalPaymentTotals(
+    db: DatabaseCore,
+    loanProfileName: string
+  ): Promise<{ interestPaid: number; principalPaid: number }> {
+    const rows = (await db.knex!(ModelNameEnum.LoanProfileHistoricalPayment)
+      .select('paymentType', 'amount')
+      .where('parent', loanProfileName)
+      .andWhere('parentFieldname', 'historicalPayments')
+      .whereIn('paymentType', ['Principal', 'Interest'])) as {
+      paymentType: string;
+      amount: number | string;
+    }[];
+
+    const totals = { interestPaid: 0, principalPaid: 0 };
+    for (const row of rows) {
+      const amount = Number(row.amount ?? 0);
+      if (row.paymentType === 'Interest') {
+        totals.interestPaid += amount;
+      } else if (row.paymentType === 'Principal') {
+        totals.principalPaid += amount;
+      }
+    }
+
+    return totals;
   }
 
   static computeAccruedInterest(

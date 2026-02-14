@@ -122,6 +122,10 @@ export type LoanSnapshot = {
   lenderName: string;
   annualInterestRate: number;
   startDate?: string;
+  historicalInterestPaid?: number;
+  includeHistoricalInterestPaid?: boolean;
+  preSystemInterestPaid?: number;
+  preSystemPrincipalPaid?: number;
   principalOutstanding: number;
   interestPaid: number;
   accruedInterest: number;

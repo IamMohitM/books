@@ -251,4 +251,30 @@ test('interest inferred from expense account when loanProfile missing', async (t
   t.equal(snapshot?.interestPaid, 100, 'interest inferred from expense account');
 });
 
+test('pre-system payments included in interest paid when enabled', async (t) => {
+  const loanProfile = fyo.doc.getNewDoc(ModelNameEnum.LoanProfile, {
+    name: 'L-PRE-SYSTEM',
+    lenderName: 'Lender Pre',
+    startDate: '2026-02-01',
+    liabilityAccount: 'Creditors',
+    interestExpenseAccount: 'Office Rent',
+    annualInterestRate: 12,
+    openingPrincipal: fyo.pesa(10000),
+    openingAccruedInterest: fyo.pesa(0),
+    historicalInterestPaid: fyo.pesa(200),
+    includeHistoricalInterestPaid: true,
+    historicalPayments: [
+      { date: '2026-01-15', paymentType: 'Interest', amount: fyo.pesa(50) },
+      { date: '2026-01-20', paymentType: 'Principal', amount: fyo.pesa(500) },
+    ],
+    active: true,
+  });
+  await loanProfile.sync();
+
+  const snapshot = await fyo.db.getLoanSnapshot('L-PRE-SYSTEM', '2026-02-10');
+  t.equal(snapshot?.preSystemInterestPaid, 250, 'pre-system interest total');
+  t.equal(snapshot?.preSystemPrincipalPaid, 500, 'pre-system principal total');
+  t.equal(snapshot?.interestPaid, 250, 'interest paid includes pre-system');
+});
+
 closeTestFyo(fyo, __filename);
