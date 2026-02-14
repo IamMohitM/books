@@ -26,6 +26,7 @@
           :style="getCellStyle(col, c)"
           class="
             text-base
+            font-semibold
             px-3
             flex-shrink-0
             overflow-x-auto

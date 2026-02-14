@@ -14,11 +14,15 @@ export class LoanRegister extends Report {
   asOfDate?: string;
   fromDate?: string;
   loanProfile?: string;
+  sortByDate?: string;
   loading = false;
 
   async setDefaultFilters() {
     if (!this.asOfDate) {
       this.asOfDate = DateTime.now().toISODate();
+    }
+    if (!this.sortByDate) {
+      this.sortByDate = 'asc';
     }
   }
 
@@ -42,22 +46,31 @@ export class LoanRegister extends Report {
         placeholder: t`As Of Date`,
         required: true,
       },
+      {
+        fieldtype: 'Select',
+        fieldname: 'sortByDate',
+        label: t`Sort By Date`,
+        options: [
+          { label: t`Oldest First`, value: 'asc' },
+          { label: t`Newest First`, value: 'desc' },
+        ],
+      },
     ];
   }
 
   getColumns(): ColumnField[] {
     return [
       {
-        fieldname: 'startDate',
-        label: t`Start Date`,
-        fieldtype: 'Date',
-        width: 1.1,
-      },
-      {
         fieldname: 'lenderName',
         label: t`Lender`,
         fieldtype: 'Data',
         width: 1.5,
+      },
+      {
+        fieldname: 'startDate',
+        label: t`Start Date`,
+        fieldtype: 'Date',
+        width: 1.1,
       },
       {
         fieldname: 'annualInterestRate',
@@ -74,6 +87,18 @@ export class LoanRegister extends Report {
       {
         fieldname: 'interestPaid',
         label: t`Interest Paid`,
+        fieldtype: 'Currency',
+        align: 'right',
+      },
+      {
+        fieldname: 'preSystemInterestPaid',
+        label: t`Interest Paid (Pre-System)`,
+        fieldtype: 'Currency',
+        align: 'right',
+      },
+      {
+        fieldname: 'preSystemPrincipalPaid',
+        label: t`Principal Paid (Pre-System)`,
         fieldtype: 'Currency',
         align: 'right',
       },
@@ -118,6 +143,19 @@ export class LoanRegister extends Report {
       rows = await this.fyo.db.getLoanPortfolioSnapshot(asOfDate);
     }
 
+    const sortByDate = this.sortByDate === 'desc' ? 'desc' : 'asc';
+    rows = rows.slice().sort((a, b) => {
+      const aDate = a.startDate ?? '';
+      const bDate = b.startDate ?? '';
+      if (aDate === bDate) {
+        return (a.lenderName ?? '').localeCompare(b.lenderName ?? '');
+      }
+
+      return sortByDate === 'asc'
+        ? aDate.localeCompare(bDate)
+        : bDate.localeCompare(aDate);
+    });
+
     this.reportData = this.getRows(rows);
     this.loading = false;
   }
@@ -125,11 +163,13 @@ export class LoanRegister extends Report {
   getRows(rows: LoanSnapshot[]): ReportData {
     const data: ReportData = rows.map((row) => {
       const values = [
-        row.startDate ?? '',
         row.lenderName,
+        row.startDate ?? '',
         row.annualInterestRate,
         row.principalOutstanding,
         row.interestPaid,
+        row.preSystemInterestPaid ?? 0,
+        row.preSystemPrincipalPaid ?? 0,
         row.accruedInterest,
         row.interestOwed,
         row.totalDue,
@@ -141,6 +181,7 @@ export class LoanRegister extends Report {
           const column = this.columns[i];
           const isNumeric = typeof value === 'number';
           let display = String(value ?? '');
+          const isLender = column.fieldname === 'lenderName';
 
           if (column.fieldname === 'annualInterestRate') {
             display = Number(value ?? 0).toFixed(2);
@@ -155,6 +196,7 @@ export class LoanRegister extends Report {
             rawValue: value,
             align: column.align ?? (isNumeric ? 'right' : 'left'),
             width: column.width ?? 1,
+            bold: isLender,
           };
         }),
       } as ReportRow;
@@ -168,6 +210,8 @@ export class LoanRegister extends Report {
       (acc, row) => {
         acc.principalOutstanding += row.principalOutstanding;
         acc.interestPaid += row.interestPaid;
+        acc.preSystemInterestPaid += row.preSystemInterestPaid ?? 0;
+        acc.preSystemPrincipalPaid += row.preSystemPrincipalPaid ?? 0;
         acc.accruedInterest += row.accruedInterest;
         acc.interestOwed += row.interestOwed;
         acc.totalDue += row.totalDue;
@@ -176,6 +220,8 @@ export class LoanRegister extends Report {
       {
         principalOutstanding: 0,
         interestPaid: 0,
+        preSystemInterestPaid: 0,
+        preSystemPrincipalPaid: 0,
         accruedInterest: 0,
         interestOwed: 0,
         totalDue: 0,
@@ -215,30 +261,44 @@ export class LoanRegister extends Report {
           width: this.columns[4]?.width,
         },
         {
+          value: this.fyo.format(totals.preSystemInterestPaid, 'Currency'),
+          rawValue: totals.preSystemInterestPaid,
+          align: 'right',
+          bold: true,
+          width: this.columns[5]?.width,
+        },
+        {
+          value: this.fyo.format(totals.preSystemPrincipalPaid, 'Currency'),
+          rawValue: totals.preSystemPrincipalPaid,
+          align: 'right',
+          bold: true,
+          width: this.columns[6]?.width,
+        },
+        {
           value: this.fyo.format(totals.accruedInterest, 'Currency'),
           rawValue: totals.accruedInterest,
           align: 'right',
           bold: true,
-          width: this.columns[5]?.width,
+          width: this.columns[7]?.width,
         },
         {
           value: this.fyo.format(totals.interestOwed, 'Currency'),
           rawValue: totals.interestOwed,
           align: 'right',
           bold: true,
-          width: this.columns[6]?.width,
+          width: this.columns[8]?.width,
         },
         {
           value: this.fyo.format(totals.totalDue, 'Currency'),
           rawValue: totals.totalDue,
           align: 'right',
           bold: true,
-          width: this.columns[7]?.width,
+          width: this.columns[9]?.width,
         },
         {
           value: '',
           rawValue: '',
-          width: this.columns[8]?.width,
+          width: this.columns[10]?.width,
         },
       ],
     });

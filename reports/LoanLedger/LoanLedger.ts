@@ -157,6 +157,9 @@ export class LoanLedger extends Report {
       'startDate',
       'openingPrincipal',
       'openingAccruedInterest',
+      'historicalInterestPaid',
+      'includeHistoricalInterestPaid',
+      'historicalPayments',
     ])) as {
       name: string;
       lenderName: string;
@@ -164,6 +167,13 @@ export class LoanLedger extends Report {
       startDate: string;
       openingPrincipal: number | string;
       openingAccruedInterest: number | string;
+      historicalInterestPaid?: number | string;
+      includeHistoricalInterestPaid?: boolean | number | string;
+      historicalPayments?: {
+        date?: string;
+        paymentType?: string;
+        amount?: number | string | Money;
+      }[];
     };
 
     const ledgerRows = await this.fyo.db.getLoanLedger(
@@ -185,6 +195,8 @@ export class LoanLedger extends Report {
       startDate: string;
       openingPrincipal: number | string;
       openingAccruedInterest: number | string;
+      historicalInterestPaid?: number | string;
+      includeHistoricalInterestPaid?: boolean | number | string;
     },
     ledgerRows: LoanLedgerRow[],
     asOfDate: string
@@ -199,6 +211,48 @@ export class LoanLedger extends Report {
     const annualRate = toNumber(profile.annualInterestRate ?? 0) / 100;
     const openingPrincipal = toNumber(profile.openingPrincipal ?? 0);
     const openingAccruedInterest = toNumber(profile.openingAccruedInterest ?? 0);
+    const historicalInterestPaid = toNumber(profile.historicalInterestPaid ?? 0);
+    const includeHistoricalInterestPaid = Boolean(
+      profile.includeHistoricalInterestPaid ?? false
+    );
+
+    const historicalPayments = Array.isArray(profile.historicalPayments)
+      ? profile.historicalPayments
+      : [];
+    const preSystemRows = [
+      ...(historicalInterestPaid > 0
+        ? [
+            {
+              date: profile.startDate,
+              paymentType: 'Interest',
+              amount: historicalInterestPaid,
+              label: t`Interest Paid (Pre-System)`,
+            },
+          ]
+        : []),
+      ...historicalPayments
+        .filter((row) => row.paymentType && row.amount)
+        .map((row) => {
+          const paymentType = row.paymentType === 'Principal' ? 'Principal' : 'Interest';
+          const label =
+            paymentType === 'Principal'
+              ? t`Principal Paid (Pre-System)`
+              : t`Interest Paid (Pre-System)`;
+          return {
+            date: row.date ?? profile.startDate,
+            paymentType,
+            amount: toNumber(row.amount ?? 0),
+            label,
+          };
+        }),
+    ].sort((a, b) => {
+      const dA = this.toUtcDate(a.date).getTime();
+      const dB = this.toUtcDate(b.date).getTime();
+      if (dA !== dB) {
+        return dA - dB;
+      }
+      return a.paymentType.localeCompare(b.paymentType);
+    });
 
     let principal = openingPrincipal;
     let interestPaid = 0;
@@ -235,7 +289,9 @@ export class LoanLedger extends Report {
     });
 
     const result: LoanLedgerComputedRow[] = [];
-    if (openingPrincipal !== 0 || openingAccruedInterest !== 0) {
+    const shouldShowOpening = openingPrincipal !== 0 || openingAccruedInterest !== 0;
+    const pushOpeningRow = () => {
+      const interestOwed = openingAccruedInterest + accrued - interestPaid;
       result.push({
         date: profile.startDate,
         referenceName: t`Opening Balance`,
@@ -244,10 +300,43 @@ export class LoanLedger extends Report {
         credit: 0,
         principalOutstanding: principal,
         accruedInterest: 0,
-        interestPaid: 0,
-        interestOwed: openingAccruedInterest,
-        totalDue: principal + openingAccruedInterest,
+        interestPaid,
+        interestOwed,
+        totalDue: principal + interestOwed,
       });
+    };
+    let openingRowAdded = false;
+
+    for (const entry of preSystemRows) {
+      if (
+        shouldShowOpening &&
+        !openingRowAdded &&
+        this.toUtcDate(entry.date).getTime() >= start.getTime()
+      ) {
+        pushOpeningRow();
+        openingRowAdded = true;
+      }
+      if (includeHistoricalInterestPaid && entry.paymentType === 'Interest') {
+        interestPaid += entry.amount;
+      }
+      const interestOwed = openingAccruedInterest + accrued - interestPaid;
+      result.push({
+        date: entry.date,
+        referenceName: entry.label,
+        loanComponent: entry.paymentType,
+        debit: entry.amount,
+        credit: 0,
+        principalOutstanding: principal,
+        accruedInterest: accrued,
+        interestPaid,
+        interestOwed,
+        totalDue: principal + interestOwed,
+      });
+    }
+
+    if (shouldShowOpening && !openingRowAdded) {
+      pushOpeningRow();
+      openingRowAdded = true;
     }
 
     for (const row of sorted) {
