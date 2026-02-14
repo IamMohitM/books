@@ -17,7 +17,6 @@ Loan tracking stays as metadata on Journal Entries and Accounting Ledger Entries
 - Liability account: root type `Liability`, account type `Payable`.
 - Interest account: root type `Expense`, account type `Expense Account`.
 - Parent account chosen from existing group accounts by preference or fallback.
- - When `Record Cash Receipt Now` is used, an Opening Entry is created and `Opening Principal` is reset to 0 to avoid double counting.
 
 ## Journal Entry Mapping
 - Loan rows auto map `account` from the selected Loan Profile and Component.

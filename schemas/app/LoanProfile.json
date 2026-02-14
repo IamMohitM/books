@@ -57,10 +57,22 @@
       "default": 0
     },
     {
-      "fieldname": "recordCashReceiptNow",
-      "label": "Record Cash Receipt Now",
+      "fieldname": "historicalInterestPaid",
+      "label": "Interest Paid (Pre-System)",
+      "fieldtype": "Currency",
+      "default": 0
+    },
+    {
+      "fieldname": "includeHistoricalInterestPaid",
+      "label": "Include Pre-System Payments",
       "fieldtype": "Check",
       "default": false
+    },
+    {
+      "fieldname": "historicalPayments",
+      "label": "Pre-System Payments",
+      "fieldtype": "Table",
+      "target": "LoanProfileHistoricalPayment"
     },
     {
       "fieldname": "active",
@@ -82,7 +94,9 @@
     "annualInterestRate",
     "openingPrincipal",
     "openingAccruedInterest",
-    "recordCashReceiptNow",
+    "historicalInterestPaid",
+    "includeHistoricalInterestPaid",
+    "historicalPayments",
     "active",
     "notes"
   ],

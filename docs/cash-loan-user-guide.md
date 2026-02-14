@@ -13,7 +13,6 @@ Use Frappe Books as a cash-first ledger with clear loan principal and interest t
 - Optional opening balances: `Opening Principal`, `Opening Accrued Interest`
 4. Liability and Interest Expense accounts are created automatically.
 5. If you want to override them, select different accounts in the profile.
-6. Optional: Check `Record Cash Receipt Now` to create an Opening Entry and post the opening principal to the General Ledger. This will also reset `Opening Principal` to 0 to avoid double counting.
 
 ## Recording Transactions
 Use `Common -> Journal Entry`.
