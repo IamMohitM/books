@@ -42,6 +42,36 @@ export function getExportFields(
     });
 }
 
+export function ensureSubmittableMetaFields(
+  fields: ExportField[],
+  schemaName: string,
+  fyo: Fyo
+): ExportField[] {
+  if (!fyo.schemaMap[schemaName]?.isSubmittable) {
+    return fields;
+  }
+
+  const existing = new Set(fields.map((f) => f.fieldname));
+  const addField = (fieldname: string, label: string) => {
+    if (existing.has(fieldname)) {
+      return;
+    }
+
+    fields.push({
+      fieldname,
+      fieldtype: FieldTypeEnum.Check,
+      label,
+      export: true,
+    });
+    existing.add(fieldname);
+  };
+
+  addField('submitted', 'Submitted');
+  addField('cancelled', 'Cancelled');
+
+  return fields;
+}
+
 export function getExportTableFields(
   fields: Field[],
   fyo: Fyo

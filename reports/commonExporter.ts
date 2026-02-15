@@ -1,7 +1,6 @@
 import { t } from 'fyo';
 import { Action } from 'fyo/model/types';
 import { Verb } from 'fyo/telemetry/types';
-import { getSavePath, showExportInFolder } from 'src/utils/ui';
 import { getIsNullOrUndef } from 'utils';
 import { generateCSV } from 'utils/csvParser';
 import { Report } from './Report';
@@ -30,7 +29,16 @@ export default function getCommonExportActions(report: Report): Action[] {
   }));
 }
 
+async function getUiHelpers() {
+  const ui = await import('src/utils/ui');
+  return {
+    getSavePath: ui.getSavePath,
+    showExportInFolder: ui.showExportInFolder,
+  };
+}
+
 async function exportReport(extention: ExportExtention, report: Report) {
+  const { getSavePath } = await getUiHelpers();
   const { filePath, canceled } = await getSavePath(
     report.reportName,
     extention
@@ -185,5 +193,6 @@ export async function saveExportData(
 ) {
   await ipc.saveData(data, filePath);
   message ??= t`Export Successful`;
+  const { showExportInFolder } = await getUiHelpers();
   showExportInFolder(message, filePath);
 }

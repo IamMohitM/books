@@ -411,6 +411,7 @@
 </template>
 <script lang="ts">
 import { DocValue } from 'fyo/core/types';
+import { Doc } from 'fyo/model/doc';
 import { Action } from 'fyo/model/types';
 import { Verb } from 'fyo/telemetry/types';
 import { ValidationError } from 'fyo/utils/errors';
@@ -856,7 +857,8 @@ export default defineComponent({
         return false;
       }
 
-      const absentLinks = await this.importer.checkLinks();
+      const existingNamesBySchema = this.getExistingNamesBySchema();
+      const absentLinks = await this.importer.checkLinks(existingNamesBySchema);
       if (absentLinks.length) {
         await showDialog({
           title,
@@ -879,26 +881,82 @@ export default defineComponent({
       this.isMakingEntries = true;
       this.importer.populateDocs();
 
-      const shouldSubmit = await this.askShouldSubmit();
+      const schemaName = this.importer.schemaName;
+      const hasSubmittedField = this.importer.assignedTemplateFields.includes(
+        `${schemaName}.submitted`
+      );
+      const hasCancelledField = this.importer.assignedTemplateFields.includes(
+        `${schemaName}.cancelled`
+      );
+      const useStatusFields = hasSubmittedField || hasCancelledField;
+      const shouldSubmit = useStatusFields ? false : await this.askShouldSubmit();
+      const statusByName = useStatusFields
+        ? this.getImportStatusByName(schemaName)
+        : new Map<string, { submitted?: boolean; cancelled?: boolean }>();
 
       let doneCount = 0;
-      for (const doc of this.importer.docs) {
-        this.setLoadingStatus(doneCount, this.importer.docs.length);
-        const oldName = doc.name ?? '';
-        try {
-          await doc.sync();
-          if (shouldSubmit) {
+      const docs = this.importer.docs;
+
+      const syncDoc = async (doc: Doc, sourceName?: string) => {
+        if (doc.name) {
+          doc.skipAutoName = true;
+        }
+        await doc.sync();
+
+        if (useStatusFields) {
+          const status = statusByName.get(sourceName ?? doc.name ?? '');
+          const submitted = Boolean(status?.submitted);
+          const cancelled = Boolean(status?.cancelled);
+
+          if (cancelled) {
+            if (!doc.submitted) {
+              await doc.submit();
+            }
+            if (!doc.cancelled) {
+              await doc.cancel();
+            }
+            if (!doc.submitted) {
+              await doc.setAndSync('submitted', true);
+            }
+            if (!doc.cancelled) {
+              await doc.setAndSync('cancelled', true);
+            }
+            return;
+          }
+
+          if (submitted && !doc.submitted) {
             await doc.submit();
           }
-          doneCount += 1;
+          return;
+        }
 
-          this.success.push(doc.name!);
-          this.successOldName.push(oldName);
-        } catch (error) {
-          if (error instanceof Error) {
-            this.failed.push({ name: doc.name!, error });
+        if (shouldSubmit) {
+          await doc.submit();
+        }
+      };
+
+      const importDocs = async (docList: Doc[]) => {
+        for (const doc of docList) {
+          this.setLoadingStatus(doneCount, docs.length);
+          const oldName = doc.name ?? '';
+          try {
+            await syncDoc(doc, oldName);
+            doneCount += 1;
+
+            this.success.push(doc.name!);
+            this.successOldName.push(oldName);
+          } catch (error) {
+            if (error instanceof Error) {
+              this.failed.push({ name: doc.name!, error });
+            }
           }
         }
+      };
+
+      if (schemaName === ModelNameEnum.Account) {
+        await this.importAccountsTwoPass(docs, importDocs);
+      } else {
+        await importDocs(docs);
       }
 
       this.fyo.telemetry.log(Verb.Imported, this.importer.schemaName);
@@ -963,7 +1021,115 @@ export default defineComponent({
       }
 
       this.importType = importType;
-      this.nullOrImporter = new Importer(importType, fyo);
+      const includeMetaFields = !!this.fyo.schemaMap[importType]?.isSubmittable;
+      this.nullOrImporter = new Importer(importType, fyo, {
+        includeMetaFields,
+      });
+    },
+    getExistingNamesBySchema(): Record<string, Set<string>> {
+      const namesBySchema: Record<string, Set<string>> = {};
+      const nameIndices = this.importer.assignedTemplateFields
+        .map((key, index) => ({ key, index }))
+        .filter((f) => f.key?.endsWith('.name'))
+        .reduce((acc, f) => {
+          if (!f.key) {
+            return acc;
+          }
+
+          const schemaName = f.key.split('.')[0];
+          acc[schemaName] = f.index;
+          return acc;
+        }, {} as Record<string, number>);
+
+      for (const schemaName of Object.keys(nameIndices)) {
+        namesBySchema[schemaName] = new Set();
+      }
+
+      for (const row of this.importer.valueMatrix) {
+        for (const schemaName of Object.keys(nameIndices)) {
+          const idx = nameIndices[schemaName];
+          const value = row[idx]?.value;
+          if (typeof value === 'string' && value) {
+            namesBySchema[schemaName].add(value);
+          }
+        }
+      }
+
+      return namesBySchema;
+    },
+    getImportStatusByName(schemaName: string) {
+      const statusMap = new Map<string, { submitted?: boolean; cancelled?: boolean }>();
+      const nameIndex = this.importer.assignedTemplateFields.indexOf(
+        `${schemaName}.name`
+      );
+      const submittedIndex = this.importer.assignedTemplateFields.indexOf(
+        `${schemaName}.submitted`
+      );
+      const cancelledIndex = this.importer.assignedTemplateFields.indexOf(
+        `${schemaName}.cancelled`
+      );
+
+      if (nameIndex < 0) {
+        return statusMap;
+      }
+
+      for (const row of this.importer.valueMatrix) {
+        const name = row[nameIndex]?.value;
+        if (typeof name !== 'string' || !name) {
+          continue;
+        }
+
+        const submitted =
+          submittedIndex >= 0 ? Boolean(row[submittedIndex]?.value) : undefined;
+        const cancelled =
+          cancelledIndex >= 0 ? Boolean(row[cancelledIndex]?.value) : undefined;
+
+        statusMap.set(name, { submitted, cancelled });
+      }
+
+      return statusMap;
+    },
+    async importAccountsTwoPass(
+      docs: Doc[],
+      importDocs: (docs: Doc[]) => Promise<void>
+    ) {
+      const groupDocs = docs.filter((doc) => !!doc.get('isGroup'));
+      const leafDocs = docs.filter((doc) => !doc.get('isGroup'));
+
+      const pending = new Map<string, Doc>();
+      for (const doc of groupDocs) {
+        if (doc.name) {
+          pending.set(doc.name, doc);
+        }
+      }
+
+      const orderedGroups: Doc[] = [];
+      while (pending.size > 0) {
+        let progressed = false;
+        for (const [name, doc] of pending.entries()) {
+          const parent = doc.get('parentAccount') as string | undefined;
+          const parentIsPending = parent && pending.has(parent);
+          if (parentIsPending) {
+            continue;
+          }
+
+          orderedGroups.push(doc);
+          pending.delete(name);
+          progressed = true;
+        }
+
+        if (!progressed) {
+          const remaining = [...pending.keys()];
+          throw new ValidationError(
+            this.t`Could not resolve account group parents for: ${remaining.join(
+              ', '
+            )}.`
+          );
+        }
+      }
+
+      await importDocs(orderedGroups);
+      await importDocs(leafDocs);
     },
     setLoadingStatus(entriesMade: number, totalEntries: number): void {
       this.percentLoading = entriesMade / totalEntries;

@@ -197,6 +197,11 @@ export class LoanLedger extends Report {
       openingAccruedInterest: number | string;
       historicalInterestPaid?: number | string;
       includeHistoricalInterestPaid?: boolean | number | string;
+      historicalPayments?: {
+        date?: string;
+        paymentType?: string;
+        amount?: number | string | Money;
+      }[];
     },
     ledgerRows: LoanLedgerRow[],
     asOfDate: string
@@ -231,9 +236,16 @@ export class LoanLedger extends Report {
           ]
         : []),
       ...historicalPayments
-        .filter((row) => row.paymentType && row.amount)
-        .map((row) => {
-          const paymentType = row.paymentType === 'Principal' ? 'Principal' : 'Interest';
+        .filter(
+          (row: {
+            date?: string;
+            paymentType?: string;
+            amount?: number | string | Money;
+          }) => row.paymentType && row.amount
+        )
+        .map((row: { date?: string; paymentType?: string; amount?: number | string | Money }) => {
+          const paymentType =
+            row.paymentType === 'Principal' ? 'Principal' : 'Interest';
           const label =
             paymentType === 'Principal'
               ? t`Principal Paid (Pre-System)`
@@ -284,6 +296,18 @@ export class LoanLedger extends Report {
       const dB = this.toUtcDate(b.date).getTime();
       if (dA !== dB) {
         return dA - dB;
+      }
+      if (a.referenceName !== b.referenceName) {
+        return a.referenceName.localeCompare(b.referenceName);
+      }
+      const orderMap: Record<string, number> = {
+        Principal: 0,
+        Interest: 1,
+      };
+      const orderA = orderMap[a.loanComponent] ?? 99;
+      const orderB = orderMap[b.loanComponent] ?? 99;
+      if (orderA !== orderB) {
+        return orderA - orderB;
       }
       return Number(a.name) - Number(b.name);
     });

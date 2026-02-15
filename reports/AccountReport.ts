@@ -458,6 +458,19 @@ export async function getFiscalEndpoints(
     'fiscalYearEnd'
   )) as Date;
 
+  const toDateObj = (value: Date | string | null | undefined) => {
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return new Date(value);
+    }
+    return new Date();
+  };
+
+  const start = toDateObj(fys);
+  const end = toDateObj(fye);
+
   /**
    * Get the month and the day, and
    * prepend with the passed year.
@@ -465,14 +478,14 @@ export async function getFiscalEndpoints(
 
   const fromDate = [
     fromYear,
-    (fys.getMonth() + 1).toString().padStart(2, '0'),
-    fys.getDate().toString().padStart(2, '0'),
+    (start.getMonth() + 1).toString().padStart(2, '0'),
+    start.getDate().toString().padStart(2, '0'),
   ].join('-');
 
   const toDate = [
     toYear,
-    (fye.getMonth() + 1).toString().padStart(2, '0'),
-    fye.getDate().toString().padStart(2, '0'),
+    (end.getMonth() + 1).toString().padStart(2, '0'),
+    end.getDate().toString().padStart(2, '0'),
   ].join('-');
 
   return { fromDate, toDate };

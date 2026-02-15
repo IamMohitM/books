@@ -50,6 +50,7 @@ const skippedFieldsTypes: FieldType[] = [
 export class Importer {
   schemaName: string;
   fyo: Fyo;
+  includeMetaFields: boolean;
 
   /**
    * List of template fields that have been assigned a column, in
@@ -95,7 +96,11 @@ export class Importer {
     labelValueMap: Record<string, Record<string, string>>;
   };
 
-  constructor(schemaName: string, fyo: Fyo) {
+  constructor(
+    schemaName: string,
+    fyo: Fyo,
+    opts?: { includeMetaFields?: boolean }
+  ) {
     if (!fyo.schemaMap[schemaName]) {
       throw new ValidationError(
         `Invalid schemaName ${schemaName} found in importer`
@@ -105,6 +110,7 @@ export class Importer {
     this.hasChildTables = false;
     this.schemaName = schemaName;
     this.fyo = fyo;
+    this.includeMetaFields = Boolean(opts?.includeMetaFields);
     this.docs = [];
     this.valueMatrix = [];
     this.optionsMap = {
@@ -134,7 +140,9 @@ export class Importer {
     return true;
   }
 
-  async checkLinks() {
+  async checkLinks(
+    existingNamesBySchema?: Record<string, Set<string>>
+  ) {
     const tfKeys = this.assignedTemplateFields
       .map((key, index) => ({
         key,
@@ -169,6 +177,10 @@ export class Importer {
     const doesNotExist = [];
     for (const [target, values] of linksNames.entries()) {
       for (const value of values) {
+        if (existingNamesBySchema?.[target]?.has(value)) {
+          continue;
+        }
+
         const exists = await this.fyo.db.exists(target, value);
         if (exists) {
           continue;
@@ -444,6 +456,39 @@ export class Importer {
       return this.getOptionFieldVmi(vmi, tf);
     }
 
+    if (tf.fieldtype === FieldTypeEnum.Check) {
+      const rawValue = vmi.rawValue;
+      if (rawValue === null || rawValue === undefined || rawValue === '') {
+        vmi.value = null;
+        return vmi;
+      }
+
+      if (typeof rawValue === 'boolean') {
+        vmi.value = rawValue;
+        return vmi;
+      }
+
+      if (typeof rawValue === 'number') {
+        vmi.value = rawValue !== 0;
+        return vmi;
+      }
+
+      if (typeof rawValue === 'string') {
+        const normalized = rawValue.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'y'].includes(normalized)) {
+          vmi.value = true;
+          return vmi;
+        }
+        if (['0', 'false', 'no', 'n'].includes(normalized)) {
+          vmi.value = false;
+          return vmi;
+        }
+      }
+
+      vmi.error = true;
+      return vmi;
+    }
+
     try {
       vmi.value = Converter.toDocValue(rawValue, tf, this.fyo);
     } catch {
@@ -587,7 +632,7 @@ function getTemplateFields(
     }
 
     for (const field of schema.fields) {
-      if (shouldSkipField(field, schema)) {
+      if (shouldSkipField(field, schema, importer.includeMetaFields)) {
         continue;
       }
 
@@ -635,6 +680,32 @@ function getTemplateFields(
     }
   }
 
+  if (
+    importer.includeMetaFields &&
+    fyo.schemaMap[importer.schemaName]?.isSubmittable
+  ) {
+    const existing = new Set(fields.map((f) => f.fieldname));
+    const schemaLabel = fyo.schemaMap[importer.schemaName]?.label ?? schemaName;
+    const schemaNameValue = importer.schemaName;
+    const addMetaField = (fieldname: string, label: string) => {
+      if (existing.has(fieldname)) {
+        return;
+      }
+
+      fields.push({
+        fieldname,
+        label,
+        fieldtype: FieldTypeEnum.Check,
+        schemaName: schemaNameValue,
+        schemaLabel,
+        fieldKey: `${schemaNameValue}.${fieldname}`,
+      } as TemplateField);
+    };
+
+    addMetaField('submitted', 'Submitted');
+    addMetaField('cancelled', 'Cancelled');
+  }
+
   return fields;
 }
 
@@ -646,8 +717,16 @@ export function getColumnLabel(field: TemplateField): string {
   return field.label;
 }
 
-function shouldSkipField(field: Field, schema: Schema): boolean {
-  if (field.computed || field.meta) {
+function shouldSkipField(
+  field: Field,
+  schema: Schema,
+  includeMetaFields = false
+): boolean {
+  if (field.computed) {
+    return true;
+  }
+
+  if (field.meta && !includeMetaFields) {
     return true;
   }
 

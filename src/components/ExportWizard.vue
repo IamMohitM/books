@@ -96,6 +96,7 @@ import {
   getExportFields,
   getExportTableFields,
   getJsonExportData,
+  ensureSubmittableMetaFields,
 } from 'src/utils/export';
 import { ExportField, ExportFormat, ExportTableField } from 'src/utils/types';
 import { getSavePath, showExportInFolder } from 'src/utils/ui';
@@ -125,7 +126,11 @@ export default defineComponent({
   },
   data() {
     const fields = fyo.schemaMap[this.schemaName]?.fields ?? [];
-    const exportFields = getExportFields(fields);
+    const exportFields = ensureSubmittableMetaFields(
+      getExportFields(fields),
+      this.schemaName,
+      fyo
+    );
     const exportTableFields = getExportTableFields(fields, fyo);
 
     return {

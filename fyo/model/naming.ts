@@ -28,6 +28,10 @@ export function isNameAutoSet(schemaName: string, fyo: Fyo): boolean {
 }
 
 export async function setName(doc: Doc, fyo: Fyo) {
+  if (doc.skipAutoName && doc.name) {
+    return doc.name;
+  }
+
   if (doc.schema.naming === 'manual') {
     return;
   }
