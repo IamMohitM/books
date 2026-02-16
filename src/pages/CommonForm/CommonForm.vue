@@ -415,13 +415,6 @@ export default defineComponent({
   activated(): void {
     this.useFullWidth = !!this.fyo.singles.Misc?.useFullWidth;
     docsPathRef.value = docsPathMap[this.schemaName] ?? '';
-    this.shortcuts?.pmod.set(this.context, ['KeyP'], () => {
-      if (!this.canPrint) {
-        return;
-      }
-
-      this.printButton?.$el.click();
-    });
     this.shortcuts?.pmod.set(this.context, ['KeyL'], () => {
       if (!this.canShowLinks && !this.showLinks) {
         return;

@@ -152,9 +152,6 @@ export default defineComponent({
       window.rep = this;
     }
 
-    this.shortcuts?.pmod.set(this.reportClassName, ['KeyP'], async () => {
-      await routeTo(`/report-print/${this.reportClassName}`);
-    });
   },
   deactivated() {
     docsPathRef.value = '';
