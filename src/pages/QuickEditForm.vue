@@ -73,7 +73,7 @@
         size="small"
         :df="titleField"
         :value="doc[titleField.fieldname]"
-        :read-only="doc.inserted || doc.schema.naming !== 'manual'"
+        :read-only="isTitleReadOnly"
         @change="(value) => valueChange(titleField as Field, value)"
       />
     </div>
@@ -103,9 +103,12 @@ import {
   commonDocSubmit,
   commonDocSync,
   focusOrSelectFormControl,
+  getFormRoute,
+  routeTo,
 } from 'src/utils/ui';
 import { useDocShortcuts } from 'src/utils/vueUtils';
 import { computed, defineComponent, inject, ref } from 'vue';
+import { handleErrorWithDialog } from 'src/errorHandling';
 
 export default defineComponent({
   name: 'QuickEditForm',
@@ -169,6 +172,35 @@ export default defineComponent({
     schema(): Schema {
       return fyo.schemaMap[this.schemaName]!;
     },
+    isTitleReadOnly() {
+      if (!this.doc) {
+        return true;
+      }
+
+      if (this.doc.schema.naming !== 'manual') {
+        return true;
+      }
+
+      // Allow renaming of Accounts even after insertion.
+      if (this.schemaName === 'Account') {
+        return false;
+      }
+
+      return this.doc.inserted;
+    },
+    canDuplicate(): boolean {
+      if (!this.doc) {
+        return false;
+      }
+
+      const isSubmittable = !!this.doc.schema.isSubmittable;
+      return (
+        !!(
+          ((isSubmittable && this.doc.submitted) || !isSubmittable) &&
+          !this.doc.notInserted
+        )
+      );
+    },
     fields() {
       if (!this.schema) {
         return [];
@@ -207,6 +239,9 @@ export default defineComponent({
     setShortcuts() {
       this.shortcuts?.set(this.context, ['Escape'], async () => {
         await this.routeToPrevious();
+      });
+      this.shortcuts?.pmod.set(this.context, ['KeyD'], async () => {
+        await this.duplicateDoc();
       });
     },
     async initialize() {
@@ -261,6 +296,19 @@ export default defineComponent({
       }
 
       this.$router.back();
+    },
+    async duplicateDoc() {
+      if (!this.doc || !this.canDuplicate) {
+        return;
+      }
+
+      try {
+        const dupe = this.doc.duplicate();
+        const route = getFormRoute(this.schemaName, dupe.name!);
+        await routeTo(route);
+      } catch (err) {
+        await handleErrorWithDialog(err as Error, this.doc);
+      }
     },
   },
 });
