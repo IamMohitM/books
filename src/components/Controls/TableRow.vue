@@ -1,8 +1,8 @@
 <template>
   <Row
     :ratio="ratio"
-    class="w-full px-2 group flex items-center justify-center h-row-mid"
-    :class="readOnly ? '' : 'hover:bg-gray-25 dark:hover:bg-gray-900'"
+    class="w-full px-2 group flex items-center justify-center"
+    :class="[rowSizeClass, readOnly ? '' : 'hover:bg-gray-25 dark:hover:bg-gray-900']"
   >
     <!-- Index or Remove button -->
     <div
@@ -125,6 +125,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    rowSize: {
+      type: String,
+      default: 'mid',
+    },
   },
   emits: ['remove', 'change'],
   data: () => ({
@@ -134,6 +138,13 @@ export default {
   computed: {
     hasErrors() {
       return Object.values(this.errors).filter(Boolean).length;
+    },
+    rowSizeClass() {
+      if (this.rowSize === 'large') {
+        return 'h-row-large';
+      }
+
+      return 'h-row-mid';
     },
   },
   beforeCreate() {

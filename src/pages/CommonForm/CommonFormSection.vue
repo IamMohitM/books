@@ -33,6 +33,10 @@
           :border="true"
           :df="field"
           :value="tableValue(doc[field.fieldname])"
+          :row-size="field.target === 'JournalEntryAccount' ? 'large' : 'mid'"
+          :max-rows-before-overflow="
+            field.target === 'JournalEntryAccount' ? 5 : 3
+          "
           @editrow="(doc: Doc) => $emit('editrow', doc)"
           @change="(value: DocValue) => $emit('value-change', field, value)"
           @row-change="(field:Field, value:DocValue, parentfield:Field) => $emit('row-change',field, value, parentfield)"

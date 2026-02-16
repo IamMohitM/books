@@ -70,7 +70,7 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 :root {
-  --w-form: 600px;
+  --w-form: 720px;
   --w-app: 1200px;
   --w-sidebar: 14rem;
   --w-desk: calc(100vw - var(--w-sidebar));

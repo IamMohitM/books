@@ -18,13 +18,15 @@
           flex
           items-center
         "
+        :class="rowSizeClass"
       >
         <div class="flex items-center ps-2">#</div>
         <div
           v-for="df in tableFields"
           :key="df.fieldname"
-          class="flex px-2 h-row-mid"
+          class="flex px-2"
           :class="[
+            rowSizeClass,
             df.sub_label
               ? 'flex-col items-center text-center'
               : isNumeric(df)
@@ -50,7 +52,7 @@
           ref="table-row"
           :key="row.name"
           :class="idx < value.length - 1 ? 'border-b dark:border-gray-800' : ''"
-          v-bind="{ row, tableFields, size, ratio, isNumeric }"
+          v-bind="{ row, tableFields, size, ratio, isNumeric, rowSize }"
           :read-only="isReadOnly"
           :can-edit-row="canEditRow"
           @remove="removeRow(row)"
@@ -123,6 +125,10 @@ export default {
       type: Boolean,
       default: true,
     },
+    rowSize: {
+      type: String,
+      default: 'mid',
+    },
     maxRowsBeforeOverflow: {
       type: Number,
       default: 3,
@@ -157,6 +163,13 @@ export default {
     tableFields() {
       const fields = fyo.schemaMap[this.df.target].tableFields ?? [];
       return fields.map((fieldname) => fyo.getField(this.df.target, fieldname));
+    },
+    rowSizeClass() {
+      if (this.rowSize === 'large') {
+        return 'h-row-large';
+      }
+
+      return 'h-row-mid';
     },
   },
   watch: {
