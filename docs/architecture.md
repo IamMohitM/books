@@ -27,3 +27,8 @@ Loan tracking stays as metadata on Journal Entries and Accounting Ledger Entries
 - `LoanLedger` shows running principal and interest owed with an as-of date.
 - Interest accrual uses ACT/365 simple daily accrual.
  - Accrual excludes the receipt day; it starts from the next day after principal events.
+
+## Journal Entry Remarks Update
+- `JournalEntry.userRemark` should be editable even when the entry is submitted.
+- Implement by keeping submission guardrails while allowing `userRemark` as an exception.
+- Update Journal Entry list view columns to include `userRemark` adjacent to `referenceNumber`.

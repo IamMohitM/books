@@ -14,11 +14,15 @@ export function evaluateReadOnly(field: Field, doc?: Doc) {
     return true;
   }
 
-  if (doc?.isSubmitted || doc?.parentdoc?.isSubmitted) {
+  if (doc?.isCancelled || doc?.parentdoc?.isCancelled) {
     return true;
   }
 
-  if (doc?.isCancelled || doc?.parentdoc?.isCancelled) {
+  if (doc?.isSubmitted || doc?.parentdoc?.isSubmitted) {
+    if (doc?.schemaName === 'JournalEntry' && field.fieldname === 'userRemark') {
+      return evaluateFieldMeta(field, doc, 'readOnly');
+    }
+
     return true;
   }
 

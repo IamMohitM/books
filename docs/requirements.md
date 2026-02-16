@@ -19,3 +19,21 @@ User needs improvements in Chart of Accounts import/export and editing capabilit
 
 ## Non-Goals
 - Fixing the group import error at this time.
+
+## Journal Entry Remarks Enhancements
+
+### Context
+Users need to update `userRemark` on submitted Journal Entries and to see `userRemark` in the Journal Entry list alongside `referenceNumber`.
+
+### Goals
+- Allow editing `userRemark` on submitted Journal Entries without un-submitting.
+- Show `userRemark` in the Journal Entry list view next to `referenceNumber`.
+
+### Acceptance Criteria
+- `userRemark` remains editable on submitted Journal Entries; saving updates persists and does not change submission state.
+- Journal Entry list view displays `userRemark` and `referenceNumber` in the list columns.
+- No other submitted fields become editable as a side-effect.
+
+### Non-Goals
+- No changes to submission/cancellation workflows.
+- No changes to permissions beyond enabling `userRemark` edit on submitted entries.

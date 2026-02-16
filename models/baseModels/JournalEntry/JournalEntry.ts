@@ -58,8 +58,7 @@ export class JournalEntry extends Transactional {
       !(this.referenceNumber || !(this.isSubmitted || this.isCancelled)),
     referenceDate: () =>
       !(this.referenceDate || !(this.isSubmitted || this.isCancelled)),
-    userRemark: () =>
-      !(this.userRemark || !(this.isSubmitted || this.isCancelled)),
+    userRemark: () => false,
     attachment: () =>
       !(this.attachment || !(this.isSubmitted || this.isCancelled)),
   };
@@ -162,6 +161,7 @@ export class JournalEntry extends Transactional {
         },
         'date',
         'entryType',
+        'userRemark',
         'referenceNumber',
       ],
     };
