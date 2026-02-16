@@ -27,6 +27,7 @@
       "label": "Entry Type",
       "fieldtype": "Select",
       "placeholder": "Entry Type",
+      "default": "Cash Entry",
       "options": [
         {
           "value": "Journal Entry",
@@ -118,5 +119,5 @@
       "section": "References"
     }
   ],
-  "keywordFields": ["name", "entryType"]
+  "keywordFields": ["name", "entryType", "userRemark"]
 }
