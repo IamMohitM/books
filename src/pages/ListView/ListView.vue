@@ -49,6 +49,37 @@
         :schema-name="schemaName"
         @change="applyFilter"
       />
+      <Popover
+        v-if="columnOptions.length"
+        placement="bottom-end"
+        :close-on-click-outside="true"
+        :close-on-click-content="false"
+      >
+        <template #target="{ togglePopover }">
+          <Button :icon="true" @click="togglePopover()">
+            {{ t`Columns` }}
+          </Button>
+        </template>
+        <template #content>
+          <div class="p-2 w-56">
+            <div class="flex flex-col gap-2">
+              <Check
+                v-for="col in columnOptions"
+                :key="col.fieldname"
+                :show-label="true"
+                :df="{
+                  label: col.label,
+                  fieldname: col.fieldname,
+                  fieldtype: 'Check',
+                }"
+                :value="columnSelection[col.fieldname] ?? true"
+                :disabled="col.fieldname === 'name'"
+                @change="(v) => updateColumnSelection(col.fieldname, v)"
+              />
+            </div>
+          </div>
+        </template>
+      </Popover>
       <Button
         v-if="canCreate"
         ref="makeNewDocButton"
@@ -64,7 +95,7 @@
     <List
       ref="list"
       :schema-name="schemaName"
-      :list-config="listConfig"
+      :list-config="filteredListConfig"
       :filters="filters"
       :can-create="canCreate"
       :is-selection-mode="isSelectionMode"
@@ -87,10 +118,12 @@
 <script lang="ts">
 import { Field } from 'schemas/types';
 import Button from 'src/components/Button.vue';
+import Check from 'src/components/Controls/Check.vue';
 import ExportWizard from 'src/components/ExportWizard.vue';
 import FilterDropdown from 'src/components/FilterDropdown.vue';
 import Modal from 'src/components/Modal.vue';
 import PageHeader from 'src/components/PageHeader.vue';
+import Popover from 'src/components/Popover.vue';
 
 import { fyo } from 'src/initFyo';
 import { shortcutsKey } from 'src/utils/injectionKeys';
@@ -112,6 +145,8 @@ export default defineComponent({
     PageHeader,
     List,
     Button,
+    Check,
+    Popover,
     FilterDropdown,
     Modal,
     ExportWizard,
@@ -133,6 +168,7 @@ export default defineComponent({
   data() {
     return {
       listConfig: undefined,
+      columnSelection: {} as Record<string, boolean>,
       openExportModal: false,
       listFilters: {},
       isSelectionMode: false,
@@ -161,6 +197,43 @@ export default defineComponent({
     fields(): Field[] {
       return fyo.schemaMap[this.schemaName]?.fields ?? [];
     },
+    columnOptions(): { fieldname: string; label: string }[] {
+      const columns = this.listConfig?.columns ?? [];
+      if (!columns.length) {
+        return [];
+      }
+
+      return columns
+        .map((column) => {
+          if (typeof column === 'object') {
+            return { fieldname: column.fieldname, label: column.label };
+          }
+
+          const field = fyo.getField(this.schemaName, column);
+          if (!field) {
+            return null;
+          }
+
+          return { fieldname: field.fieldname, label: field.label };
+        })
+        .filter(Boolean) as { fieldname: string; label: string }[];
+    },
+    filteredListConfig(): ReturnType<typeof getListConfig> | undefined {
+      if (!this.listConfig) {
+        return undefined;
+      }
+
+      const selected = this.columnSelection;
+      const filteredColumns = (this.listConfig.columns ?? []).filter((col) => {
+        const fieldname = typeof col === 'string' ? col : col.fieldname;
+        if (fieldname === 'name') {
+          return true;
+        }
+        return selected[fieldname] ?? true;
+      });
+
+      return { ...this.listConfig, columns: filteredColumns };
+    },
     canCreate(): boolean {
       return fyo.schemaMap[this.schemaName]?.create !== false;
     },
@@ -172,8 +245,15 @@ export default defineComponent({
       ];
     },
   },
+  watch: {
+    schemaName() {
+      this.listConfig = getListConfig(this.schemaName);
+      this.initColumnSelection();
+    },
+  },
   activated() {
     this.listConfig = getListConfig(this.schemaName);
+    this.initColumnSelection();
     docsPathRef.value =
       docsPathMap[this.schemaName] ?? docsPathMap.Entries ?? '';
 
@@ -189,6 +269,21 @@ export default defineComponent({
     this.shortcuts?.delete(this.context);
   },
   methods: {
+    initColumnSelection() {
+      const options = this.columnOptions;
+      const selection: Record<string, boolean> = {};
+      for (const col of options) {
+        selection[col.fieldname] = this.columnSelection[col.fieldname] ?? true;
+      }
+      selection.name = true;
+      this.columnSelection = selection;
+    },
+    updateColumnSelection(fieldname: string, value: boolean) {
+      if (fieldname === 'name') {
+        return;
+      }
+      this.columnSelection = { ...this.columnSelection, [fieldname]: value };
+    },
     setShortcuts() {
       if (!this.shortcuts) {
         return;
