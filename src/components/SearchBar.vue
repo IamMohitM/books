@@ -365,7 +365,7 @@ export default defineComponent({
 
       const shortcuts = [
         {
-          shortcut: 'KeyK',
+          shortcut: 'KeyP',
           callback: ifClose(() => this.open()),
         },
       ];

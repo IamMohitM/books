@@ -44,6 +44,18 @@ export function useKeys() {
       return;
     }
 
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      (e.code === 'KeyF' ||
+        e.code === 'KeyP' ||
+        e.code === 'KeyD' ||
+        e.code === 'KeyJ' ||
+        e.code === 'BracketLeft' ||
+        e.code === 'BracketRight')
+    ) {
+      e.preventDefault();
+    }
+
     keys.alt = e.altKey;
     keys.ctrl = e.ctrlKey;
     keys.meta = e.metaKey;

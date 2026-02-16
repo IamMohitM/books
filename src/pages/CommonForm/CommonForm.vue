@@ -189,6 +189,7 @@ import FormContainer from 'src/components/FormContainer.vue';
 import FormHeader from 'src/components/FormHeader.vue';
 import StatusPill from 'src/components/StatusPill.vue';
 import { getErrorMessage } from 'src/utils';
+import { handleErrorWithDialog } from 'src/errorHandling';
 import { shortcutsKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
@@ -380,6 +381,19 @@ export default defineComponent({
 
       return getGroupedActionsForDoc(this.doc);
     },
+    canDuplicate(): boolean {
+      if (!this.hasDoc) {
+        return false;
+      }
+
+      const isSubmittable = !!this.doc.schema.isSubmittable;
+      return (
+        !!(
+          ((isSubmittable && this.doc.submitted) || !isSubmittable) &&
+          !this.doc.notInserted
+        )
+      );
+    },
   },
   beforeMount() {
     this.useFullWidth = !!this.fyo.singles.Misc?.useFullWidth;
@@ -415,6 +429,9 @@ export default defineComponent({
 
       this.showLinks = !this.showLinks;
     });
+    this.shortcuts?.pmod.set(this.context, ['KeyD'], async () => {
+      await this.duplicateDoc();
+    });
   },
   deactivated(): void {
     docsPathRef.value = '';
@@ -423,6 +440,19 @@ export default defineComponent({
   },
   methods: {
     routeTo,
+    async duplicateDoc() {
+      if (!this.hasDoc || !this.canDuplicate) {
+        return;
+      }
+
+      try {
+        const dupe = this.doc.duplicate();
+        const route = getFormRoute(this.schemaName, dupe.name!);
+        await routeTo(route);
+      } catch (err) {
+        await handleErrorWithDialog(err as Error, this.doc);
+      }
+    },
     async toggleWidth() {
       const value = !this.useFullWidth;
       await this.fyo.singles.Misc?.setAndSync('useFullWidth', value);

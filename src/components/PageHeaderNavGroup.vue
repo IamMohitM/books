@@ -38,6 +38,10 @@ import { ref, inject } from 'vue';
 import { defineComponent } from 'vue';
 import SearchBar from './SearchBar.vue';
 import { historyState } from 'src/utils/refs';
+import { ModelNameEnum } from 'models/types';
+import { fyo } from 'src/initFyo';
+import { getFormRoute, routeTo } from 'src/utils/ui';
+import { handleErrorWithDialog } from 'src/errorHandling';
 
 const COMPONENT_NAME = 'PageHeaderNavGroup';
 
@@ -62,11 +66,31 @@ export default defineComponent({
     this.shortcuts?.shift.set(COMPONENT_NAME, ['Backspace'], () => {
       this.backlink?.click();
     });
+    this.shortcuts?.pmod.set(COMPONENT_NAME, ['KeyJ'], async () => {
+      await this.createJournalEntry();
+    });
+    this.shortcuts?.pmod.set(COMPONENT_NAME, ['BracketLeft'], () => {
+      this.backlink?.click();
+    });
+    this.shortcuts?.pmod.set(COMPONENT_NAME, ['BracketRight'], () => {
+      this.$router.forward();
+    });
     // @ts-ignore
     window.ng = this;
   },
   deactivated() {
     this.shortcuts?.delete(COMPONENT_NAME);
+  },
+  methods: {
+    async createJournalEntry() {
+      try {
+        const doc = fyo.doc.getNewDoc(ModelNameEnum.JournalEntry);
+        const route = getFormRoute(ModelNameEnum.JournalEntry, doc.name!);
+        await routeTo(route);
+      } catch (err) {
+        await handleErrorWithDialog(err as Error);
+      }
+    },
   },
 });
 </script>

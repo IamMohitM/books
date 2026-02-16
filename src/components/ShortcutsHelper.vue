@@ -74,12 +74,24 @@ export default defineComponent({
         collapsed: false,
         shortcuts: [
           {
-            shortcut: [ShortcutKey.pmod, 'K'],
+            shortcut: [ShortcutKey.pmod, 'P'],
             description: t`Open Quick Search`,
+          },
+          {
+            shortcut: [ShortcutKey.pmod, 'J'],
+            description: t`Create a new Journal Entry`,
           },
           {
             shortcut: [ShortcutKey.shift, ShortcutKey.delete],
             description: t`Go back to the previous page`,
+          },
+          {
+            shortcut: [ShortcutKey.pmod, '['],
+            description: t`Go back to the previous page`,
+          },
+          {
+            shortcut: [ShortcutKey.pmod, ']'],
+            description: t`Go forward to the next page`,
           },
           {
             shortcut: [ShortcutKey.shift, 'H'],
@@ -116,6 +128,10 @@ export default defineComponent({
             description: t`Open Print View if Print is available.`,
           },
           {
+            shortcut: [ShortcutKey.pmod, 'D'],
+            description: t`Duplicate the current entry if allowed.`,
+          },
+          {
             shortcut: [ShortcutKey.pmod, 'L'],
             description: t`Toggle Linked Entries widget, not available in Quick Edit view.`,
           },
@@ -133,6 +149,10 @@ export default defineComponent({
           {
             shortcut: [ShortcutKey.pmod, 'E'],
             description: t`Open the Export Wizard modal`,
+          },
+          {
+            shortcut: [ShortcutKey.pmod, 'F'],
+            description: t`Search within the list (e.g., Journal Entry remarks)`,
           },
         ],
       },

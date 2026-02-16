@@ -1,6 +1,25 @@
 <template>
   <div class="flex flex-col">
     <PageHeader :title="title">
+      <input
+        v-if="showQuickSearch"
+        ref="quickSearchInput"
+        v-model="quickSearchTerm"
+        type="search"
+        class="
+          bg-gray-100
+          dark:bg-gray-850
+          text-sm
+          px-3
+          py-2
+          rounded
+          focus:outline-none
+          w-48
+          dark:text-gray-100
+        "
+        :placeholder="quickSearchPlaceholder"
+        @input="applyCombinedFilters"
+      />
       <Button
         v-if="
           schemaName === 'Item' &&
@@ -163,6 +182,7 @@ export default defineComponent({
       makeNewDocButton: ref<InstanceType<typeof Button> | null>(null),
       exportButton: ref<InstanceType<typeof Button> | null>(null),
       filterDropdown: ref<InstanceType<typeof FilterDropdown> | null>(null),
+      quickSearchInput: ref<HTMLInputElement | null>(null),
     };
   },
   data() {
@@ -171,6 +191,8 @@ export default defineComponent({
       columnSelection: {} as Record<string, boolean>,
       openExportModal: false,
       listFilters: {},
+      filterDropdownFilters: {} as QueryFilter,
+      quickSearchTerm: '',
       isSelectionMode: false,
       showDropdown: false,
       selectedItems: [] as string[],
@@ -178,6 +200,8 @@ export default defineComponent({
       listConfig: undefined | ReturnType<typeof getListConfig>;
       openExportModal: boolean;
       listFilters: QueryFilter;
+      filterDropdownFilters: QueryFilter;
+      quickSearchTerm: string;
       isSelectionMode: boolean;
       showDropdown: boolean;
       selectedItems: string[];
@@ -196,6 +220,23 @@ export default defineComponent({
     },
     fields(): Field[] {
       return fyo.schemaMap[this.schemaName]?.fields ?? [];
+    },
+    quickSearchField(): string | null {
+      if (this.schemaName === ModelNameEnum.JournalEntry) {
+        return 'userRemark';
+      }
+
+      return null;
+    },
+    quickSearchPlaceholder(): string {
+      if (this.schemaName === ModelNameEnum.JournalEntry) {
+        return this.t`Find remarks...`;
+      }
+
+      return this.t`Find in page...`;
+    },
+    showQuickSearch(): boolean {
+      return !!this.quickSearchField;
     },
     columnOptions(): { fieldname: string; label: string }[] {
       const columns = this.listConfig?.columns ?? [];
@@ -249,6 +290,8 @@ export default defineComponent({
     schemaName() {
       this.listConfig = getListConfig(this.schemaName);
       this.initColumnSelection();
+      this.quickSearchTerm = '';
+      this.filterDropdownFilters = {};
     },
   },
   activated() {
@@ -295,6 +338,29 @@ export default defineComponent({
       this.shortcuts.pmod.set(this.context, ['KeyE'], () =>
         this.exportButton?.$el.click()
       );
+      if (this.showQuickSearch) {
+        this.shortcuts.pmod.set(this.context, ['KeyF'], () =>
+          this.focusQuickSearch()
+        );
+      }
+    },
+    focusQuickSearch() {
+      const input = this.quickSearchInput as HTMLInputElement | null;
+      if (!input) {
+        return;
+      }
+      input.focus();
+      input.select();
+    },
+    applyCombinedFilters() {
+      const filters = { ...this.filterDropdownFilters } as QueryFilter;
+      const field = this.quickSearchField;
+      const term = this.quickSearchTerm.trim();
+      if (field && term.length) {
+        filters[field] = ['like', `%${term}%`];
+      }
+
+      this.list?.updateData(filters);
     },
     updatedData(listFilters: QueryFilter) {
       this.listFilters = listFilters;
@@ -317,7 +383,8 @@ export default defineComponent({
       await this.makeNewDoc();
     },
     applyFilter(filters: QueryFilter) {
-      this.list?.updateData(filters);
+      this.filterDropdownFilters = filters;
+      this.applyCombinedFilters();
     },
     toggleSelectionMode() {
       this.isSelectionMode = !this.isSelectionMode;
