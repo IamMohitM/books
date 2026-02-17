@@ -1,6 +1,7 @@
-import { t } from 'fyo';
+import { Fyo, t } from 'fyo';
 import { Action } from 'fyo/model/types';
 import { DateTime } from 'luxon';
+import { ModelNameEnum } from 'models/types';
 import { Report } from 'reports/Report';
 import { ColumnField, ReportData, ReportRow } from 'reports/types';
 import { Field } from 'schemas/types';
@@ -14,12 +15,47 @@ export class LoanRegister extends Report {
   asOfDate?: string;
   fromDate?: string;
   loanProfile?: string;
+  sortByField?: 'startDate' | 'lenderName';
   sortByDate?: string;
   loading = false;
+  shouldRefresh = false;
+
+  constructor(fyo: Fyo) {
+    super(fyo);
+    this._setObservers();
+  }
+
+  _setObservers() {
+    const listener = () => (this.shouldRefresh = true);
+
+    this.fyo.doc.observer.on(`sync:${ModelNameEnum.LoanProfile}`, listener);
+    this.fyo.doc.observer.on(`delete:${ModelNameEnum.LoanProfile}`, listener);
+
+    this.fyo.doc.observer.on(
+      `sync:${ModelNameEnum.LoanProfileHistoricalPayment}`,
+      listener
+    );
+    this.fyo.doc.observer.on(
+      `delete:${ModelNameEnum.LoanProfileHistoricalPayment}`,
+      listener
+    );
+
+    this.fyo.doc.observer.on(
+      `sync:${ModelNameEnum.AccountingLedgerEntry}`,
+      listener
+    );
+    this.fyo.doc.observer.on(
+      `delete:${ModelNameEnum.AccountingLedgerEntry}`,
+      listener
+    );
+  }
 
   async setDefaultFilters() {
     if (!this.asOfDate) {
       this.asOfDate = DateTime.now().toISODate();
+    }
+    if (!this.sortByField) {
+      this.sortByField = 'startDate';
     }
     if (!this.sortByDate) {
       this.sortByDate = 'asc';
@@ -48,11 +84,20 @@ export class LoanRegister extends Report {
       },
       {
         fieldtype: 'Select',
-        fieldname: 'sortByDate',
-        label: t`Sort By Date`,
+        fieldname: 'sortByField',
+        label: t`Sort By`,
         options: [
-          { label: t`Oldest First`, value: 'asc' },
-          { label: t`Newest First`, value: 'desc' },
+          { label: t`Start Date`, value: 'startDate' },
+          { label: t`Lender`, value: 'lenderName' },
+        ],
+      },
+      {
+        fieldtype: 'Select',
+        fieldname: 'sortByDate',
+        label: t`Sort Order`,
+        options: [
+          { label: t`Ascending`, value: 'asc' },
+          { label: t`Descending`, value: 'desc' },
         ],
       },
     ];
@@ -143,21 +188,34 @@ export class LoanRegister extends Report {
       rows = await this.fyo.db.getLoanPortfolioSnapshot(asOfDate);
     }
 
-    const sortByDate = this.sortByDate === 'desc' ? 'desc' : 'asc';
+    const sortOrder = this.sortByDate === 'desc' ? 'desc' : 'asc';
+    const sortByField = this.sortByField ?? 'startDate';
     rows = rows.slice().sort((a, b) => {
       const aDate = a.startDate ?? '';
       const bDate = b.startDate ?? '';
-      if (aDate === bDate) {
-        return (a.lenderName ?? '').localeCompare(b.lenderName ?? '');
+      const aLender = a.lenderName ?? '';
+      const bLender = b.lenderName ?? '';
+
+      if (sortByField === 'lenderName') {
+        const nameCompare = aLender.localeCompare(bLender);
+        if (nameCompare !== 0) {
+          return sortOrder === 'asc' ? nameCompare : -nameCompare;
+        }
+        return aDate.localeCompare(bDate);
       }
 
-      return sortByDate === 'asc'
+      if (aDate === bDate) {
+        return aLender.localeCompare(bLender);
+      }
+
+      return sortOrder === 'asc'
         ? aDate.localeCompare(bDate)
         : bDate.localeCompare(aDate);
     });
 
     this.reportData = this.getRows(rows);
     this.loading = false;
+    this.shouldRefresh = false;
   }
 
   getRows(rows: LoanSnapshot[]): ReportData {

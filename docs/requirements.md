@@ -1,39 +1,48 @@
-# Requirements
+# Requirements: Loan Register Refresh
 
-## Context
-User needs improvements in Chart of Accounts import/export and editing capabilities for Accounts.
+## Problem Statement
+Loan Register does not reflect recent Loan Profile updates without a manual refresh (Cmd+R) in the production app.
 
-## Goals
-- Allow optional export of account descriptions in the Chart of Accounts export that is compatible with Import Wizard.
-- Ensure account descriptions are available in Import Wizard (column assignment and values grid), but not shown in Chart of Accounts list.
-- Allow editing of account names.
-- Allow moving accounts between groups as long as the account remains within the same root category (rootType).
-- Ignore current group import error for now.
+## User Story
+As a user, when I update a Loan Profile or related ledger data, the Loan Register should reflect the changes when I return to the report without requiring a manual refresh.
 
 ## Acceptance Criteria
-- Export flow prompts for including description; if excluded, CSV has no description column. If included, description column is present with values.
-- Import Wizard shows Description field in column assignment (step 2) and data grid (step 3) when provided in data/template.
-- Chart of Accounts list does not display description.
-- Account name can be edited and persists correctly.
-- Changing parent group is allowed only when the parent account has the same rootType as the account.
+- When a Loan Profile is updated, the Loan Register refreshes the next time the report view is activated.
+- When loan-related ledger entries or historical payments change, the Loan Register refreshes the next time the report view is activated.
+- No manual refresh is required to see the updates.
 
-## Non-Goals
-- Fixing the group import error at this time.
+# Requirements: General Ledger Date Filtering
 
-## Journal Entry Remarks Enhancements
+## Problem Statement
+General Ledger ignores `From Date` / `To Date` filters and shows entries outside the selected range.
 
-### Context
-Users need to update `userRemark` on submitted Journal Entries and to see `userRemark` in the Journal Entry list alongside `referenceNumber`.
+## User Story
+As a user, when I set `From Date` and `To Date` in General Ledger, I expect only entries within that range, and the default range should be the current month to date.
 
-### Goals
-- Allow editing `userRemark` on submitted Journal Entries without un-submitting.
-- Show `userRemark` in the Journal Entry list view next to `referenceNumber`.
+## Acceptance Criteria
+- General Ledger respects `From Date` and `To Date` filters for the ledger entries shown.
+- Default `From Date` is the 1st of the current month.
+- Default `To Date` is the current date.
 
-### Acceptance Criteria
-- `userRemark` remains editable on submitted Journal Entries; saving updates persists and does not change submission state.
-- Journal Entry list view displays `userRemark` and `referenceNumber` in the list columns.
-- No other submitted fields become editable as a side-effect.
+# Requirements: Loan Register Sorting
 
-### Non-Goals
-- No changes to submission/cancellation workflows.
-- No changes to permissions beyond enabling `userRemark` edit on submitted entries.
+## Problem Statement
+Loan Register needs to support sorting by lender name in addition to existing date ordering.
+
+## User Story
+As a user, I want to sort the Loan Register by lender name so I can quickly scan accounts alphabetically.
+
+## Acceptance Criteria
+- Loan Register can be sorted by lender name.
+- Sorting order supports ascending and descending.
+
+# Requirements: Dropdown Consistency
+
+## Problem Statement
+Select dropdowns look and behave inconsistently compared to link dropdowns across multiple pages.
+
+## User Story
+As a user, dropdowns should look and behave consistently across the app so filters and selects feel uniform.
+
+## Acceptance Criteria
+- Select dropdowns use the same dropdown styling and interaction pattern as link dropdowns.

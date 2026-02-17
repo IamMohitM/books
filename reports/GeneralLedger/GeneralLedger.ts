@@ -40,8 +40,10 @@ export class GeneralLedger extends LedgerReport {
 
   setDefaultFilters() {
     if (!this.toDate) {
-      this.toDate = DateTime.now().plus({ days: 1 }).toISODate();
-      this.fromDate = DateTime.now().minus({ years: 1 }).toISODate();
+      this.toDate = DateTime.now().toISODate();
+    }
+    if (!this.fromDate) {
+      this.fromDate = DateTime.now().startOf('month').toISODate();
     }
     if (!this.sortByDate) {
       this.sortByDate = 'desc';
@@ -264,12 +266,14 @@ export class GeneralLedger extends LedgerReport {
 
     if (this.toDate) {
       filters.date ??= [];
-      (filters.date as string[]).push('<=', this.toDate as string);
+      const toDate = DateTime.fromISO(this.toDate as string).endOf('day').toISO();
+      (filters.date as string[]).push('<=', toDate as string);
     }
 
     if (this.fromDate) {
       filters.date ??= [];
-      (filters.date as string[]).push('>=', this.fromDate as string);
+      const fromDate = DateTime.fromISO(this.fromDate as string).startOf('day').toISO();
+      (filters.date as string[]).push('>=', fromDate as string);
     }
 
     if (!this.reverted) {
