@@ -217,10 +217,6 @@ export class LoanLedger extends Report {
     const openingPrincipal = toNumber(profile.openingPrincipal ?? 0);
     const openingAccruedInterest = toNumber(profile.openingAccruedInterest ?? 0);
     const historicalInterestPaid = toNumber(profile.historicalInterestPaid ?? 0);
-    const includeHistoricalInterestPaid = Boolean(
-      profile.includeHistoricalInterestPaid ?? false
-    );
-
     const historicalPayments = Array.isArray(profile.historicalPayments)
       ? profile.historicalPayments
       : [];
@@ -340,8 +336,10 @@ export class LoanLedger extends Report {
         pushOpeningRow();
         openingRowAdded = true;
       }
-      if (includeHistoricalInterestPaid && entry.paymentType === 'Interest') {
+      if (entry.paymentType === 'Interest') {
         interestPaid += entry.amount;
+      } else if (entry.paymentType === 'Principal') {
+        principal -= entry.amount;
       }
       const interestOwed = openingAccruedInterest + accrued - interestPaid;
       result.push({

@@ -46,3 +46,16 @@ As a user, dropdowns should look and behave consistently across the app so filte
 
 ## Acceptance Criteria
 - Select dropdowns use the same dropdown styling and interaction pattern as link dropdowns.
+
+# Requirements: Loan Register and Loan Ledger Prepaid Handling
+
+## Problem Statement
+Loan Register shows pre-system (prepaid) columns, and Loan Ledger should include prepaid and journal entries without separate prepaid columns.
+
+## User Story
+As a user, I want Loan Register to fold prepaid amounts into principal and interest, and Loan Ledger to show all entries (including prepaid and journal entries) without separate prepaid columns.
+
+## Acceptance Criteria
+- Loan Register removes pre-system columns and integrates prepaid amounts into principal outstanding and interest paid.
+- Loan Ledger continues to show all entries, including prepaid and journal entries.
+- Loan Ledger totals reflect pre-system principal and interest payments in the final as-of summary.

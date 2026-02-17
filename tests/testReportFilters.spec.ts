@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { ModelNameEnum } from 'models/types';
 import { GeneralLedger } from 'reports/GeneralLedger/GeneralLedger';
+import { LoanLedger } from 'reports/LoanLedger/LoanLedger';
 import { LoanRegister } from 'reports/LoanRegister/LoanRegister';
 import test from 'tape';
 import { closeTestFyo, getTestFyo, setupTestFyo } from './helpers';
@@ -143,6 +144,164 @@ test('loan register can sort by lender name', async (t) => {
     lenders.slice(0, 2),
     ['Alpha Bank', 'Beta Bank'],
     'sorted by lender name asc'
+  );
+  t.end();
+});
+
+test('loan register integrates pre-system amounts into totals', async (t) => {
+  const liability = await getAccountName('Liability');
+  const expense = await getAccountName('Expense');
+
+  t.ok(liability && expense, 'accounts exist for loan profile');
+  if (!liability || !expense) {
+    t.end();
+    return;
+  }
+
+  const loan = fyo.doc.getNewDoc(ModelNameEnum.LoanProfile, {
+    name: 'L-PREPAID',
+    lenderName: 'Prepaid Bank',
+    startDate: '2025-01-01',
+    openingPrincipal: 1000,
+    openingAccruedInterest: 100,
+    historicalInterestPaid: 50,
+    includeHistoricalInterestPaid: false,
+    annualInterestRate: 0,
+    liabilityAccount: liability,
+    interestExpenseAccount: expense,
+  });
+  loan.push('historicalPayments', {
+    date: '2024-12-31',
+    paymentType: 'Principal',
+    amount: 200,
+  });
+  await loan.sync();
+
+  const report = new LoanRegister(fyo);
+  await report.initialize();
+  await report.set('loanProfile', 'L-PREPAID');
+  await report.set('asOfDate', '2025-01-01');
+
+  const fieldnames = report.columns.map((c) => c.fieldname);
+  t.notOk(
+    fieldnames.includes('preSystemInterestPaid'),
+    'pre-system interest column removed'
+  );
+  t.notOk(
+    fieldnames.includes('preSystemPrincipalPaid'),
+    'pre-system principal column removed'
+  );
+
+  const principalIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'principalOutstanding'
+  );
+  const interestPaidIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'interestPaid'
+  );
+  const interestOwedIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'interestOwed'
+  );
+  const totalDueIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'totalDue'
+  );
+
+  const firstRow = report.reportData[0];
+  t.equal(
+    firstRow.cells[principalIdx]?.rawValue,
+    800,
+    'principal outstanding includes pre-system principal paid'
+  );
+  t.equal(
+    firstRow.cells[interestPaidIdx]?.rawValue,
+    50,
+    'interest paid includes pre-system interest'
+  );
+  t.equal(
+    firstRow.cells[interestOwedIdx]?.rawValue,
+    50,
+    'interest owed reflects integrated pre-system interest'
+  );
+  t.equal(
+    firstRow.cells[totalDueIdx]?.rawValue,
+    850,
+    'total due reflects integrated pre-system amounts'
+  );
+  t.end();
+});
+
+test('loan ledger integrates pre-system payments into balances', async (t) => {
+  const liability = await getAccountName('Liability');
+  const expense = await getAccountName('Expense');
+
+  t.ok(liability && expense, 'accounts exist for loan profile');
+  if (!liability || !expense) {
+    t.end();
+    return;
+  }
+
+  const loan = fyo.doc.getNewDoc(ModelNameEnum.LoanProfile, {
+    name: 'L-LEDGER-PREPAID',
+    lenderName: 'Ledger Bank',
+    startDate: '2025-01-01',
+    openingPrincipal: 100000,
+    openingAccruedInterest: 2000,
+    historicalInterestPaid: 1000,
+    includeHistoricalInterestPaid: false,
+    annualInterestRate: 0,
+    liabilityAccount: liability,
+    interestExpenseAccount: expense,
+  });
+  loan.push('historicalPayments', {
+    date: '2024-12-31',
+    paymentType: 'Principal',
+    amount: 2000,
+  });
+  await loan.sync();
+
+  const report = new LoanLedger(fyo);
+  await report.initialize();
+  await report.set('loanProfile', 'L-LEDGER-PREPAID');
+  await report.set('asOfDate', '2025-01-01');
+
+  const principalIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'principalOutstanding'
+  );
+  const interestPaidIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'interestPaid'
+  );
+  const interestOwedIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'interestOwed'
+  );
+  const totalDueIdx = report.columns.findIndex(
+    (c) => c.fieldname === 'totalDue'
+  );
+
+  const finalRow = report.reportData.at(-1);
+  t.ok(finalRow, 'final as-of row exists');
+  if (!finalRow) {
+    t.end();
+    return;
+  }
+
+  t.equal(
+    finalRow.cells[principalIdx]?.rawValue,
+    98000,
+    'principal outstanding reduced by pre-system principal'
+  );
+  t.equal(
+    finalRow.cells[interestPaidIdx]?.rawValue,
+    1000,
+    'interest paid includes pre-system interest'
+  );
+  t.equal(
+    finalRow.cells[interestOwedIdx]?.rawValue,
+    1000,
+    'interest owed reflects pre-system interest paid'
+  );
+  t.equal(
+    finalRow.cells[totalDueIdx]?.rawValue,
+    99000,
+    'total due reflects integrated pre-system amounts'
   );
   t.end();
 });

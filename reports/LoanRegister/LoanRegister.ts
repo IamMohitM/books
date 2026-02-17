@@ -136,18 +136,6 @@ export class LoanRegister extends Report {
         align: 'right',
       },
       {
-        fieldname: 'preSystemInterestPaid',
-        label: t`Interest Paid (Pre-System)`,
-        fieldtype: 'Currency',
-        align: 'right',
-      },
-      {
-        fieldname: 'preSystemPrincipalPaid',
-        label: t`Principal Paid (Pre-System)`,
-        fieldtype: 'Currency',
-        align: 'right',
-      },
-      {
         fieldname: 'accruedInterest',
         label: t`Accrued Interest`,
         fieldtype: 'Currency',
@@ -220,17 +208,33 @@ export class LoanRegister extends Report {
 
   getRows(rows: LoanSnapshot[]): ReportData {
     const data: ReportData = rows.map((row) => {
+      const preSystemPrincipalPaid = row.preSystemPrincipalPaid ?? 0;
+      const preSystemInterestPaid = row.preSystemInterestPaid ?? 0;
+      const includeHistoricalInterestPaid = Boolean(
+        row.includeHistoricalInterestPaid ?? false
+      );
+      const adjustedInterestPaid = includeHistoricalInterestPaid
+        ? row.interestPaid
+        : row.interestPaid + preSystemInterestPaid;
+      const adjustedPrincipalOutstanding =
+        row.principalOutstanding - preSystemPrincipalPaid;
+      const adjustedInterestOwed =
+        row.interestOwed -
+        (includeHistoricalInterestPaid ? 0 : preSystemInterestPaid);
+      const adjustedTotalDue =
+        row.totalDue -
+        preSystemPrincipalPaid -
+        (includeHistoricalInterestPaid ? 0 : preSystemInterestPaid);
+
       const values = [
         row.lenderName,
         row.startDate ?? '',
         row.annualInterestRate,
-        row.principalOutstanding,
-        row.interestPaid,
-        row.preSystemInterestPaid ?? 0,
-        row.preSystemPrincipalPaid ?? 0,
+        adjustedPrincipalOutstanding,
+        adjustedInterestPaid,
         row.accruedInterest,
-        row.interestOwed,
-        row.totalDue,
+        adjustedInterestOwed,
+        adjustedTotalDue,
         row.liabilityAccount ?? row.loanProfile,
       ];
 
@@ -266,20 +270,34 @@ export class LoanRegister extends Report {
 
     const totals = rows.reduce(
       (acc, row) => {
-        acc.principalOutstanding += row.principalOutstanding;
-        acc.interestPaid += row.interestPaid;
-        acc.preSystemInterestPaid += row.preSystemInterestPaid ?? 0;
-        acc.preSystemPrincipalPaid += row.preSystemPrincipalPaid ?? 0;
+        const preSystemPrincipalPaid = row.preSystemPrincipalPaid ?? 0;
+        const preSystemInterestPaid = row.preSystemInterestPaid ?? 0;
+        const includeHistoricalInterestPaid = Boolean(
+          row.includeHistoricalInterestPaid ?? false
+        );
+        const adjustedInterestPaid = includeHistoricalInterestPaid
+          ? row.interestPaid
+          : row.interestPaid + preSystemInterestPaid;
+        const adjustedPrincipalOutstanding =
+          row.principalOutstanding - preSystemPrincipalPaid;
+        const adjustedInterestOwed =
+          row.interestOwed -
+          (includeHistoricalInterestPaid ? 0 : preSystemInterestPaid);
+        const adjustedTotalDue =
+          row.totalDue -
+          preSystemPrincipalPaid -
+          (includeHistoricalInterestPaid ? 0 : preSystemInterestPaid);
+
+        acc.principalOutstanding += adjustedPrincipalOutstanding;
+        acc.interestPaid += adjustedInterestPaid;
         acc.accruedInterest += row.accruedInterest;
-        acc.interestOwed += row.interestOwed;
-        acc.totalDue += row.totalDue;
+        acc.interestOwed += adjustedInterestOwed;
+        acc.totalDue += adjustedTotalDue;
         return acc;
       },
       {
         principalOutstanding: 0,
         interestPaid: 0,
-        preSystemInterestPaid: 0,
-        preSystemPrincipalPaid: 0,
         accruedInterest: 0,
         interestOwed: 0,
         totalDue: 0,
@@ -319,44 +337,30 @@ export class LoanRegister extends Report {
           width: this.columns[4]?.width,
         },
         {
-          value: this.fyo.format(totals.preSystemInterestPaid, 'Currency'),
-          rawValue: totals.preSystemInterestPaid,
-          align: 'right',
-          bold: true,
-          width: this.columns[5]?.width,
-        },
-        {
-          value: this.fyo.format(totals.preSystemPrincipalPaid, 'Currency'),
-          rawValue: totals.preSystemPrincipalPaid,
-          align: 'right',
-          bold: true,
-          width: this.columns[6]?.width,
-        },
-        {
           value: this.fyo.format(totals.accruedInterest, 'Currency'),
           rawValue: totals.accruedInterest,
           align: 'right',
           bold: true,
-          width: this.columns[7]?.width,
+          width: this.columns[5]?.width,
         },
         {
           value: this.fyo.format(totals.interestOwed, 'Currency'),
           rawValue: totals.interestOwed,
           align: 'right',
           bold: true,
-          width: this.columns[8]?.width,
+          width: this.columns[6]?.width,
         },
         {
           value: this.fyo.format(totals.totalDue, 'Currency'),
           rawValue: totals.totalDue,
           align: 'right',
           bold: true,
-          width: this.columns[9]?.width,
+          width: this.columns[7]?.width,
         },
         {
           value: '',
           rawValue: '',
-          width: this.columns[10]?.width,
+          width: this.columns[8]?.width,
         },
       ],
     });
