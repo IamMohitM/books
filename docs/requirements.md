@@ -1,61 +1,48 @@
-# Requirements: Loan Register Refresh
+# Requirements: Loan Profile Duplication and Credit Column
 
-## Problem Statement
-Loan Register does not reflect recent Loan Profile updates without a manual refresh (Cmd+R) in the production app.
+## Overview
+Improve Loan Profile duplication behavior and add a credit column for tracking additional principal within the Pre-system Payments table.
 
-## User Story
-As a user, when I update a Loan Profile or related ledger data, the Loan Register should reflect the changes when I return to the report without requiring a manual refresh.
+## Target Users
+- Accounting/finance users managing loan profiles and related payments.
 
-## Acceptance Criteria
-- When a Loan Profile is updated, the Loan Register refreshes the next time the report view is activated.
-- When loan-related ledger entries or historical payments change, the Loan Register refreshes the next time the report view is activated.
-- No manual refresh is required to see the updates.
+## User Stories
 
-# Requirements: General Ledger Date Filtering
+### 1) Duplicate Loan Profile resets account fields
+**As a** finance user
+**I want** duplicated loan profiles to clear loan and interest account fields
+**So that** new accounts are created unless I explicitly select existing ones
 
-## Problem Statement
-General Ledger ignores `From Date` / `To Date` filters and shows entries outside the selected range.
+**Acceptance Criteria:**
+- [ ] Using Cmd+D to duplicate a loan profile clears Loan Account and Interest Account fields.
+- [ ] If those fields remain blank on save, the system auto-creates new Loan Account and Interest Account.
+- [ ] If the user explicitly selects existing accounts, the duplicate may use those accounts as-is.
+- [ ] Existing loan profile data (other than the account fields) is duplicated as it is today.
 
-## User Story
-As a user, when I set `From Date` and `To Date` in General Ledger, I expect only entries within that range, and the default range should be the current month to date.
+**Priority:** Must-have
 
-## Acceptance Criteria
-- General Ledger respects `From Date` and `To Date` filters for the ledger entries shown.
-- Default `From Date` is the 1st of the current month.
-- Default `To Date` is the current date.
+### 2) Credit column in Pre-system Payments
+**As a** finance user
+**I want** a Credit column in the Pre-system Payments table
+**So that** I can record additional principal added to the loan
 
-# Requirements: Loan Register Sorting
+**Acceptance Criteria:**
+- [ ] Pre-system Payments table includes a new column named "Credit".
+- [ ] Credit values are persisted with the loan profile.
+- [ ] Existing data continues to display correctly (no data loss).
 
-## Problem Statement
-Loan Register needs to support sorting by lender name in addition to existing date ordering.
+**Priority:** Must-have
 
-## User Story
-As a user, I want to sort the Loan Register by lender name so I can quickly scan accounts alphabetically.
+## MVP Scope
+- Update duplication behavior for Loan Profile with account field clearing and auto-creation on blank.
+- Add Credit column to Pre-system Payments and persist it.
 
-## Acceptance Criteria
-- Loan Register can be sorted by lender name.
-- Sorting order supports ascending and descending.
+## Future Enhancements
+- None identified.
 
-# Requirements: Dropdown Consistency
+## Success Criteria
+- Duplicated loan profiles consistently clear account fields and auto-create on save if blank.
+- Users can enter and store credit amounts in Pre-system Payments.
 
-## Problem Statement
-Select dropdowns look and behave inconsistently compared to link dropdowns across multiple pages.
-
-## User Story
-As a user, dropdowns should look and behave consistently across the app so filters and selects feel uniform.
-
-## Acceptance Criteria
-- Select dropdowns use the same dropdown styling and interaction pattern as link dropdowns.
-
-# Requirements: Loan Register and Loan Ledger Prepaid Handling
-
-## Problem Statement
-Loan Register shows pre-system (prepaid) columns, and Loan Ledger should include prepaid and journal entries without separate prepaid columns.
-
-## User Story
-As a user, I want Loan Register to fold prepaid amounts into principal and interest, and Loan Ledger to show all entries (including prepaid and journal entries) without separate prepaid columns.
-
-## Acceptance Criteria
-- Loan Register removes pre-system columns and integrates prepaid amounts into principal outstanding and interest paid.
-- Loan Ledger continues to show all entries, including prepaid and journal entries.
-- Loan Ledger totals reflect pre-system principal and interest payments in the final as-of summary.
+## Constraints
+- Duplication is triggered via Cmd+D in the Loan Profile UI.

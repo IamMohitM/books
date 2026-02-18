@@ -211,6 +211,13 @@ export class LoanProfile extends Doc {
     };
   }
 
+  override duplicate(): Doc {
+    const doc = super.duplicate() as LoanProfile;
+    doc.liabilityAccount = null;
+    doc.interestExpenseAccount = null;
+    return doc;
+  }
+
   static getActions(_fyo: Fyo): Action[] {
     return [];
   }

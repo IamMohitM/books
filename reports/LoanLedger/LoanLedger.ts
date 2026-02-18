@@ -173,6 +173,7 @@ export class LoanLedger extends Report {
         date?: string;
         paymentType?: string;
         amount?: number | string | Money;
+        credit?: number | string | Money;
       }[];
     };
 
@@ -226,33 +227,60 @@ export class LoanLedger extends Report {
             {
               date: profile.startDate,
               paymentType: 'Interest',
-              amount: historicalInterestPaid,
+              debit: historicalInterestPaid,
+              credit: 0,
               label: t`Interest Paid (Pre-System)`,
             },
           ]
         : []),
       ...historicalPayments
-        .filter(
+        .flatMap(
           (row: {
             date?: string;
             paymentType?: string;
             amount?: number | string | Money;
-          }) => row.paymentType && row.amount
-        )
-        .map((row: { date?: string; paymentType?: string; amount?: number | string | Money }) => {
-          const paymentType =
-            row.paymentType === 'Principal' ? 'Principal' : 'Interest';
-          const label =
-            paymentType === 'Principal'
-              ? t`Principal Paid (Pre-System)`
-              : t`Interest Paid (Pre-System)`;
-          return {
-            date: row.date ?? profile.startDate,
-            paymentType,
-            amount: toNumber(row.amount ?? 0),
-            label,
-          };
-        }),
+            credit?: number | string | Money;
+          }) => {
+            const rows: {
+              date: string;
+              paymentType: string;
+              debit: number;
+              credit: number;
+              label: string;
+            }[] = [];
+            const amount = toNumber(row.amount ?? 0);
+            const credit = toNumber(row.credit ?? 0);
+            const date = row.date ?? profile.startDate;
+
+            if (row.paymentType && amount) {
+              const paymentType =
+                row.paymentType === 'Principal' ? 'Principal' : 'Interest';
+              const label =
+                paymentType === 'Principal'
+                  ? t`Principal Paid (Pre-System)`
+                  : t`Interest Paid (Pre-System)`;
+              rows.push({
+                date,
+                paymentType,
+                debit: amount,
+                credit: 0,
+                label,
+              });
+            }
+
+            if (credit) {
+              rows.push({
+                date,
+                paymentType: 'Principal',
+                debit: 0,
+                credit,
+                label: t`Principal Added (Pre-System)`,
+              });
+            }
+
+            return rows;
+          }
+        ),
     ].sort((a, b) => {
       const dA = this.toUtcDate(a.date).getTime();
       const dB = this.toUtcDate(b.date).getTime();
@@ -319,7 +347,7 @@ export class LoanLedger extends Report {
         debit: 0,
         credit: 0,
         principalOutstanding: principal,
-        accruedInterest: 0,
+        accruedInterest: accrued,
         interestPaid,
         interestOwed,
         totalDue: principal + interestOwed,
@@ -327,27 +355,90 @@ export class LoanLedger extends Report {
     };
     let openingRowAdded = false;
 
-    for (const entry of preSystemRows) {
+    type LoanEvent = {
+      date: string;
+      referenceName: string;
+      loanComponent: string;
+      debit: number;
+      credit: number;
+      isPreSystem?: boolean;
+    };
+
+    const events: LoanEvent[] = [
+      ...preSystemRows.map((entry) => ({
+        date: entry.date,
+        referenceName: entry.label,
+        loanComponent: entry.paymentType,
+        debit: entry.debit,
+        credit: entry.credit,
+        isPreSystem: true,
+      })),
+      ...sorted.map((row) => ({
+        date: row.date,
+        referenceName: row.referenceName,
+        loanComponent: row.loanComponent,
+        debit: toNumber(row.debit ?? 0),
+        credit: toNumber(row.credit ?? 0),
+      })),
+    ];
+
+    events.sort((a, b) => {
+      const dA = this.toUtcDate(a.date).getTime();
+      const dB = this.toUtcDate(b.date).getTime();
+      if (dA !== dB) {
+        return dA - dB;
+      }
+      if (a.referenceName !== b.referenceName) {
+        return a.referenceName.localeCompare(b.referenceName);
+      }
+      const orderMap: Record<string, number> = {
+        Opening: 0,
+        Principal: 1,
+        Interest: 2,
+      };
+      const orderA = orderMap[a.loanComponent] ?? 99;
+      const orderB = orderMap[b.loanComponent] ?? 99;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return 0;
+    });
+
+    for (const event of events) {
+      const rowDate = this.toUtcDate(event.date);
+      const eventDate = rowDate.getTime() < start.getTime() ? start : rowDate;
+      if (eventDate.getTime() >= endExclusive.getTime()) {
+        break;
+      }
+
       if (
         shouldShowOpening &&
         !openingRowAdded &&
-        this.toUtcDate(entry.date).getTime() >= start.getTime()
+        eventDate.getTime() >= start.getTime()
       ) {
         pushOpeningRow();
         openingRowAdded = true;
       }
-      if (entry.paymentType === 'Interest') {
-        interestPaid += entry.amount;
-      } else if (entry.paymentType === 'Principal') {
-        principal -= entry.amount;
+
+      const daySpan = this.diffDays(cursor, eventDate);
+      if (daySpan > 0) {
+        accrued += principal * annualRate * (daySpan / 365);
       }
+      cursor = this.addDays(eventDate, 1);
+
+      if (event.loanComponent === 'Principal') {
+        principal += event.credit - event.debit;
+      } else if (event.loanComponent === 'Interest') {
+        interestPaid += event.debit - event.credit;
+      }
+
       const interestOwed = openingAccruedInterest + accrued - interestPaid;
       result.push({
-        date: entry.date,
-        referenceName: entry.label,
-        loanComponent: entry.paymentType,
-        debit: entry.amount,
-        credit: 0,
+        date: event.date,
+        referenceName: event.referenceName,
+        loanComponent: event.loanComponent,
+        debit: event.debit,
+        credit: event.credit,
         principalOutstanding: principal,
         accruedInterest: accrued,
         interestPaid,
@@ -359,40 +450,6 @@ export class LoanLedger extends Report {
     if (shouldShowOpening && !openingRowAdded) {
       pushOpeningRow();
       openingRowAdded = true;
-    }
-
-    for (const row of sorted) {
-      const rowDate = this.toUtcDate(row.date);
-      const eventDate = rowDate.getTime() < start.getTime() ? start : rowDate;
-      if (eventDate.getTime() >= endExclusive.getTime()) {
-        break;
-      }
-
-      const daySpan = this.diffDays(cursor, eventDate);
-      if (daySpan > 0) {
-        accrued += principal * annualRate * (daySpan / 365);
-      }
-      cursor = this.addDays(eventDate, 1);
-
-      if (row.loanComponent === 'Principal') {
-        principal += toNumber(row.credit ?? 0) - toNumber(row.debit ?? 0);
-      } else if (row.loanComponent === 'Interest') {
-        interestPaid += toNumber(row.debit ?? 0) - toNumber(row.credit ?? 0);
-      }
-
-      const interestOwed = openingAccruedInterest + accrued - interestPaid;
-      result.push({
-        date: row.date,
-        referenceName: row.referenceName,
-        loanComponent: row.loanComponent,
-        debit: toNumber(row.debit ?? 0),
-        credit: toNumber(row.credit ?? 0),
-        principalOutstanding: principal,
-        accruedInterest: accrued,
-        interestPaid,
-        interestOwed,
-        totalDue: principal + interestOwed,
-      });
     }
 
     if (cursor.getTime() < endExclusive.getTime()) {

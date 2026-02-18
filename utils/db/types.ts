@@ -126,6 +126,7 @@ export type LoanSnapshot = {
   includeHistoricalInterestPaid?: boolean;
   preSystemInterestPaid?: number;
   preSystemPrincipalPaid?: number;
+  preSystemPrincipalCredited?: number;
   principalOutstanding: number;
   interestPaid: number;
   accruedInterest: number;
