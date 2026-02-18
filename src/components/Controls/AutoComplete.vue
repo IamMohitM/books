@@ -310,10 +310,12 @@ export default {
       this.isFocused = false;
       this.isDropdownOpen = false;
       if (!label && !this.value) {
+        this.setLinkValue('');
         return;
       }
       if (!label) {
         this.triggerChange('');
+        this.setLinkValue('');
         return;
       }
 
@@ -336,9 +338,14 @@ export default {
         return;
       }
 
-      if (!e.target.value || this.focInp) {
-        e.target.value = null;
+      if (this.focInp) {
         this.focInp = false;
+      }
+
+      if (!e.target.value) {
+        this.setLinkValue('');
+        this.triggerChange('');
+        this.updateSuggestions('');
         toggleDropdown(false);
         return;
       }
