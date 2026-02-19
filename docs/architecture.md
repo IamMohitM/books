@@ -1,91 +1,33 @@
-# Architecture: Loan Profile Duplication and Credit Column
+# Architecture: Select Database Folder On New Company
 
 ## Overview
-This change set extends the Loan Profile data model and reporting logic to support pre-system principal credits, and customizes Loan Profile duplication behavior to clear account fields so new accounts are auto-created on save.
+Extend the setup wizard UI to capture an optional database folder and pass it to the main process when creating the default database path.
 
-## Technology Stack
+## Components
+- **Setup Wizard UI** (`src/pages/SetupWizard/SetupWizard.vue` + `schemas/app/SetupWizard.json`)
+  - Add `dbFolder` (read-only text) and `selectDbFolder` (button) fields.
+  - Handle button click to open a folder picker dialog and write the selected path to `dbFolder`.
+  - Make `email` and `bankName` optional fields.
+  - Default country to India and currency to INR via schema defaults.
 
-### Core Technologies
-- **Language:** TypeScript - existing project language
-- **Framework:** Vue - existing UI framework
-- **Database:** Existing DB layer via FYO schemas and bespoke queries
+- **Renderer Utilities** (`src/utils/ui.ts`)
+  - Add `getSelectedFolderPath()` helper using an open-directory dialog.
 
-### Supporting Tools
-- **FYO Doc model:** Used for duplication and lifecycle hooks
-- **Reports:** LoanLedger and LoanRegister use bespoke queries and computed rows
+- **IPC API** (`main/preload.ts`, `main/registerIpcMainActionListeners.ts`)
+  - Extend `ipc.getDbDefaultPath(companyName, dbFolder?)` to accept an optional folder path.
+  - In main process, use the provided folder as the database directory; otherwise keep existing default path logic.
 
-## System Components
+- **Setup Completion** (`src/App.vue`)
+  - Pass the optional `dbFolder` from setup wizard options into `ipc.getDbDefaultPath`.
+- **Setup Initialization** (`src/setup/setupInstance.ts`)
+  - Default `bankName` when missing and allow empty `email`.
 
-### Component: LoanProfile Model
-**Purpose:** Domain model for loan profiles
-**Responsibilities:**
-- Ensure loan accounts exist before sync
-- Provide duplication behavior
+## Data Flow
+1. User clicks **Choose Folder** in Setup Wizard.
+2. Renderer opens directory picker and stores selected path in `dbFolder` field.
+3. On submit, `setupComplete` receives `dbFolder` and requests a default DB path from main process.
+4. Main process builds file path inside selected folder (or defaults if none).
 
-**Interfaces:**
-- Input: LoanProfile fields
-- Output: Validated/synced loan profile doc
-
-### Component: LoanProfileHistoricalPayment
-**Purpose:** Store pre-system payment rows
-**Responsibilities:**
-- Persist date, type, amount, and new credit field
-
-### Component: LoanLedger Report
-**Purpose:** Render loan ledger including pre-system rows
-**Responsibilities:**
-- Incorporate pre-system payments and credits into ledger rows
-
-### Component: Bespoke Queries
-**Purpose:** Compute loan snapshots and historical totals
-**Responsibilities:**
-- Aggregate pre-system principal paid and credited amounts
-
-## Data Models
-
-### LoanProfileHistoricalPayment
-```
-- date: Date
-- paymentType: Select (Principal | Interest)
-- amount: Currency
-- credit: Currency (new; principal credit)
-```
-
-### LoanSnapshot (computed)
-```
-- preSystemInterestPaid: number
-- preSystemPrincipalPaid: number
-- preSystemPrincipalCredited: number (new)
-- principalOutstanding: number
-```
-
-**Data Flow:**
-- Pre-system payment rows are read from LoanProfileHistoricalPayment.
-- Amounts are aggregated into totals; credits increase principal outstanding.
-- Loan Ledger includes pre-system rows with debit/credit values.
-
-## API Design
-- No new API endpoints; uses existing doc sync and bespoke query pathways.
-
-## Scalability Considerations
-- Changes are bounded to per-loan computations; no new heavy queries.
-
-## Security Considerations
-- No new security surface area.
-
-## Development Approach
-
-**Project Structure:**
-```
-project/
-├── models/baseModels/LoanProfile/LoanProfile.ts
-├── schemas/app/LoanProfileHistoricalPayment.json
-├── reports/LoanLedger/LoanLedger.ts
-├── backend/database/bespoke.ts
-├── utils/db/types.ts
-└── docs/
-```
-
-**Testing Strategy:**
-- Manual verification of duplication behavior
-- Manual verification of pre-system credit display and snapshot
+## Compatibility
+- Default path behavior remains unchanged when no folder is selected.
+- Existing overwrite/new file handling remains in place.

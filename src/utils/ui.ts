@@ -1064,6 +1064,13 @@ export async function getSelectedFilePath() {
   });
 }
 
+export async function getSelectedFolderPath() {
+  return ipc.getOpenFilePath({
+    title: t`Select folder`,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+}
+
 export async function getSavePath(name: string, extention: string) {
   const response = await ipc.getSaveFilePath({
     title: t`Select folder`,

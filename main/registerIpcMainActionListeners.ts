@@ -43,33 +43,40 @@ export default function registerIpcMainActionListeners(main: Main) {
 
   ipcMain.handle(
     IPC_ACTIONS.GET_DB_DEFAULT_PATH,
-    async (_, companyName: string) => {
-      let root: string;
-      try {
-        root = app.getPath('documents');
-      } catch {
-        root = app.getPath('userData');
-      }
+    async (_, companyName: string, dbFolder?: string) => {
+      const customRoot = typeof dbFolder === 'string' ? dbFolder.trim() : '';
+      let dbsPath = '';
 
-      if (main.isDevelopment) {
-        root = 'dbs';
-      }
-
-      const legacyAppName = 'Frappe Books';
-      const appName = 'Frappe Cash Books';
-      const legacyPath = path.join(root, legacyAppName);
-      let dbsPath = path.join(root, appName);
-
-      if (
-        legacyPath !== dbsPath &&
-        (await fs.pathExists(legacyPath)) &&
-        !(await fs.pathExists(dbsPath))
-      ) {
+      if (customRoot) {
+        dbsPath = customRoot;
+      } else {
+        let root: string;
         try {
-          await fs.move(legacyPath, dbsPath, { overwrite: false });
+          root = app.getPath('documents');
         } catch {
-          // If migration fails, fall back to legacy path.
-          dbsPath = legacyPath;
+          root = app.getPath('userData');
+        }
+
+        if (main.isDevelopment) {
+          root = 'dbs';
+        }
+
+        const legacyAppName = 'Frappe Books';
+        const appName = 'Frappe Cash Books';
+        const legacyPath = path.join(root, legacyAppName);
+        dbsPath = path.join(root, appName);
+
+        if (
+          legacyPath !== dbsPath &&
+          (await fs.pathExists(legacyPath)) &&
+          !(await fs.pathExists(dbsPath))
+        ) {
+          try {
+            await fs.move(legacyPath, dbsPath, { overwrite: false });
+          } catch {
+            // If migration fails, fall back to legacy path.
+            dbsPath = legacyPath;
+          }
         }
       }
 

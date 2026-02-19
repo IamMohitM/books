@@ -20,6 +20,20 @@
       "section": "Default"
     },
     {
+      "fieldname": "dbFolder",
+      "label": "Database Folder",
+      "placeholder": "Select a folder",
+      "fieldtype": "Data",
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "selectDbFolder",
+      "label": "Choose Folder",
+      "fieldtype": "Button",
+      "section": "Default"
+    },
+    {
       "fieldname": "fullname",
       "label": "Full Name",
       "fieldtype": "Data",
@@ -31,7 +45,7 @@
       "label": "Email",
       "fieldtype": "Data",
       "placeholder": "john@doe.com",
-      "required": true
+      "required": false
     },
     {
       "fieldname": "country",
@@ -39,7 +53,8 @@
       "fieldtype": "AutoComplete",
       "placeholder": "Select Country",
       "section": "Locale",
-      "required": true
+      "required": true,
+      "default": "India"
     },
     {
       "fieldname": "currency",
@@ -47,7 +62,8 @@
       "fieldtype": "AutoComplete",
       "placeholder": "Currency",
       "section": "Locale",
-      "required": true
+      "required": true,
+      "default": "INR"
     },
     {
       "fieldname": "bankName",
@@ -55,7 +71,7 @@
       "fieldtype": "Data",
       "placeholder": "Prime Bank",
       "section": "Accounting",
-      "required": true
+      "required": false
     },
     {
       "fieldname": "chartOfAccounts",

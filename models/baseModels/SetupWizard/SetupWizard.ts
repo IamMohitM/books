@@ -5,6 +5,14 @@ import { validateEmail } from 'fyo/model/validationFunction';
 import { DateTime } from 'luxon';
 import { getCountryInfo, getFiscalYear } from 'utils/misc';
 
+function validateOptionalEmail(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return;
+  }
+
+  validateEmail(value);
+}
+
 function getCurrencyList(): { countryCode: string; name: string }[] {
   const result: { countryCode: string; name: string }[] = [];
   const countryInfo = getCountryInfo();
@@ -155,7 +163,7 @@ export class SetupWizard extends Doc {
   };
 
   validations: ValidationMap = {
-    email: validateEmail,
+    email: validateOptionalEmail,
   };
 
   static lists: ListsMap = {

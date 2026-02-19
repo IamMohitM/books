@@ -201,11 +201,16 @@ export default defineComponent({
       }
     },
     async setupComplete(setupWizardOptions: SetupWizardOptions): Promise<void> {
-      const companyName = setupWizardOptions.companyName;
-      const filePath = await ipc.getDbDefaultPath(companyName);
-      await setupInstance(filePath, setupWizardOptions, fyo);
-      fyo.config.set('lastSelectedFilePath', filePath);
-      await this.setDesk(filePath);
+      try {
+        const { companyName, dbFolder } = setupWizardOptions;
+        const filePath = await ipc.getDbDefaultPath(companyName, dbFolder);
+        await setupInstance(filePath, setupWizardOptions, fyo);
+        fyo.config.set('lastSelectedFilePath', filePath);
+        await this.setDesk(filePath);
+      } catch (error) {
+        await handleErrorWithDialog(error as Error, undefined, true, true);
+        await this.showDbSelector();
+      }
     },
     async showSetupWizardOrDesk(filePath: string): Promise<void> {
       const { countryCode, error, actionSymbol } = await connectToDatabase(
