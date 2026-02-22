@@ -59,3 +59,80 @@ As a user, I want Loan Register to fold prepaid amounts into principal and inter
 - Loan Register removes pre-system columns and integrates prepaid amounts into principal outstanding and interest paid.
 - Loan Ledger continues to show all entries, including prepaid and journal entries.
 - Loan Ledger totals reflect pre-system principal and interest payments in the final as-of summary.
+
+# Requirements: Mobile Collaboration And Migration
+
+## Problem Statement
+The desktop app is not accessible on mobile and collaboration requires file sharing, which is unreliable and insecure for multi-user access.
+
+## Target Users
+- Company owners and collaborators who need to add and review transactions from multiple locations.
+
+## User Stories
+
+### Mobile App For Collaboration
+**As a** user managing cash transactions across cities
+**I want** a mobile app to view and add transactions
+**So that** I can collaborate with others without maintaining books myself
+
+**Acceptance Criteria:**
+- iOS users can sign in.
+- Users can view journal entries.
+- Users can add journal entries via a quick add flow.
+- Ledger and account balance reports are viewable.
+- Each entry shows who created it.
+
+**Priority:** Must-have
+
+### Invite Collaborators By Email
+**As a** company owner
+**I want** to invite collaborators by email
+**So that** they can edit the shared books
+
+**Acceptance Criteria:**
+- Owner can add a collaborator by email.
+- Collaborators can view and edit entries.
+- Access is limited to invited users.
+- Invites are initiated from the mobile app settings screen.
+- Owner-only permission is enforced for invites.
+- Invites send a magic link if the user does not already exist.
+
+**Priority:** Must-have
+
+### Preserve Existing Data
+**As a** current desktop user
+**I want** my existing data migrated to the hosted database
+**So that** I do not lose history when using mobile
+
+**Acceptance Criteria:**
+- A one-time migration imports existing accounts and journal entries.
+- Ledger totals match after migration.
+
+**Priority:** Must-have
+
+## MVP Scope
+- iOS app with login, journal entries, quick add, ledger, reports, and collaborator invites.
+- Hosted database with multi-user access and audit attribution.
+- One-time migration from local SQLite.
+
+## Future Enhancements
+- Android app.
+- Offline-first sync with conflict resolution.
+- Role-based read-only users.
+
+## Success Criteria
+- iOS users can view and add entries securely.
+- Migration preserves existing data accurately.
+- Owners can invite collaborators from the mobile app.
+
+# Requirements: Mobile Quick Add Button
+
+## Problem Statement
+Quick Add is currently a header button; it should be promoted to a central plus button for faster access.
+
+## User Story
+As a mobile user, I want quick add in a center plus button at the bottom so I can add transactions faster from any tab.
+
+## Acceptance Criteria
+- A floating plus button sits centered in the bottom navigation.
+- Tapping the plus button opens Quick Add from any tab.
