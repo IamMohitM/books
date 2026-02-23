@@ -1,6 +1,16 @@
 <template>
   <FormContainer>
     <template #header>
+      <Button
+        v-if="showCloudSyncPanel"
+        class="me-2"
+        @click="refreshCloudSyncStatus"
+      >
+        {{ t`Refresh Sync Status` }}
+      </Button>
+      <Button v-if="showCloudSyncPanel" class="me-2" @click="flushCloudSyncNow">
+        {{ t`Flush Sync Now` }}
+      </Button>
       <Button v-if="canSave" type="primary" @click="sync">
         {{ t`Save` }}
       </Button>
@@ -22,6 +32,35 @@
 
       <!-- Section Container -->
       <div v-if="doc" class="overflow-auto custom-scroll custom-scroll-thumb1">
+        <div
+          v-if="showCloudSyncPanel"
+          class="
+            mx-4
+            mt-4
+            p-3
+            rounded
+            border
+            dark:border-gray-800
+            bg-gray-50
+            dark:bg-gray-875
+            text-sm
+          "
+        >
+          <div class="font-semibold mb-2">{{ t`Cloud Sync Status` }}</div>
+          <div class="flex flex-wrap gap-4 text-gray-700 dark:text-gray-200">
+            <div>{{ t`Queued` }}: {{ cloudSyncStatus.queued }}</div>
+            <div>{{ t`Processing` }}: {{ cloudSyncStatus.processing }}</div>
+            <div>{{ t`Failed` }}: {{ cloudSyncStatus.failed }}</div>
+            <div>{{ t`Sent` }}: {{ cloudSyncStatus.sent }}</div>
+          </div>
+          <div
+            v-if="cloudSyncStatus.lastError"
+            class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
+          >
+            {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
+          </div>
+        </div>
+
         <CommonFormSection
           v-for="([name, fields], idx) in activeGroup.entries()"
           :key="name + idx"
@@ -96,6 +135,12 @@ import { showDialog } from 'src/utils/interactive';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
+import { showToast } from 'src/utils/interactive';
+import {
+  flushCloudSyncOutbox,
+  startCloudSyncWorker,
+  stopCloudSyncWorker,
+} from 'src/utils/cloudSyncWorker';
 import { computed, defineComponent, inject } from 'vue';
 import CommonFormSection from '../CommonForm/CommonFormSection.vue';
 
@@ -116,10 +161,24 @@ export default defineComponent({
       errors: {},
       activeTab: ModelNameEnum.AccountingSettings,
       groupedFields: null,
+      cloudSyncStatus: {
+        queued: 0,
+        processing: 0,
+        failed: 0,
+        sent: 0,
+        lastError: '',
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
       groupedFields: null | UIGroupedFields;
+      cloudSyncStatus: {
+        queued: number;
+        processing: number;
+        failed: number;
+        sent: number;
+        lastError: string;
+      };
     };
   },
   computed: {
@@ -200,6 +259,9 @@ export default defineComponent({
 
       return group;
     },
+    showCloudSyncPanel(): boolean {
+      return this.activeTab === ModelNameEnum.SystemSettings;
+    },
   },
   mounted() {
     if (this.fyo.store.isDevelopment) {
@@ -216,6 +278,7 @@ export default defineComponent({
     }
 
     docsPathRef.value = docsPathMap.Settings ?? '';
+    void this.refreshCloudSyncStatus();
     this.shortcuts?.pmod.set(COMPONENT_NAME, ['KeyS'], async () => {
       if (!this.canSave) {
         return;
@@ -253,6 +316,13 @@ export default defineComponent({
         await this.syncDoc(doc);
       }
 
+      if (this.fyo.singles.SystemSettings?.syncEnabled) {
+        startCloudSyncWorker(this.fyo);
+      } else {
+        stopCloudSyncWorker();
+      }
+
+      await this.refreshCloudSyncStatus();
       this.update();
       await showDialog({
         title: this.t`Reload Frappe Cash Books?`,
@@ -298,6 +368,49 @@ export default defineComponent({
     },
     update(): void {
       this.updateGroupedFields();
+    },
+    async refreshCloudSyncStatus(): Promise<void> {
+      const [queued, processing, failed, sent] = await Promise.all([
+        this.fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+          filters: { status: 'queued' },
+        }),
+        this.fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+          filters: { status: 'processing' },
+        }),
+        this.fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+          filters: { status: 'failed' },
+        }),
+        this.fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+          filters: { status: 'sent' },
+        }),
+      ]);
+
+      const failedRows = await this.fyo.db.getAll(
+        ModelNameEnum.CloudSyncOutbox,
+        {
+          fields: ['errorMessage', 'modified'],
+          filters: { status: 'failed' },
+          orderBy: 'modified',
+        }
+      );
+      const lastFailed = failedRows[failedRows.length - 1];
+      const lastError = (lastFailed?.errorMessage as string) ?? '';
+
+      this.cloudSyncStatus = {
+        queued,
+        processing,
+        failed,
+        sent,
+        lastError,
+      };
+    },
+    async flushCloudSyncNow(): Promise<void> {
+      await flushCloudSyncOutbox(this.fyo);
+      await this.refreshCloudSyncStatus();
+      showToast({
+        type: 'success',
+        message: this.t`Cloud sync flush finished.`,
+      });
     },
     updateGroupedFields(): void {
       const grouped: UIGroupedFields = new Map();

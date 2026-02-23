@@ -41,7 +41,9 @@ export function getCloudSyncEventId(
   doc: Doc,
   operation: CloudSyncOperation
 ): string {
-  return `${doc.schemaName}:${doc.name}:${operation}:${getRandomString()}`;
+  return `${doc.schemaName}:${String(
+    doc.name ?? ''
+  )}:${operation}:${getRandomString()}`;
 }
 
 export async function enqueueCloudSyncEvent(
@@ -53,6 +55,11 @@ export async function enqueueCloudSyncEvent(
   }
 
   const settings = getSystemSettings(doc);
+  const rawDocData = doc.fyo.db.converter.toRawValueMap(
+    doc.schemaName,
+    doc.getValidDict(false, true)
+  );
+
   const payload = JSON.stringify({
     schemaName: doc.schemaName,
     name: doc.name,
@@ -60,6 +67,8 @@ export async function enqueueCloudSyncEvent(
     submitted: !!doc.submitted,
     cancelled: !!doc.cancelled,
     modified: doc.modified ?? null,
+    deviceId: settings?.syncDeviceId || doc.fyo.store.deviceId || '',
+    data: rawDocData,
   });
 
   const outboxDoc = doc.fyo.doc.getNewDoc(ModelNameEnum.CloudSyncOutbox, {

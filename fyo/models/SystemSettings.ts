@@ -22,6 +22,9 @@ export default class SystemSettings extends Doc {
   syncMode?: 'off' | 'pilot' | 'on';
   syncCompanyId?: string;
   syncDeviceId?: string;
+  syncApiUrl?: string;
+  syncAuthToken?: string;
+  syncIntervalSeconds?: number;
 
   validations: ValidationMap = {
     displayPrecision(value: DocValue) {

@@ -75,6 +75,10 @@ import {
   updateERPNSyncSettings,
 } from './utils/erpnextSync';
 import { ERPNextSyncSettings } from 'models/baseModels/ERPNextSyncSettings/ERPNextSyncSettings';
+import {
+  startCloudSyncWorker,
+  stopCloudSyncWorker,
+} from './utils/cloudSyncWorker';
 
 enum Screen {
   Desk = 'Desk',
@@ -256,6 +260,8 @@ export default defineComponent({
         }
       }
 
+      startCloudSyncWorker(fyo);
+
       await this.setDesk(filePath);
     },
     async handleConnectionFailed(error: Error, actionSymbol: symbol) {
@@ -285,6 +291,7 @@ export default defineComponent({
     },
     async showDbSelector(): Promise<void> {
       localStorage.clear();
+      stopCloudSyncWorker();
       fyo.config.set('lastSelectedFilePath', null);
       fyo.telemetry.stop();
       await fyo.purgeCache();
