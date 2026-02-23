@@ -52,6 +52,11 @@ Introduce a hosted backend (Supabase Postgres + Auth + RLS) with an iOS mobile c
 - Quick add writes via `create_journal_entry` RPC.
 - Ledger and report screens read from `ledger_entries` and `account_balances` views.
 
+## Testing Strategy
+- Unit/integration tests live in `mobile/__tests__` using Jest + `@testing-library/react-native`.
+- Supabase is mocked for list and RPC flows.
+- Coverage focuses on transaction list, details modal, and Quick Add validations.
+
 ## Security
 - RLS ensures company data is only accessible to members.
 - `created_by` tracks who added each entry.

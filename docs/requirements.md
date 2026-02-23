@@ -136,3 +136,30 @@ As a mobile user, I want quick add in a center plus button at the bottom so I ca
 ## Acceptance Criteria
 - A floating plus button sits centered in the bottom navigation.
 - Tapping the plus button opens Quick Add from any tab.
+
+# Requirements: Mobile Account Search and Create
+
+## Problem Statement
+Selecting accounts on mobile is slow without search, and users need a way to add missing accounts inline.
+
+## User Story
+As a mobile user, I want to search accounts and create a missing account while adding a journal entry so I can complete entries without switching contexts.
+
+## Acceptance Criteria
+- Account selector supports search with live filtering.
+- If no exact match exists, user can create a new account inline.
+- Newly created account is selected after creation.
+- New accounts must choose a parent group account and inherit its root type/account type.
+
+# Requirements: Mobile Test Suite
+
+## Problem Statement
+Mobile changes are hard to validate without automated tests, slowing down QA and increasing regressions.
+
+## User Story
+As a developer, I want automated mobile tests so I can validate critical flows quickly and consistently.
+
+## Acceptance Criteria
+- Transactions list renders from Supabase data.
+- Tapping a transaction opens a details view with debit/credit lines.
+- Quick Add validates required fields and submits balanced entries.
