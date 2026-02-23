@@ -20,7 +20,6 @@ export default function SettingsScreen({ companyId, onSignOut }: Props) {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [inviting, setInviting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [debugTokenInfo, setDebugTokenInfo] = useState<string | null>(null);
 
   const loadCollaborators = async () => {
     const { data, error } = await supabase
@@ -55,13 +54,8 @@ export default function SettingsScreen({ companyId, onSignOut }: Props) {
     if (sessionError || !session?.access_token) {
       setInviting(false);
       setStatus('Invite failed. Please sign in again.');
-      setDebugTokenInfo(`token: missing, error: ${sessionError?.message ?? 'none'}`);
       return;
     }
-
-    setDebugTokenInfo(
-      `token: yes, length: ${session.access_token.length}, exp: ${session.expires_at ?? 'n/a'}`
-    );
 
     let inviteError: string | null = null;
     try {
@@ -127,7 +121,6 @@ export default function SettingsScreen({ companyId, onSignOut }: Props) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Invite collaborator</Text>
         <Text style={styles.sectionHint}>Owners can invite existing users by email.</Text>
-        {!!debugTokenInfo && <Text style={styles.debug}>{debugTokenInfo}</Text>}
         <View style={styles.inviteRow}>
           <TextInput
             style={styles.input}
@@ -185,7 +178,6 @@ const styles = StyleSheet.create({
   },
   inviteButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
   status: { marginTop: 8, fontSize: 12, color: '#0f172a' },
-  debug: { fontSize: 11, color: '#64748b', marginBottom: 6 },
   collabRow: {
     backgroundColor: 'white',
     padding: 12,
