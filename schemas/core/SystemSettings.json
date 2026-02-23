@@ -148,6 +148,52 @@
       "fieldtype": "Check",
       "default": false,
       "section": "Customizations"
+    },
+    {
+      "fieldname": "syncEnabled",
+      "label": "Enable Cloud Sync",
+      "fieldtype": "Check",
+      "default": false,
+      "description": "Feature flag for desktop cloud sync workers.",
+      "section": "Sync",
+      "hidden": true
+    },
+    {
+      "fieldname": "syncMode",
+      "label": "Sync Mode",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "off",
+          "label": "Off"
+        },
+        {
+          "value": "pilot",
+          "label": "Pilot"
+        },
+        {
+          "value": "on",
+          "label": "On"
+        }
+      ],
+      "default": "off",
+      "section": "Sync",
+      "hidden": true
+    },
+    {
+      "fieldname": "syncCompanyId",
+      "label": "Sync Company ID",
+      "fieldtype": "Data",
+      "section": "Sync",
+      "hidden": true
+    },
+    {
+      "fieldname": "syncDeviceId",
+      "label": "Sync Device ID",
+      "fieldtype": "Data",
+      "readOnly": true,
+      "section": "Sync",
+      "hidden": true
     }
   ],
   "quickEditFields": [

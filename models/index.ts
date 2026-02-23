@@ -60,6 +60,9 @@ import { ERPNextSyncQueue } from './baseModels/ERPNextSyncQueue/ERPNextSyncQueue
 import { FetchFromERPNextQueue } from './baseModels/FetchFromERPNextQueue/FetchFromERPNextQueue';
 import { IntegrationErrorLog } from './baseModels/IntegrationErrorLog/IntegrationErrorLog';
 import { ItemEnquiry } from './baseModels/ItemEnquiry/ItemEnquiry';
+import { CloudSyncOutbox } from './baseModels/CloudSyncOutbox/CloudSyncOutbox';
+import { CloudSyncCursor } from './baseModels/CloudSyncCursor/CloudSyncCursor';
+import { CloudSyncState } from './baseModels/CloudSyncState/CloudSyncState';
 
 export const models = {
   Account,
@@ -125,6 +128,9 @@ export const models = {
   ERPNextSyncSettings,
   ERPNextSyncQueue,
   FetchFromERPNextQueue,
+  CloudSyncOutbox,
+  CloudSyncCursor,
+  CloudSyncState,
   // Error Log
   IntegrationErrorLog,
 } as ModelMap;

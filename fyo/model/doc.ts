@@ -46,6 +46,10 @@ import {
 import { validateOptions, validateRequired } from './validationFunction';
 import { getShouldDocSyncToERPNext } from 'src/utils/erpnextSync';
 import { ModelNameEnum } from 'models/types';
+import {
+  enqueueCloudSyncEvent,
+  shouldEnqueueCloudSyncForDoc,
+} from 'src/utils/cloudSync';
 
 export class Doc extends Observable<DocValue | Doc[]> {
   /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -925,6 +929,7 @@ export class Doc extends Observable<DocValue | Doc[]> {
   async sync(): Promise<Doc> {
     this._syncing = true;
     await this.trigger('beforeSync');
+    const operation = this.notInserted ? 'create' : 'update';
     let doc;
     if (this.notInserted) {
       doc = await this._insert();
@@ -967,6 +972,14 @@ export class Doc extends Observable<DocValue | Doc[]> {
       }
     }
 
+    if (
+      this._addDocToSyncQueue &&
+      shouldEnqueueCloudSyncForDoc(this) &&
+      this.schemaName !== ModelNameEnum.CloudSyncOutbox
+    ) {
+      await enqueueCloudSyncEvent(this, operation).catch(() => undefined);
+    }
+
     this._syncing = false;
     return doc;
   }
@@ -984,6 +997,14 @@ export class Doc extends Observable<DocValue | Doc[]> {
     await this.fyo.db.delete(this.schemaName, this.name!);
     await this.trigger('afterDelete');
 
+    if (
+      this._addDocToSyncQueue &&
+      shouldEnqueueCloudSyncForDoc(this) &&
+      this.schemaName !== ModelNameEnum.CloudSyncOutbox
+    ) {
+      await enqueueCloudSyncEvent(this, 'delete').catch(() => undefined);
+    }
+
     this.fyo.telemetry.log(Verb.Deleted, this.schemaName);
     this.fyo.doc.observer.trigger(`delete:${this.schemaName}`, this.name);
   }
@@ -997,6 +1018,14 @@ export class Doc extends Observable<DocValue | Doc[]> {
     await this.setAndSync('submitted', true);
     await this.trigger('afterSubmit');
 
+    if (
+      this._addDocToSyncQueue &&
+      shouldEnqueueCloudSyncForDoc(this) &&
+      this.schemaName !== ModelNameEnum.CloudSyncOutbox
+    ) {
+      await enqueueCloudSyncEvent(this, 'submit').catch(() => undefined);
+    }
+
     this.fyo.telemetry.log(Verb.Submitted, this.schemaName);
     this.fyo.doc.observer.trigger(`submit:${this.schemaName}`, this.name);
   }
@@ -1009,6 +1038,14 @@ export class Doc extends Observable<DocValue | Doc[]> {
     await this.trigger('beforeCancel');
     await this.setAndSync('cancelled', true);
     await this.trigger('afterCancel');
+
+    if (
+      this._addDocToSyncQueue &&
+      shouldEnqueueCloudSyncForDoc(this) &&
+      this.schemaName !== ModelNameEnum.CloudSyncOutbox
+    ) {
+      await enqueueCloudSyncEvent(this, 'cancel').catch(() => undefined);
+    }
 
     this.fyo.telemetry.log(Verb.Cancelled, this.schemaName);
     this.fyo.doc.observer.trigger(`cancel:${this.schemaName}`, this.name);

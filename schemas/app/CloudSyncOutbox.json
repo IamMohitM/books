@@ -1,0 +1,116 @@
+{
+  "name": "CloudSyncOutbox",
+  "label": "Cloud Sync Outbox",
+  "naming": "random",
+  "fields": [
+    {
+      "fieldname": "eventId",
+      "label": "Event ID",
+      "fieldtype": "Data",
+      "required": true
+    },
+    {
+      "fieldname": "referenceType",
+      "label": "Ref. Type",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "Account",
+          "label": "Account"
+        },
+        {
+          "value": "Party",
+          "label": "Party"
+        },
+        {
+          "value": "JournalEntry",
+          "label": "Journal Entry"
+        }
+      ],
+      "required": true
+    },
+    {
+      "fieldname": "documentName",
+      "label": "Document Name",
+      "fieldtype": "DynamicLink",
+      "references": "referenceType",
+      "required": true
+    },
+    {
+      "fieldname": "operation",
+      "label": "Operation",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "create",
+          "label": "Create"
+        },
+        {
+          "value": "update",
+          "label": "Update"
+        },
+        {
+          "value": "submit",
+          "label": "Submit"
+        },
+        {
+          "value": "cancel",
+          "label": "Cancel"
+        },
+        {
+          "value": "delete",
+          "label": "Delete"
+        }
+      ],
+      "required": true
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "queued",
+          "label": "Queued"
+        },
+        {
+          "value": "processing",
+          "label": "Processing"
+        },
+        {
+          "value": "sent",
+          "label": "Sent"
+        },
+        {
+          "value": "failed",
+          "label": "Failed"
+        }
+      ],
+      "default": "queued",
+      "required": true
+    },
+    {
+      "fieldname": "attempts",
+      "label": "Attempts",
+      "fieldtype": "Int",
+      "default": 0,
+      "required": true
+    },
+    {
+      "fieldname": "deviceId",
+      "label": "Device ID",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "errorMessage",
+      "label": "Error Message",
+      "fieldtype": "Text"
+    },
+    {
+      "fieldname": "payload",
+      "label": "Payload",
+      "fieldtype": "Text",
+      "hidden": true
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "CloudSyncCursor",
+  "label": "Cloud Sync Cursor",
+  "naming": "random",
+  "fields": [
+    {
+      "fieldname": "companyId",
+      "label": "Company ID",
+      "fieldtype": "Data",
+      "required": true
+    },
+    {
+      "fieldname": "lastSeq",
+      "label": "Last Sequence",
+      "fieldtype": "Int",
+      "default": 0,
+      "required": true
+    }
+  ]
+}

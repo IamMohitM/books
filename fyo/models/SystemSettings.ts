@@ -18,6 +18,10 @@ export default class SystemSettings extends Doc {
   instanceId?: string;
   darkMode?: boolean;
   displayTermsAndConditions?: boolean;
+  syncEnabled?: boolean;
+  syncMode?: 'off' | 'pilot' | 'on';
+  syncCompanyId?: string;
+  syncDeviceId?: string;
 
   validations: ValidationMap = {
     displayPrecision(value: DocValue) {

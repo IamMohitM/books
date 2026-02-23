@@ -1,0 +1,51 @@
+{
+  "name": "CloudSyncState",
+  "label": "Cloud Sync State",
+  "isSingle": true,
+  "fields": [
+    {
+      "fieldname": "enrollmentStatus",
+      "label": "Enrollment Status",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "not_enrolled",
+          "label": "Not Enrolled"
+        },
+        {
+          "value": "enrolling",
+          "label": "Enrolling"
+        },
+        {
+          "value": "active",
+          "label": "Active"
+        },
+        {
+          "value": "paused",
+          "label": "Paused"
+        },
+        {
+          "value": "error",
+          "label": "Error"
+        }
+      ],
+      "default": "not_enrolled",
+      "required": true
+    },
+    {
+      "fieldname": "lastPushAt",
+      "label": "Last Push At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "lastPullAt",
+      "label": "Last Pull At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "lastError",
+      "label": "Last Error",
+      "fieldtype": "Text"
+    }
+  ]
+}

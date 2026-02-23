@@ -82,6 +82,9 @@ export enum ModelNameEnum {
   ERPNextSyncSettings = 'ERPNextSyncSettings',
   ERPNextSyncQueue = 'ERPNextSyncQueue',
   FetchFromERPNextQueue = 'FetchFromERPNextQueue',
+  CloudSyncOutbox = 'CloudSyncOutbox',
+  CloudSyncCursor = 'CloudSyncCursor',
+  CloudSyncState = 'CloudSyncState',
 }
 
 export type ModelName = keyof typeof ModelNameEnum;
