@@ -154,7 +154,7 @@
       "label": "Enable Cloud Sync",
       "fieldtype": "Check",
       "default": false,
-      "description": "Feature flag for desktop cloud sync workers.",
+      "description": "Turns desktop cloud sync on or off.",
       "section": "Sync"
     },
     {
@@ -176,12 +176,14 @@
         }
       ],
       "default": "off",
+      "description": "Use 'pilot' for controlled rollout and 'on' for normal operation.",
       "section": "Sync"
     },
     {
       "fieldname": "syncCompanyId",
       "label": "Sync Company ID",
       "fieldtype": "Data",
+      "description": "Remote company UUID used for sync scope.",
       "section": "Sync"
     },
     {
@@ -189,18 +191,28 @@
       "label": "Sync Device ID",
       "fieldtype": "Data",
       "readOnly": true,
+      "description": "Optional stable desktop identifier for diagnostics.",
       "section": "Sync"
     },
     {
       "fieldname": "syncApiUrl",
       "label": "Sync API URL",
       "fieldtype": "Data",
+      "description": "Supabase RPC URL for push, e.g. .../rest/v1/rpc/apply_sync_event.",
+      "section": "Sync"
+    },
+    {
+      "fieldname": "syncPullApiUrl",
+      "label": "Sync Pull API URL",
+      "fieldtype": "Data",
+      "description": "Supabase RPC URL for pull, e.g. .../rest/v1/rpc/fetch_sync_changes. Leave empty to auto-derive from push URL.",
       "section": "Sync"
     },
     {
       "fieldname": "syncAuthToken",
       "label": "Sync Auth Token",
       "fieldtype": "Data",
+      "description": "Bearer/API token used for push/pull RPC calls.",
       "section": "Sync"
     },
     {
@@ -209,6 +221,7 @@
       "fieldtype": "Int",
       "default": 15,
       "minvalue": 5,
+      "description": "Background sync interval in seconds.",
       "section": "Sync"
     }
   ],

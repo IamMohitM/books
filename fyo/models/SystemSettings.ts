@@ -23,6 +23,7 @@ export default class SystemSettings extends Doc {
   syncCompanyId?: string;
   syncDeviceId?: string;
   syncApiUrl?: string;
+  syncPullApiUrl?: string;
   syncAuthToken?: string;
   syncIntervalSeconds?: number;
 

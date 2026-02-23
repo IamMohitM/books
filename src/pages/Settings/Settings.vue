@@ -47,6 +47,28 @@
           "
         >
           <div class="font-semibold mb-2">{{ t`Cloud Sync Status` }}</div>
+          <div class="text-xs text-gray-700 dark:text-gray-200 mb-3">
+            {{
+              t`Use this flow: 1) Save sync settings, 2) Flush desktop data to remote, 3) Open mobile app with the same company.`
+            }}
+          </div>
+          <div
+            v-if="syncSetupMissing.length"
+            class="
+              mb-3
+              p-2
+              rounded
+              border border-red-200
+              dark:border-red-800
+              bg-red-50
+              dark:bg-red-900/20
+              text-xs text-red-700
+              dark:text-red-200
+            "
+          >
+            <div class="font-semibold">{{ t`Sync setup incomplete` }}</div>
+            <div v-for="item in syncSetupMissing" :key="item">- {{ item }}</div>
+          </div>
           <div class="flex flex-wrap gap-4 text-gray-700 dark:text-gray-200">
             <div>{{ t`Queued` }}: {{ cloudSyncStatus.queued }}</div>
             <div>{{ t`Processing` }}: {{ cloudSyncStatus.processing }}</div>
@@ -131,11 +153,10 @@ import { handleErrorWithDialog } from 'src/errorHandling';
 import { getErrorMessage } from 'src/utils';
 import { evaluateHidden } from 'src/utils/doc';
 import { shortcutsKey } from 'src/utils/injectionKeys';
-import { showDialog } from 'src/utils/interactive';
+import { showDialog, showToast } from 'src/utils/interactive';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
-import { showToast } from 'src/utils/interactive';
 import {
   flushCloudSyncOutbox,
   startCloudSyncWorker,
@@ -261,6 +282,25 @@ export default defineComponent({
     },
     showCloudSyncPanel(): boolean {
       return this.activeTab === ModelNameEnum.SystemSettings;
+    },
+    syncSetupMissing(): string[] {
+      const ss = this.fyo.singles.SystemSettings;
+      if (!ss?.syncEnabled || ss.syncMode === 'off') {
+        return [];
+      }
+
+      const missing: string[] = [];
+      if (!ss.syncCompanyId) {
+        missing.push(this.t`Sync Company ID is required.`);
+      }
+      if (!ss.syncApiUrl) {
+        missing.push(this.t`Sync API URL is required (apply_sync_event).`);
+      }
+      if (!ss.syncAuthToken) {
+        missing.push(this.t`Sync Auth Token is required.`);
+      }
+
+      return missing;
     },
   },
   mounted() {
@@ -405,6 +445,15 @@ export default defineComponent({
       };
     },
     async flushCloudSyncNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
       await flushCloudSyncOutbox(this.fyo);
       await this.refreshCloudSyncStatus();
       showToast({
