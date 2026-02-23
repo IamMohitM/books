@@ -23,6 +23,22 @@ type RemoteSyncChange = {
   };
 };
 
+export type SyncSnapshot = {
+  accounts: number;
+  parties: number;
+  journal_entries: number;
+  journal_entry_lines: number;
+  debit_total: number;
+  credit_total: number;
+};
+
+export type ReconciliationResult = {
+  ok: boolean;
+  mismatches: string[];
+  local: SyncSnapshot;
+  remote: SyncSnapshot;
+};
+
 function getSystemSettings(fyo: Fyo) {
   return fyo.singles.SystemSettings as
     | {
@@ -45,6 +61,18 @@ function getDefaultPullApiUrl(pushApiUrl: string) {
   return pushApiUrl;
 }
 
+function getDefaultSnapshotApiUrl(pullApiUrl: string) {
+  if (pullApiUrl.includes('/fetch_sync_changes')) {
+    return pullApiUrl.replace('/fetch_sync_changes', '/fetch_sync_snapshot');
+  }
+
+  if (pullApiUrl.includes('/apply_sync_event')) {
+    return pullApiUrl.replace('/apply_sync_event', '/fetch_sync_snapshot');
+  }
+
+  return pullApiUrl;
+}
+
 function getWorkerConfig(fyo: Fyo) {
   const settings = getSystemSettings(fyo);
   const pushApiUrl = settings?.syncApiUrl ?? '';
@@ -65,6 +93,143 @@ function getWorkerConfig(fyo: Fyo) {
     companyId: settings?.syncCompanyId ?? '',
     intervalSeconds: Math.max(settings?.syncIntervalSeconds ?? 15, 5),
   };
+}
+
+function toNumber(value: unknown) {
+  const numeric =
+    typeof value === 'number' ? value : Number(String(value ?? '').trim());
+  if (Number.isNaN(numeric)) {
+    return 0;
+  }
+
+  return numeric;
+}
+
+export function compareSyncSnapshots(
+  local: SyncSnapshot,
+  remote: SyncSnapshot
+): ReconciliationResult {
+  const mismatches: string[] = [];
+  const exactKeys: Array<keyof SyncSnapshot> = [
+    'accounts',
+    'parties',
+    'journal_entries',
+    'journal_entry_lines',
+  ];
+
+  for (const key of exactKeys) {
+    if (local[key] !== remote[key]) {
+      mismatches.push(`${key}: local=${local[key]} remote=${remote[key]}`);
+    }
+  }
+
+  const decimalKeys: Array<keyof SyncSnapshot> = ['debit_total', 'credit_total'];
+  for (const key of decimalKeys) {
+    if (Math.abs(local[key] - remote[key]) > 0.01) {
+      mismatches.push(
+        `${key}: local=${local[key].toFixed(2)} remote=${remote[key].toFixed(
+          2
+        )}`
+      );
+    }
+  }
+
+  return {
+    ok: mismatches.length === 0,
+    mismatches,
+    local,
+    remote,
+  };
+}
+
+export async function getLocalSyncSnapshot(fyo: Fyo): Promise<SyncSnapshot> {
+  const [accounts, parties, journalEntries] = await Promise.all([
+    fyo.db.count(ModelNameEnum.Account),
+    fyo.db.count(ModelNameEnum.Party),
+    fyo.db.count(ModelNameEnum.JournalEntry),
+  ]);
+
+  const lineRows = await fyo.db.getAll(ModelNameEnum.JournalEntryAccount, {
+    fields: ['debit', 'credit'],
+  });
+
+  let debitTotal = 0;
+  let creditTotal = 0;
+  for (const row of lineRows) {
+    debitTotal += toNumber(row.debit);
+    creditTotal += toNumber(row.credit);
+  }
+
+  return {
+    accounts,
+    parties,
+    journal_entries: journalEntries,
+    journal_entry_lines: lineRows.length,
+    debit_total: Number(debitTotal.toFixed(2)),
+    credit_total: Number(creditTotal.toFixed(2)),
+  };
+}
+
+async function fetchRemoteSyncSnapshot(
+  apiUrl: string,
+  token: string,
+  companyId: string
+): Promise<SyncSnapshot> {
+  const snapshotApiUrl = getDefaultSnapshotApiUrl(apiUrl);
+  const response = (await sendAPIRequest(snapshotApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      apikey: token,
+    },
+    body: JSON.stringify({
+      target_company: companyId,
+    }),
+  })) as
+    | {
+        accounts?: unknown;
+        parties?: unknown;
+        journal_entries?: unknown;
+        journal_entry_lines?: unknown;
+        debit_total?: unknown;
+        credit_total?: unknown;
+        error?: string;
+      }
+    | null;
+
+  if (!response) {
+    throw new Error('Empty response from sync snapshot API');
+  }
+
+  if (response.error) {
+    throw new Error(response.error);
+  }
+
+  return {
+    accounts: toNumber(response.accounts),
+    parties: toNumber(response.parties),
+    journal_entries: toNumber(response.journal_entries),
+    journal_entry_lines: toNumber(response.journal_entry_lines),
+    debit_total: Number(toNumber(response.debit_total).toFixed(2)),
+    credit_total: Number(toNumber(response.credit_total).toFixed(2)),
+  };
+}
+
+export async function runCloudSyncReconciliation(
+  fyo: Fyo
+): Promise<ReconciliationResult> {
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const [local, remote] = await Promise.all([
+    getLocalSyncSnapshot(fyo),
+    fetchRemoteSyncSnapshot(config.pullApiUrl, config.token, config.companyId),
+  ]);
+
+  return compareSyncSnapshots(local, remote);
 }
 
 export function startCloudSyncWorker(fyo: Fyo) {

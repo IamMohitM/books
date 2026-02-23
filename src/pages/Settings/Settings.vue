@@ -11,6 +11,13 @@
       <Button v-if="showCloudSyncPanel" class="me-2" @click="flushCloudSyncNow">
         {{ t`Flush Sync Now` }}
       </Button>
+      <Button
+        v-if="showCloudSyncPanel"
+        class="me-2"
+        @click="runReconciliationNow"
+      >
+        {{ t`Run Reconciliation` }}
+      </Button>
       <Button v-if="canSave" type="primary" @click="sync">
         {{ t`Save` }}
       </Button>
@@ -49,7 +56,7 @@
           <div class="font-semibold mb-2">{{ t`Cloud Sync Status` }}</div>
           <div class="text-xs text-gray-700 dark:text-gray-200 mb-3">
             {{
-              t`Use this flow: 1) Save sync settings, 2) Flush desktop data to remote, 3) Open mobile app with the same company.`
+              t`Use this flow: 1) Save sync settings, 2) Flush desktop data to remote, 3) Run Reconciliation, 4) Open mobile app with the same company.`
             }}
           </div>
           <div
@@ -80,6 +87,42 @@
             class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
           >
             {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
+          </div>
+          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-1">{{ t`Reconciliation` }}</div>
+            <div v-if="reconciliation.running">
+              {{ t`Checking local vs remote snapshot...` }}
+            </div>
+            <div v-else-if="reconciliation.checkedAt">
+              <div>
+                {{ t`Last Checked` }}: {{ reconciliation.checkedAt }}
+              </div>
+              <div
+                :class="
+                  reconciliation.ok
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-yellow-700 dark:text-yellow-300'
+                "
+              >
+                {{
+                  reconciliation.ok
+                    ? t`Snapshot matches.`
+                    : t`Snapshot mismatch found.`
+                }}
+              </div>
+              <div
+                v-if="reconciliation.mismatches.length"
+                class="mt-1 text-yellow-700 dark:text-yellow-300"
+              >
+                <div
+                  v-for="item in reconciliation.mismatches"
+                  :key="item"
+                  class="break-all"
+                >
+                  - {{ item }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -159,6 +202,7 @@ import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
 import {
   flushCloudSyncOutbox,
+  runCloudSyncReconciliation,
   startCloudSyncWorker,
   stopCloudSyncWorker,
 } from 'src/utils/cloudSyncWorker';
@@ -189,6 +233,12 @@ export default defineComponent({
         sent: 0,
         lastError: '',
       },
+      reconciliation: {
+        running: false,
+        checkedAt: '',
+        ok: null as null | boolean,
+        mismatches: [] as string[],
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -199,6 +249,12 @@ export default defineComponent({
         failed: number;
         sent: number;
         lastError: string;
+      };
+      reconciliation: {
+        running: boolean;
+        checkedAt: string;
+        ok: null | boolean;
+        mismatches: string[];
       };
     };
   },
@@ -460,6 +516,46 @@ export default defineComponent({
         type: 'success',
         message: this.t`Cloud sync flush finished.`,
       });
+    },
+    async runReconciliationNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      this.reconciliation.running = true;
+      try {
+        const result = await runCloudSyncReconciliation(this.fyo);
+        this.reconciliation = {
+          running: false,
+          checkedAt: new Date().toLocaleString(),
+          ok: result.ok,
+          mismatches: result.mismatches,
+        };
+
+        showToast({
+          type: result.ok ? 'success' : 'warning',
+          message: result.ok
+            ? this.t`Reconciliation passed. Local and remote snapshot match.`
+            : this.t`Reconciliation found differences. Review mismatch details.`,
+        });
+      } catch (error) {
+        this.reconciliation = {
+          running: false,
+          checkedAt: new Date().toLocaleString(),
+          ok: false,
+          mismatches: [getErrorMessage(error as Error)],
+        };
+
+        showToast({
+          type: 'error',
+          message: this.t`Reconciliation failed. Check sync configuration and network.`,
+        });
+      }
     },
     updateGroupedFields(): void {
       const grouped: UIGroupedFields = new Map();
