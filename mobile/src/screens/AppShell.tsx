@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import QuickAddModal from '../components/QuickAddModal';
 import LedgerScreen from './LedgerScreen';
@@ -48,11 +49,31 @@ export default function AppShell({ session }: { session: any }) {
       <Text style={styles.header}>Cash Books</Text>
       <View style={styles.content}>{content}</View>
       <View style={styles.tabs}>
-        <Tab label="Transactions" isActive={activeTab === 'transactions'} onPress={() => setActiveTab('transactions')} />
-        <Tab label="Ledger" isActive={activeTab === 'ledger'} onPress={() => setActiveTab('ledger')} />
+        <Tab
+          label="Transactions"
+          icon="list"
+          isActive={activeTab === 'transactions'}
+          onPress={() => setActiveTab('transactions')}
+        />
+        <Tab
+          label="Ledger"
+          icon="book-open"
+          isActive={activeTab === 'ledger'}
+          onPress={() => setActiveTab('ledger')}
+        />
         <View style={styles.centerSpacer} />
-        <Tab label="Reports" isActive={activeTab === 'reports'} onPress={() => setActiveTab('reports')} />
-        <Tab label="Settings" isActive={activeTab === 'settings'} onPress={() => setActiveTab('settings')} />
+        <Tab
+          label="Reports"
+          icon="bar-chart-2"
+          isActive={activeTab === 'reports'}
+          onPress={() => setActiveTab('reports')}
+        />
+        <Tab
+          label="Settings"
+          icon="settings"
+          isActive={activeTab === 'settings'}
+          onPress={() => setActiveTab('settings')}
+        />
         <TouchableOpacity style={styles.quickAddButton} onPress={() => setShowQuickAdd(true)}>
           <Text style={styles.quickAddText}>+</Text>
         </TouchableOpacity>
@@ -69,59 +90,79 @@ export default function AppShell({ session }: { session: any }) {
   );
 }
 
-function Tab({ label, isActive, onPress }: { label: string; isActive: boolean; onPress: () => void }) {
+function Tab({
+  label,
+  icon,
+  isActive,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  isActive: boolean;
+  onPress: () => void;
+}) {
+  const iconColor = isActive ? '#0f172a' : '#e2e8f0';
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.tab, isActive && styles.tabActive]}>
-      <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{label}</Text>
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.tab, isActive && styles.tabActive]}
+      accessibilityLabel={label}
+    >
+      <Feather name={icon} size={20} color={iconColor} />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, paddingBottom: 4, backgroundColor: '#f8fafc' },
+  container: { flex: 1, padding: 16, paddingBottom: 10, backgroundColor: '#f8fafc' },
   header: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 6,
-    paddingTop: 10,
-    paddingBottom: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 18,
+    marginTop: 8,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
     position: 'relative',
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 12,
+    minHeight: 44,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(248,250,252,0.08)',
+    borderRadius: 14,
     alignItems: 'center',
   },
-  tabActive: { backgroundColor: '#0f172a' },
-  tabText: { fontSize: 11, color: '#0f172a' },
-  tabTextActive: { color: '#f8fafc' },
+  tabActive: { backgroundColor: '#f8fafc' },
   content: { flex: 1 },
   loading: { marginTop: 40, textAlign: 'center' },
-  centerSpacer: { width: 64 },
+  centerSpacer: { width: 72 },
   quickAddButton: {
     position: 'absolute',
-    top: -18,
+    top: -24,
     left: '50%',
-    marginLeft: -28,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0f172a',
+    marginLeft: -30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#38bdf8',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#f8fafc',
+    borderColor: '#0f172a',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 6,
   },
-  quickAddText: { color: '#f8fafc', fontSize: 28, fontWeight: '700', marginTop: -2 },
+  quickAddText: { color: '#0f172a', fontSize: 30, fontWeight: '800', marginTop: -2 },
 });
