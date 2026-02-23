@@ -82,6 +82,14 @@
             <div>{{ t`Failed` }}: {{ cloudSyncStatus.failed }}</div>
             <div>{{ t`Sent` }}: {{ cloudSyncStatus.sent }}</div>
           </div>
+          <div class="mt-2 text-xs text-gray-600 dark:text-gray-300">
+            <div v-if="cloudSyncStatus.lastPushAt">
+              {{ t`Last Push` }}: {{ cloudSyncStatus.lastPushAt }}
+            </div>
+            <div v-if="cloudSyncStatus.lastPullAt">
+              {{ t`Last Pull` }}: {{ cloudSyncStatus.lastPullAt }}
+            </div>
+          </div>
           <div
             v-if="cloudSyncStatus.lastError"
             class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
@@ -121,6 +129,25 @@
                 >
                   - {{ item }}
                 </div>
+              </div>
+            </div>
+            <div
+              v-else-if="cloudSyncStatus.lastReconciliationAt"
+              class="text-gray-700 dark:text-gray-200"
+            >
+              <div>
+                {{ t`Last Checked` }}:
+                {{ cloudSyncStatus.lastReconciliationAt }}
+              </div>
+              <div>
+                {{ t`Last Status` }}:
+                {{ cloudSyncStatus.lastReconciliationStatus }}
+              </div>
+              <div
+                v-if="cloudSyncStatus.lastReconciliationSummary"
+                class="break-all"
+              >
+                {{ cloudSyncStatus.lastReconciliationSummary }}
               </div>
             </div>
           </div>
@@ -232,6 +259,11 @@ export default defineComponent({
         failed: 0,
         sent: 0,
         lastError: '',
+        lastPushAt: '',
+        lastPullAt: '',
+        lastReconciliationAt: '',
+        lastReconciliationStatus: 'unknown',
+        lastReconciliationSummary: '',
       },
       reconciliation: {
         running: false,
@@ -249,6 +281,11 @@ export default defineComponent({
         failed: number;
         sent: number;
         lastError: string;
+        lastPushAt: string;
+        lastPullAt: string;
+        lastReconciliationAt: string;
+        lastReconciliationStatus: string;
+        lastReconciliationSummary: string;
       };
       reconciliation: {
         running: boolean;
@@ -490,7 +527,18 @@ export default defineComponent({
         }
       );
       const lastFailed = failedRows[failedRows.length - 1];
-      const lastError = (lastFailed?.errorMessage as string) ?? '';
+      const syncState = this.fyo.singles.CloudSyncState as
+        | {
+            lastError?: string;
+            lastPushAt?: string;
+            lastPullAt?: string;
+            lastReconciliationAt?: string;
+            lastReconciliationStatus?: string;
+            lastReconciliationSummary?: string;
+          }
+        | undefined;
+      const lastError =
+        (lastFailed?.errorMessage as string) ?? syncState?.lastError ?? '';
 
       this.cloudSyncStatus = {
         queued,
@@ -498,6 +546,11 @@ export default defineComponent({
         failed,
         sent,
         lastError,
+        lastPushAt: syncState?.lastPushAt ?? '',
+        lastPullAt: syncState?.lastPullAt ?? '',
+        lastReconciliationAt: syncState?.lastReconciliationAt ?? '',
+        lastReconciliationStatus: syncState?.lastReconciliationStatus ?? 'unknown',
+        lastReconciliationSummary: syncState?.lastReconciliationSummary ?? '',
       };
     },
     async flushCloudSyncNow(): Promise<void> {
@@ -543,6 +596,7 @@ export default defineComponent({
             ? this.t`Reconciliation passed. Local and remote snapshot match.`
             : this.t`Reconciliation found differences. Review mismatch details.`,
         });
+        await this.refreshCloudSyncStatus();
       } catch (error) {
         this.reconciliation = {
           running: false,
@@ -555,6 +609,7 @@ export default defineComponent({
           type: 'error',
           message: this.t`Reconciliation failed. Check sync configuration and network.`,
         });
+        await this.refreshCloudSyncStatus();
       }
     },
     updateGroupedFields(): void {

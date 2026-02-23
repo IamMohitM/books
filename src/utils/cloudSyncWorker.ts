@@ -3,11 +3,13 @@ import { DocValueMap } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
 import { CloudSyncOutbox } from 'models/baseModels/CloudSyncOutbox/CloudSyncOutbox';
 import { CloudSyncCursor } from 'models/baseModels/CloudSyncCursor/CloudSyncCursor';
+import { CloudSyncState } from 'models/baseModels/CloudSyncState/CloudSyncState';
 import { ModelNameEnum } from 'models/types';
 import { sendAPIRequest } from './api';
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncing = false;
+const RECONCILIATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 type CloudSyncPayload = {
   data?: Record<string, unknown>;
@@ -93,6 +95,31 @@ function getWorkerConfig(fyo: Fyo) {
     companyId: settings?.syncCompanyId ?? '',
     intervalSeconds: Math.max(settings?.syncIntervalSeconds ?? 15, 5),
   };
+}
+
+function getCloudSyncStateDoc(fyo: Fyo): CloudSyncState | null {
+  return (fyo.singles.CloudSyncState as CloudSyncState | undefined) ?? null;
+}
+
+async function updateCloudSyncState(
+  fyo: Fyo,
+  values: Partial<{
+    enrollmentStatus: string;
+    lastPushAt: string;
+    lastPullAt: string;
+    lastError: string;
+    lastReconciliationAt: string;
+    lastReconciliationStatus: string;
+    lastReconciliationSummary: string;
+  }>
+) {
+  const stateDoc = getCloudSyncStateDoc(fyo);
+  if (!stateDoc) {
+    return;
+  }
+
+  stateDoc._addDocToSyncQueue = false;
+  await stateDoc.setAndSync(values).catch(() => undefined);
 }
 
 function toNumber(value: unknown) {
@@ -229,7 +256,49 @@ export async function runCloudSyncReconciliation(
     fetchRemoteSyncSnapshot(config.pullApiUrl, config.token, config.companyId),
   ]);
 
-  return compareSyncSnapshots(local, remote);
+  const result = compareSyncSnapshots(local, remote);
+  await updateCloudSyncState(fyo, {
+    lastReconciliationAt: new Date().toISOString(),
+    lastReconciliationStatus: result.ok ? 'passed' : 'failed',
+    lastReconciliationSummary: result.ok
+      ? 'Snapshot matched.'
+      : result.mismatches.join('\n'),
+    lastError: result.ok ? '' : 'Reconciliation mismatch detected',
+  });
+
+  return result;
+}
+
+function shouldRunDailyReconciliation(stateDoc: CloudSyncState | null) {
+  const lastAt = stateDoc?.lastReconciliationAt;
+  if (!lastAt) {
+    return true;
+  }
+
+  const lastMs = new Date(lastAt).getTime();
+  if (Number.isNaN(lastMs)) {
+    return true;
+  }
+
+  return Date.now() - lastMs >= RECONCILIATION_INTERVAL_MS;
+}
+
+async function runAutoReconciliationIfDue(fyo: Fyo) {
+  const stateDoc = getCloudSyncStateDoc(fyo);
+  if (!shouldRunDailyReconciliation(stateDoc)) {
+    return;
+  }
+
+  try {
+    await runCloudSyncReconciliation(fyo);
+  } catch (error) {
+    await updateCloudSyncState(fyo, {
+      lastReconciliationAt: new Date().toISOString(),
+      lastReconciliationStatus: 'failed',
+      lastReconciliationSummary: (error as Error).message,
+      lastError: (error as Error).message,
+    });
+  }
 }
 
 export function startCloudSyncWorker(fyo: Fyo) {
@@ -296,6 +365,7 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
 export async function runCloudSyncCycle(fyo: Fyo) {
   await flushCloudSyncOutbox(fyo);
   await pullCloudSyncChanges(fyo);
+  await runAutoReconciliationIfDue(fyo);
 }
 
 export async function pullCloudSyncChanges(fyo: Fyo) {
@@ -340,6 +410,12 @@ export async function pullCloudSyncChanges(fyo: Fyo) {
   if (maxSeq > lastSeq) {
     await cursorDoc.setAndSync('lastSeq', maxSeq);
   }
+
+  await updateCloudSyncState(fyo, {
+    enrollmentStatus: 'active',
+    lastPullAt: new Date().toISOString(),
+    lastError: '',
+  });
 }
 
 async function getOrCreateCursor(
@@ -413,10 +489,19 @@ async function processOutboxItem(
       status: 'sent',
       errorMessage: '',
     });
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'active',
+      lastPushAt: new Date().toISOString(),
+      lastError: '',
+    });
   } catch (error) {
     await outboxDoc.setAndSync({
       status: 'failed',
       errorMessage: (error as Error).message,
+    });
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'error',
+      lastError: (error as Error).message,
     });
   }
 }

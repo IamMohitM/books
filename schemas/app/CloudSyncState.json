@@ -46,6 +46,36 @@
       "fieldname": "lastError",
       "label": "Last Error",
       "fieldtype": "Text"
+    },
+    {
+      "fieldname": "lastReconciliationAt",
+      "label": "Last Reconciliation At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "lastReconciliationStatus",
+      "label": "Last Reconciliation Status",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "unknown",
+          "label": "Unknown"
+        },
+        {
+          "value": "passed",
+          "label": "Passed"
+        },
+        {
+          "value": "failed",
+          "label": "Failed"
+        }
+      ],
+      "default": "unknown"
+    },
+    {
+      "fieldname": "lastReconciliationSummary",
+      "label": "Last Reconciliation Summary",
+      "fieldtype": "Text"
     }
   ]
 }
