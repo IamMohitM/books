@@ -63,6 +63,14 @@ export class JournalEntryAccount extends Doc {
     loanProfile: () => ({ active: true }),
   };
 
+  static createFilters: FiltersMap = {
+    account: async (_doc: Doc) => {
+      return {
+        isGroup: false,
+      };
+    },
+  };
+
   readOnly: ReadOnlyMap = {
     account: () => !!this.loanProfile,
   };

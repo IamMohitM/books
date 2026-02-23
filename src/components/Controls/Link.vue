@@ -45,7 +45,18 @@ export default {
         return (this.linkValue = newValue || '');
       }
 
-      const value = newValue ?? this.value;
+      const value = newValue !== undefined ? newValue : this.value;
+
+      // While user is editing, preserve raw text and avoid resolving linked
+      // display values that can overwrite partial deletions/typing.
+      if (this.isFocused) {
+        if (requestId !== this.linkValueRequestId) {
+          return;
+        }
+        this.linkValue = value || '';
+        return;
+      }
+
       const { fieldname, target } = this.df ?? {};
       const linkDisplayField = fyo.schemaMap[target ?? '']?.linkDisplayField;
       if (!linkDisplayField) {

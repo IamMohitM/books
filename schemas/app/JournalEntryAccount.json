@@ -9,6 +9,7 @@
       "placeholder": "Account",
       "fieldtype": "Link",
       "target": "Account",
+      "create": true,
       "required": true,
       "groupBy": "rootType"
     },
