@@ -171,10 +171,11 @@ const ipc = {
     )) as ConfigFilesWithModified[];
   },
 
-  async getDbDefaultPath(companyName: string) {
+  async getDbDefaultPath(companyName: string, dbFolder?: string) {
     return (await ipcRenderer.invoke(
       IPC_ACTIONS.GET_DB_DEFAULT_PATH,
-      companyName
+      companyName,
+      dbFolder
     )) as string;
   },
 

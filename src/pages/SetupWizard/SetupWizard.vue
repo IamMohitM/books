@@ -101,7 +101,7 @@ import FormHeader from 'src/components/FormHeader.vue';
 import { getErrorMessage } from 'src/utils';
 import { showDialog } from 'src/utils/interactive';
 import { getSetupWizardDoc } from 'src/utils/misc';
-import { getFieldsGroupedByTabAndSection } from 'src/utils/ui';
+import { getFieldsGroupedByTabAndSection, getSelectedFolderPath } from 'src/utils/ui';
 import { computed, defineComponent } from 'vue';
 import CommonFormSection from '../CommonForm/CommonFormSection.vue';
 
@@ -192,6 +192,17 @@ export default defineComponent({
     },
     async onValueChange(field: Field, value: DocValue) {
       if (!this.hasDoc) {
+        return;
+      }
+
+      if (field.fieldname === 'selectDbFolder') {
+        const response = await getSelectedFolderPath();
+        const selectedPath = response?.filePaths?.[0];
+        if (response?.canceled || !selectedPath) {
+          return;
+        }
+
+        await this.doc.set('dbFolder', selectedPath);
         return;
       }
 

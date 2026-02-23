@@ -13,6 +13,14 @@ import { ModelNameEnum } from 'models/types';
 import { createDiscountAccount } from 'src/setup/setupInstance';
 import { getCountryInfo } from 'utils/misc';
 
+function validateOptionalEmail(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return;
+  }
+
+  validateEmail(value);
+}
+
 export class AccountingSettings extends Doc {
   enableDiscounting?: boolean;
   enableInventory?: boolean;
@@ -45,7 +53,7 @@ export class AccountingSettings extends Doc {
   };
 
   validations: ValidationMap = {
-    email: validateEmail,
+    email: validateOptionalEmail,
   };
 
   static lists: ListsMap = {

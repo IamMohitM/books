@@ -166,13 +166,19 @@ export function useDocShortcuts(
     showCannotCancelOrDeleteToast(doc);
   };
 
+  const registerShortcuts = () => {
+    shortcuts.pmod.set(context, ['KeyS'], syncOrSubmitCallback, false);
+    // Keep existing behavior and add Delete alias for clearer discoverability.
+    shortcuts.pmod.set(context, ['Backspace'], cancelOrDeleteCallback, false);
+    shortcuts.pmod.set(context, ['Delete'], cancelOrDeleteCallback, false);
+  };
+
   onMounted(() => {
     if (isMultiple && shortcuts.has(context)) {
       return;
     }
 
-    shortcuts.pmod.set(context, ['KeyS'], syncOrSubmitCallback, false);
-    shortcuts.pmod.set(context, ['Backspace'], cancelOrDeleteCallback, false);
+    registerShortcuts();
   });
 
   onActivated(() => {
@@ -180,8 +186,7 @@ export function useDocShortcuts(
       return;
     }
 
-    shortcuts.pmod.set(context, ['KeyS'], syncOrSubmitCallback, false);
-    shortcuts.pmod.set(context, ['Backspace'], cancelOrDeleteCallback, false);
+    registerShortcuts();
   });
 
   onDeactivated(() => {

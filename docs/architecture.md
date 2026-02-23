@@ -1,37 +1,36 @@
-# Loan Tracking Enhancements Architecture
+# Architecture: Select Database Folder On New Company
 
-## Summary
-Loan tracking stays as metadata on Journal Entries and Accounting Ledger Entries. Enhancements add a DB patch for missing columns, auto account creation on Loan Profiles, and a Loan Ledger report with running balances.
+## Overview
+Extend the setup wizard UI to capture an optional database folder and pass it to the main process when creating the default database path.
 
-## Data Model
-- `LoanProfile` remains the lender setup.
-- `JournalEntryAccount` tags loan rows with `loanProfile` and `loanComponent`.
-- `AccountingLedgerEntry` stores `loanProfile` and `loanComponent` for reporting.
+## Components
+- **Setup Wizard UI** (`src/pages/SetupWizard/SetupWizard.vue` + `schemas/app/SetupWizard.json`)
+  - Add `dbFolder` (read-only text) and `selectDbFolder` (button) fields.
+  - Handle button click to open a folder picker dialog and write the selected path to `dbFolder`.
+  - Make `email` and `bankName` optional fields.
+  - Default country to India and currency to INR via schema defaults.
 
-## DB Patch
-- Add `loanProfile` and `loanComponent` columns to `AccountingLedgerEntry` if missing.
-- Patch is idempotent and safe for existing databases.
+- **Renderer Utilities** (`src/utils/ui.ts`)
+  - Add `getSelectedFolderPath()` helper using an open-directory dialog.
 
-## Account Automation
-- `LoanProfile.beforeSync` creates missing accounts.
-- Liability account: root type `Liability`, account type `Payable`.
-- Interest account: root type `Expense`, account type `Expense Account`.
-- Parent account chosen from existing group accounts by preference or fallback.
+- **IPC API** (`main/preload.ts`, `main/registerIpcMainActionListeners.ts`)
+  - Extend `ipc.getDbDefaultPath(companyName, dbFolder?)` to accept an optional folder path.
+  - In main process, use the provided folder as the database directory; otherwise keep existing default path logic.
 
-## Journal Entry Mapping
-- Loan rows auto map `account` from the selected Loan Profile and Component.
-- `Account` field is read-only for loan rows to avoid mismatches.
+- **Setup Completion** (`src/App.vue`)
+  - Pass the optional `dbFolder` from setup wizard options into `ipc.getDbDefaultPath`.
+- **Setup Initialization** (`src/setup/setupInstance.ts`)
+  - Default `bankName` when missing and allow empty `email`.
 
-## Reporting
-- `LoanRegister` shows liability account and summary snapshot.
-- `LoanLedger` shows running principal and interest owed with an as-of date.
-- Interest accrual uses ACT/365 simple daily accrual.
- - Accrual excludes the receipt day; it starts from the next day after principal events.
+## Data Flow
+1. User clicks **Choose Folder** in Setup Wizard.
+2. Renderer opens directory picker and stores selected path in `dbFolder` field.
+3. On submit, `setupComplete` receives `dbFolder` and requests a default DB path from main process.
+4. Main process builds file path inside selected folder (or defaults if none).
 
-## Journal Entry Remarks Update
-- `JournalEntry.userRemark` should be editable even when the entry is submitted.
-- Implement by keeping submission guardrails while allowing `userRemark` as an exception.
-- Update Journal Entry list view columns to include `userRemark` adjacent to `referenceNumber`.
+## Compatibility
+- Default path behavior remains unchanged when no folder is selected.
+- Existing overwrite/new file handling remains in place.
 
 # Mobile Collaboration Architecture
 

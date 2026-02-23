@@ -22,6 +22,16 @@ export default () => {
     server: { host, port, strictPort: true },
     root: path.resolve(__dirname, './src'),
     plugins: [vue()],
+    optimizeDeps: {
+      exclude: [
+        '@codemirror/autocomplete',
+        '@codemirror/lang-vue',
+        '@codemirror/language',
+        '@codemirror/state',
+        '@codemirror/view',
+        'codemirror',
+      ],
+    },
     resolve: {
       alias: {
         vue: 'vue/dist/vue.esm-bundler.js',

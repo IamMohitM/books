@@ -33,14 +33,18 @@ export default async function setupInstance(
   setupWizardOptions: SetupWizardOptions,
   fyo: Fyo
 ) {
-  const { companyName, country, bankName, chartOfAccounts } =
-    setupWizardOptions;
+  const { companyName, country, chartOfAccounts } = setupWizardOptions;
+  const bankName = getDefaultBankName(setupWizardOptions.bankName);
+  const email = getOptionalEmail(setupWizardOptions.email);
 
   fyo.store.skipTelemetryLogging = true;
   await initializeDatabase(dbPath, country, fyo);
   await updateSystemSettings(setupWizardOptions, fyo);
-  await updateAccountingSettings(setupWizardOptions, fyo);
-  await updatePrintSettings(setupWizardOptions, fyo);
+  await updateAccountingSettings(
+    { ...setupWizardOptions, bankName, email },
+    fyo
+  );
+  await updatePrintSettings({ ...setupWizardOptions, email }, fyo);
 
   await createCurrencyRecords(fyo);
   await createAccountRecords(bankName, country, chartOfAccounts, fyo);
@@ -99,7 +103,7 @@ async function updateAccountingSettings(
     companyName,
     country,
     fullname,
-    email,
+    email: email ?? '',
     bankName,
     fiscalYearStart,
     fiscalYearEnd,
@@ -115,7 +119,7 @@ async function updatePrintSettings(
   await printSettings.setAndSync({
     logo,
     companyName,
-    email,
+    email: email ?? '',
     displayLogo: logo ? true : false,
   });
 }
@@ -139,6 +143,15 @@ async function updateSystemSettings(
     instanceId,
     countryCode,
   });
+}
+
+function getDefaultBankName(value?: string) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  return name || 'Bank';
+}
+
+function getOptionalEmail(value?: string) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 async function createCurrencyRecords(fyo: Fyo) {

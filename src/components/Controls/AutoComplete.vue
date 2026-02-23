@@ -188,6 +188,9 @@ export default {
     value: {
       immediate: true,
       handler(newValue) {
+        if (this.isFocused) {
+          return;
+        }
         this.setLinkValue(this.getLinkValue(newValue));
       },
     },
@@ -243,7 +246,15 @@ export default {
         return null;
       }
 
-      return option?.label ?? oldValue;
+      if (option?.label) {
+        return option.label;
+      }
+
+      if (typeof value === 'string') {
+        return value;
+      }
+
+      return oldValue;
     },
     async updateSuggestions(keyword) {
       if (typeof keyword === 'string') {
@@ -309,26 +320,30 @@ export default {
     async onBlur(label, toggleDropdown) {
       this.isFocused = false;
       this.isDropdownOpen = false;
+      toggleDropdown(false);
+      const currentSuggestions = this.suggestions;
+      this.suggestions = [];
       if (!label && !this.value) {
+        this.setLinkValue('');
         return;
       }
       if (!label) {
-        this.triggerChange('');
+        this.setLinkValue('');
+        if (!this.isRequired) {
+          this.triggerChange('');
+        }
         return;
       }
 
-      if (this.suggestions.length === 0) {
-        this.triggerChange(label);
-        return;
-      }
-
-      const suggestion = this.suggestions.find((s) => s.label === label);
+      const suggestion = currentSuggestions.find((s) => s.label === label);
       if (suggestion) {
         this.setSuggestion(suggestion);
-      } else {
-        const suggestions = await this.getSuggestions(label);
-        this.setSuggestion(suggestions[0]);
+        return;
       }
+
+      // Preserve user text on blur instead of auto-selecting the first match.
+      this.setLinkValue(label);
+      this.triggerChange(label);
     },
 
     onInput(e, toggleDropdown) {
@@ -336,15 +351,21 @@ export default {
         return;
       }
 
-      if (!e.target.value || this.focInp) {
-        e.target.value = null;
+      if (this.focInp) {
         this.focInp = false;
+      }
+
+      if (!e.target.value) {
+        this.setLinkValue('');
+        this.updateSuggestions('');
         toggleDropdown(false);
         return;
       }
 
       this.triggerChange(e.target.value);
       this.updateSuggestions(e.target.value);
+      toggleDropdown(true);
+      this.isDropdownOpen = true;
     },
 
     async onPressEnter(e, toggleDropdown, selectHighlightedItem) {
@@ -368,18 +389,18 @@ export default {
     onKeyDownUp(e, toggleDropdown, highlightItemUp) {
       if (this.suggestions.length === 0) {
         this.updateSuggestions();
-        toggleDropdown(true);
-        this.isDropdownOpen = true;
       }
-      highlightItemUp();
+      toggleDropdown(true);
+      this.isDropdownOpen = true;
+      highlightItemUp(e);
     },
     onKeyDownDown(e, toggleDropdown, highlightItemDown) {
       if (this.suggestions.length === 0) {
         this.updateSuggestions();
-        toggleDropdown(true);
-        this.isDropdownOpen = true;
       }
-      highlightItemDown();
+      toggleDropdown(true);
+      this.isDropdownOpen = true;
+      highlightItemDown(e);
     },
     closeDropdown(e, toggleDropdown) {
       toggleDropdown(false);

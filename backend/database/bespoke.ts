@@ -389,9 +389,14 @@ export class BespokeQueries {
     },
     ledgerRows: LoanLedgerRow[],
     asOfDate: string,
-    preSystemTotals: { interestPaid: number; principalPaid: number } = {
+    preSystemTotals: {
+      interestPaid: number;
+      principalPaid: number;
+      principalCredited: number;
+    } = {
       interestPaid: 0,
       principalPaid: 0,
+      principalCredited: 0,
     }
   ): LoanSnapshot {
     const asOf = BespokeQueries.toUtcDate(asOfDate);
@@ -407,6 +412,8 @@ export class BespokeQueries {
     const preSystemInterestPaid =
       historicalInterestPaid + (preSystemTotals?.interestPaid ?? 0);
     const preSystemPrincipalPaid = preSystemTotals?.principalPaid ?? 0;
+    const preSystemPrincipalCredited =
+      preSystemTotals?.principalCredited ?? 0;
 
     if (asOf.getTime() < start.getTime()) {
       return {
@@ -427,7 +434,7 @@ export class BespokeQueries {
       };
     }
 
-    let principalOutstanding = openingPrincipal;
+    let principalOutstanding = openingPrincipal + preSystemPrincipalCredited;
     let interestPaid = includeHistoricalInterestPaid ? preSystemInterestPaid : 0;
 
     for (const row of ledgerRows) {
@@ -457,6 +464,7 @@ export class BespokeQueries {
       includeHistoricalInterestPaid,
       preSystemInterestPaid,
       preSystemPrincipalPaid,
+      preSystemPrincipalCredited,
       principalOutstanding,
       interestPaid,
       accruedInterest,
@@ -468,23 +476,30 @@ export class BespokeQueries {
   static async getLoanHistoricalPaymentTotals(
     db: DatabaseCore,
     loanProfileName: string
-  ): Promise<{ interestPaid: number; principalPaid: number }> {
+  ): Promise<{
+    interestPaid: number;
+    principalPaid: number;
+    principalCredited: number;
+  }> {
     const rows = (await db.knex!(ModelNameEnum.LoanProfileHistoricalPayment)
-      .select('paymentType', 'amount')
+      .select('paymentType', 'amount', 'credit')
       .where('parent', loanProfileName)
       .andWhere('parentFieldname', 'historicalPayments')
       .whereIn('paymentType', ['Principal', 'Interest'])) as {
       paymentType: string;
       amount: number | string;
+      credit?: number | string;
     }[];
 
-    const totals = { interestPaid: 0, principalPaid: 0 };
+    const totals = { interestPaid: 0, principalPaid: 0, principalCredited: 0 };
     for (const row of rows) {
       const amount = Number(row.amount ?? 0);
+      const credit = Number(row.credit ?? 0);
       if (row.paymentType === 'Interest') {
         totals.interestPaid += amount;
       } else if (row.paymentType === 'Principal') {
         totals.principalPaid += amount;
+        totals.principalCredited += credit;
       }
     }
 

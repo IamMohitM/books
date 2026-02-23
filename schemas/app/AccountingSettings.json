@@ -41,7 +41,7 @@
       "fieldname": "email",
       "label": "Email",
       "fieldtype": "Data",
-      "required": true,
+      "required": false,
       "section": "Default"
     },
     {

@@ -1,64 +1,70 @@
-# Requirements: Loan Register Refresh
+# Requirements: Select Database Folder On New Company
 
-## Problem Statement
-Loan Register does not reflect recent Loan Profile updates without a manual refresh (Cmd+R) in the production app.
+## Overview
+Allow users to choose the folder where the new company database file is created during the new company setup flow.
 
-## User Story
-As a user, when I update a Loan Profile or related ledger data, the Loan Register should reflect the changes when I return to the report without requiring a manual refresh.
+## Target Users
+- Users creating a new company who want control over where the database file is stored.
 
-## Acceptance Criteria
-- When a Loan Profile is updated, the Loan Register refreshes the next time the report view is activated.
-- When loan-related ledger entries or historical payments change, the Loan Register refreshes the next time the report view is activated.
-- No manual refresh is required to see the updates.
+## User Stories
 
-# Requirements: General Ledger Date Filtering
+### Choose Database Folder During Setup
+**As a** user creating a new company
+**I want** to pick a folder to store the new database
+**So that** I can manage where my data files live
 
-## Problem Statement
-General Ledger ignores `From Date` / `To Date` filters and shows entries outside the selected range.
+**Acceptance Criteria:**
+- [ ] The setup flow provides a way to choose a folder for the database location.
+- [ ] If a folder is selected, the database file is created inside that folder.
+- [ ] If no folder is selected, the existing default location behavior is preserved.
+- [ ] Existing filename conflict behavior (overwrite/new) still applies.
 
-## User Story
-As a user, when I set `From Date` and `To Date` in General Ledger, I expect only entries within that range, and the default range should be the current month to date.
+**Priority:** Must-have
 
-## Acceptance Criteria
-- General Ledger respects `From Date` and `To Date` filters for the ledger entries shown.
-- Default `From Date` is the 1st of the current month.
-- Default `To Date` is the current date.
+### Optional Email And Bank Name
+**As a** user creating a new company
+**I want** email and bank name to be optional
+**So that** I can complete setup without those details
 
-# Requirements: Loan Register Sorting
+**Acceptance Criteria:**
+- [ ] Email is optional in the setup wizard and does not block submission.
+- [ ] Bank name is optional in the setup wizard and does not block submission.
+- [ ] If bank name is missing, a default bank account is created.
 
-## Problem Statement
-Loan Register needs to support sorting by lender name in addition to existing date ordering.
+**Priority:** Must-have
 
-## User Story
-As a user, I want to sort the Loan Register by lender name so I can quickly scan accounts alphabetically.
+### Default India And INR
+**As a** user creating a new company
+**I want** India and INR to be preselected
+**So that** I can complete setup faster for the default locale
 
-## Acceptance Criteria
-- Loan Register can be sorted by lender name.
-- Sorting order supports ascending and descending.
+**Acceptance Criteria:**
+- [ ] Country defaults to India in the setup wizard.
+- [ ] Currency defaults to INR in the setup wizard.
+- [ ] Changing country still updates currency as before.
 
-# Requirements: Dropdown Consistency
+**Priority:** Must-have
 
-## Problem Statement
-Select dropdowns look and behave inconsistently compared to link dropdowns across multiple pages.
+## MVP Scope
+- Add a folder selection control to the setup wizard.
+- Use the selected folder when generating the database file path.
+- Allow setup to proceed without email or bank name.
+- Default country to India and currency to INR.
 
-## User Story
-As a user, dropdowns should look and behave consistently across the app so filters and selects feel uniform.
+## Future Enhancements
+- Remember last selected folder for future setups.
+- Validate folder permissions before submitting.
+- Prompt for email/bank name later in onboarding.
 
-## Acceptance Criteria
-- Select dropdowns use the same dropdown styling and interaction pattern as link dropdowns.
+## Success Criteria
+- Users can reliably select a folder and see the database created there.
+- No regression for users who leave the folder unselected.
+- Users can complete setup without providing email or bank name.
+- India/INR are preselected by default in the setup wizard.
 
-# Requirements: Loan Register and Loan Ledger Prepaid Handling
-
-## Problem Statement
-Loan Register shows pre-system (prepaid) columns, and Loan Ledger should include prepaid and journal entries without separate prepaid columns.
-
-## User Story
-As a user, I want Loan Register to fold prepaid amounts into principal and interest, and Loan Ledger to show all entries (including prepaid and journal entries) without separate prepaid columns.
-
-## Acceptance Criteria
-- Loan Register removes pre-system columns and integrates prepaid amounts into principal outstanding and interest paid.
-- Loan Ledger continues to show all entries, including prepaid and journal entries.
-- Loan Ledger totals reflect pre-system principal and interest payments in the final as-of summary.
+## Constraints
+- Must work in Electron environment.
+- Should not break existing setup wizard validation.
 
 # Requirements: Mobile Collaboration And Migration
 
