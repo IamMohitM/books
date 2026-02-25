@@ -278,7 +278,35 @@ export default function registerIpcMainActionListeners(main: Main) {
   ipcMain.handle(
     IPC_ACTIONS.SEND_API_REQUEST,
     async (e, endpoint: string, options: RequestInit | undefined) => {
-      return sendAPIRequest(endpoint, options);
+      const isSyncRpc =
+        endpoint.includes('/rpc/apply_sync_event') ||
+        endpoint.includes('/rpc/fetch_sync_changes') ||
+        endpoint.includes('/rpc/fetch_sync_snapshot');
+      const startedAt = Date.now();
+      if (isSyncRpc) {
+        console.log(`[cloud-sync-ipc] invoke -> ${endpoint}`);
+      }
+
+      try {
+        const response = await sendAPIRequest(endpoint, options);
+        if (isSyncRpc) {
+          console.log(
+            `[cloud-sync-ipc] done <- ${endpoint} in ${
+              Date.now() - startedAt
+            }ms`
+          );
+        }
+        return response;
+      } catch (error) {
+        if (isSyncRpc) {
+          console.error(
+            `[cloud-sync-ipc] fail !! ${endpoint} in ${
+              Date.now() - startedAt
+            }ms: ${(error as Error).message}`
+          );
+        }
+        throw error;
+      }
     }
   );
 

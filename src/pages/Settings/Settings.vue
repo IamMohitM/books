@@ -11,6 +11,16 @@
       <Button v-if="showCloudSyncPanel" class="me-2" @click="flushCloudSyncNow">
         {{ t`Flush Sync Now` }}
       </Button>
+      <Button v-if="showCloudSyncPanel" class="me-2" @click="bootstrapCloudNow">
+        {{ t`Bootstrap To Cloud` }}
+      </Button>
+      <Button
+        v-if="showDevClearRemoteButton"
+        class="me-2"
+        @click="clearRemoteDataNow"
+      >
+        {{ t`Clear Remote Data (Dev)` }}
+      </Button>
       <Button
         v-if="showCloudSyncPanel"
         class="me-2"
@@ -77,6 +87,9 @@
             <div v-for="item in syncSetupMissing" :key="item">- {{ item }}</div>
           </div>
           <div class="flex flex-wrap gap-4 text-gray-700 dark:text-gray-200">
+            <div>
+              {{ t`Enrollment` }}: {{ cloudSyncStatus.enrollmentStatus }}
+            </div>
             <div>{{ t`Queued` }}: {{ cloudSyncStatus.queued }}</div>
             <div>{{ t`Processing` }}: {{ cloudSyncStatus.processing }}</div>
             <div>{{ t`Failed` }}: {{ cloudSyncStatus.failed }}</div>
@@ -97,14 +110,53 @@
             {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
           </div>
           <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-1">{{ t`Bootstrap` }}</div>
+            <div v-if="bootstrap.running">
+              <div class="mb-2">
+                {{ t`Uploading local baseline to cloud...` }}
+              </div>
+              <div
+                class="
+                  h-2
+                  w-full
+                  rounded-full
+                  bg-gray-200
+                  dark:bg-gray-800
+                  overflow-hidden
+                "
+              >
+                <div
+                  class="h-full bg-blue-600 transition-all duration-200"
+                  :style="{ width: `${bootstrapProgressPercent}%` }"
+                />
+              </div>
+              <div class="mt-1 text-gray-700 dark:text-gray-200">
+                {{ bootstrapProgressPercent }}%
+                <span v-if="bootstrap.total > 0">
+                  ({{ bootstrap.processed }}/{{ bootstrap.total }})
+                </span>
+              </div>
+              <div
+                v-if="bootstrap.summary"
+                class="text-gray-700 dark:text-gray-200 break-all mt-1"
+              >
+                {{ bootstrap.summary }}
+              </div>
+            </div>
+            <div v-else-if="bootstrap.checkedAt">
+              <div>{{ t`Last Bootstrap` }}: {{ bootstrap.checkedAt }}</div>
+              <div class="text-gray-700 dark:text-gray-200">
+                {{ bootstrap.summary }}
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
             <div class="font-semibold mb-1">{{ t`Reconciliation` }}</div>
             <div v-if="reconciliation.running">
               {{ t`Checking local vs remote snapshot...` }}
             </div>
             <div v-else-if="reconciliation.checkedAt">
-              <div>
-                {{ t`Last Checked` }}: {{ reconciliation.checkedAt }}
-              </div>
+              <div>{{ t`Last Checked` }}: {{ reconciliation.checkedAt }}</div>
               <div
                 :class="
                   reconciliation.ok
@@ -228,6 +280,8 @@ import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
 import {
+  bootstrapCloudSyncFromLocal,
+  clearCloudSyncRemoteCompanyData,
   flushCloudSyncOutbox,
   runCloudSyncReconciliation,
   startCloudSyncWorker,
@@ -254,6 +308,7 @@ export default defineComponent({
       activeTab: ModelNameEnum.AccountingSettings,
       groupedFields: null,
       cloudSyncStatus: {
+        enrollmentStatus: 'not_enrolled',
         queued: 0,
         processing: 0,
         failed: 0,
@@ -271,11 +326,20 @@ export default defineComponent({
         ok: null as null | boolean,
         mismatches: [] as string[],
       },
+      bootstrap: {
+        running: false,
+        checkedAt: '',
+        summary: '',
+        stage: '',
+        processed: 0,
+        total: 0,
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
       groupedFields: null | UIGroupedFields;
       cloudSyncStatus: {
+        enrollmentStatus: string;
         queued: number;
         processing: number;
         failed: number;
@@ -292,6 +356,14 @@ export default defineComponent({
         checkedAt: string;
         ok: null | boolean;
         mismatches: string[];
+      };
+      bootstrap: {
+        running: boolean;
+        checkedAt: string;
+        summary: string;
+        stage: string;
+        processed: number;
+        total: number;
       };
     };
   },
@@ -376,6 +448,23 @@ export default defineComponent({
     showCloudSyncPanel(): boolean {
       return this.activeTab === ModelNameEnum.SystemSettings;
     },
+    showDevClearRemoteButton(): boolean {
+      return this.showCloudSyncPanel && !!this.fyo.store.isDevelopment;
+    },
+    bootstrapProgressPercent(): number {
+      if (!this.bootstrap.running) {
+        return 0;
+      }
+
+      if (this.bootstrap.total <= 0) {
+        return 0;
+      }
+
+      const pct = Math.round(
+        (this.bootstrap.processed / this.bootstrap.total) * 100
+      );
+      return Math.min(Math.max(pct, 0), 100);
+    },
     syncSetupMissing(): string[] {
       const ss = this.fyo.singles.SystemSettings;
       if (!ss?.syncEnabled || ss.syncMode === 'off') {
@@ -385,7 +474,8 @@ export default defineComponent({
       const missing: string[] = [];
       if (!ss.syncProjectId && !ss.syncApiUrl) {
         missing.push(
-          this.t`Sync Project ID is required (or provide Sync API URL Override).`
+          this
+            .t`Sync Project ID is required (or provide Sync API URL Override).`
         );
       }
       if (!ss.syncCompanyId) {
@@ -531,6 +621,7 @@ export default defineComponent({
       const lastFailed = failedRows[failedRows.length - 1];
       const syncState = this.fyo.singles.CloudSyncState as
         | {
+            enrollmentStatus?: string;
             lastError?: string;
             lastPushAt?: string;
             lastPullAt?: string;
@@ -543,6 +634,7 @@ export default defineComponent({
         (lastFailed?.errorMessage as string) ?? syncState?.lastError ?? '';
 
       this.cloudSyncStatus = {
+        enrollmentStatus: syncState?.enrollmentStatus ?? 'not_enrolled',
         queued,
         processing,
         failed,
@@ -551,7 +643,8 @@ export default defineComponent({
         lastPushAt: syncState?.lastPushAt ?? '',
         lastPullAt: syncState?.lastPullAt ?? '',
         lastReconciliationAt: syncState?.lastReconciliationAt ?? '',
-        lastReconciliationStatus: syncState?.lastReconciliationStatus ?? 'unknown',
+        lastReconciliationStatus:
+          syncState?.lastReconciliationStatus ?? 'unknown',
         lastReconciliationSummary: syncState?.lastReconciliationSummary ?? '',
       };
     },
@@ -570,6 +663,153 @@ export default defineComponent({
       showToast({
         type: 'success',
         message: this.t`Cloud sync flush finished.`,
+      });
+    },
+    async bootstrapCloudNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      await showDialog({
+        title: this.t`Bootstrap Cloud Data?`,
+        detail: this
+          .t`This uploads your current desktop Accounts, Parties, and Journal Entries to the configured cloud company. Use this only once on an empty remote company.`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Continue`,
+            isPrimary: true,
+            action: async () => {
+              try {
+                this.bootstrap = {
+                  running: true,
+                  checkedAt: '',
+                  summary: this.t`Starting bootstrap...`,
+                  stage: 'starting',
+                  processed: 0,
+                  total: 0,
+                };
+                const result = await bootstrapCloudSyncFromLocal(this.fyo, {
+                  onProgress: (progress: {
+                    stage: string;
+                    message: string;
+                    processed?: number;
+                    total?: number;
+                  }) => {
+                    this.bootstrap = {
+                      running: true,
+                      checkedAt: '',
+                      summary: progress.message,
+                      stage: progress.stage,
+                      processed: progress.processed ?? this.bootstrap.processed,
+                      total: progress.total ?? this.bootstrap.total,
+                    };
+                  },
+                });
+                const verification = await runCloudSyncReconciliation(this.fyo);
+                this.bootstrap = {
+                  running: false,
+                  checkedAt: new Date().toLocaleString(),
+                  summary: verification.ok
+                    ? this
+                        .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification passed.`
+                    : this
+                        .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification found differences.`,
+                  stage: 'completed',
+                  processed: 0,
+                  total: 0,
+                };
+                this.reconciliation = {
+                  running: false,
+                  checkedAt: new Date().toLocaleString(),
+                  ok: verification.ok,
+                  mismatches: verification.mismatches,
+                };
+                await this.refreshCloudSyncStatus();
+                showToast({
+                  type: verification.ok ? 'success' : 'warning',
+                  message: verification.ok
+                    ? this.t`Bootstrap finished and verification passed.`
+                    : this
+                        .t`Bootstrap finished but verification found differences.`,
+                });
+              } catch (error) {
+                this.bootstrap = {
+                  running: false,
+                  checkedAt: new Date().toLocaleString(),
+                  summary: getErrorMessage(error as Error),
+                  stage: 'failed',
+                  processed: 0,
+                  total: 0,
+                };
+                await this.refreshCloudSyncStatus();
+                showToast({
+                  type: 'error',
+                  message: getErrorMessage(error as Error),
+                });
+              }
+            },
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => null,
+          },
+        ],
+      });
+    },
+    async clearRemoteDataNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      await showDialog({
+        title: this.t`Clear Remote Company Data?`,
+        detail: this
+          .t`Development action: this will delete all synced Accounts, Parties, Journal Entries, Change Log, and sync state for the selected Sync Company ID on remote.`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Delete Remote Data`,
+            isPrimary: true,
+            action: async () => {
+              const response = await clearCloudSyncRemoteCompanyData(this.fyo);
+              const deleted = response.deleted ?? {};
+              await this.refreshCloudSyncStatus();
+              this.bootstrap = {
+                running: false,
+                checkedAt: new Date().toLocaleString(),
+                summary: this.t`Remote cleared. Accounts=${
+                  deleted.accounts ?? 0
+                }, Parties=${deleted.parties ?? 0}, JournalEntries=${
+                  deleted.journal_entries ?? 0
+                }.`,
+                stage: 'completed',
+                processed: 0,
+                total: 0,
+              };
+              showToast({
+                type: 'success',
+                message: this.t`Remote company data cleared.`,
+              });
+            },
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => null,
+          },
+        ],
       });
     },
     async runReconciliationNow(): Promise<void> {
@@ -596,7 +836,8 @@ export default defineComponent({
           type: result.ok ? 'success' : 'warning',
           message: result.ok
             ? this.t`Reconciliation passed. Local and remote snapshot match.`
-            : this.t`Reconciliation found differences. Review mismatch details.`,
+            : this
+                .t`Reconciliation found differences. Review mismatch details.`,
         });
         await this.refreshCloudSyncStatus();
       } catch (error) {
@@ -609,7 +850,8 @@ export default defineComponent({
 
         showToast({
           type: 'error',
-          message: this.t`Reconciliation failed. Check sync configuration and network.`,
+          message: this
+            .t`Reconciliation failed. Check sync configuration and network.`,
         });
         await this.refreshCloudSyncStatus();
       }

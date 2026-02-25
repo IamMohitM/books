@@ -10,6 +10,8 @@ import { sendAPIRequest } from './api';
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncing = false;
 const RECONCILIATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const PROCESSING_STALE_MS = 2 * 60 * 1000;
+const BOOTSTRAP_REQUEST_TIMEOUT_MS = 15_000;
 
 type CloudSyncPayload = {
   data?: Record<string, unknown>;
@@ -41,6 +43,31 @@ export type ReconciliationResult = {
   remote: SyncSnapshot;
 };
 
+export type BootstrapResult = {
+  accounts: number;
+  parties: number;
+  journalEntries: number;
+  journalEntryLines: number;
+};
+type BootstrapProgress = {
+  stage:
+    | 'starting'
+    | 'checking_remote'
+    | 'loading_local'
+    | 'pushing_accounts'
+    | 'pushing_parties'
+    | 'pushing_journal_entries'
+    | 'completed';
+  message: string;
+  processed?: number;
+  total?: number;
+};
+const BOOTSTRAP_RETRY_ATTEMPTS = 5;
+const BOOTSTRAP_BASE_RETRY_DELAY_MS = 600;
+const BOOTSTRAP_ACCOUNTS_CONCURRENCY = 6;
+const BOOTSTRAP_PARTIES_CONCURRENCY = 6;
+const BOOTSTRAP_JOURNAL_ENTRIES_CONCURRENCY = 3;
+
 function getSystemSettings(fyo: Fyo) {
   return fyo.singles.SystemSettings as
     | {
@@ -54,6 +81,11 @@ function getSystemSettings(fyo: Fyo) {
         syncIntervalSeconds?: number;
       }
     | undefined;
+}
+
+function logCloudSync(message: string) {
+  // Visible in terminal when desktop is started from terminal in dev mode.
+  console.info(`[cloud-sync] ${message}`);
 }
 
 function getDefaultPullApiUrl(pushApiUrl: string) {
@@ -76,6 +108,14 @@ function getDefaultSnapshotApiUrl(pullApiUrl: string) {
   return pullApiUrl;
 }
 
+function getDefaultClearApiUrl(pushApiUrl: string) {
+  if (pushApiUrl.includes('/apply_sync_event')) {
+    return pushApiUrl.replace('/apply_sync_event', '/clear_sync_company_data');
+  }
+
+  return pushApiUrl;
+}
+
 function normalizeProjectRef(projectIdOrUrl?: string) {
   const input = String(projectIdOrUrl ?? '').trim();
   if (!input) {
@@ -83,10 +123,10 @@ function normalizeProjectRef(projectIdOrUrl?: string) {
   }
 
   if (input.endsWith('.supabase.co')) {
-    return input.replace('https://', '').replace('http://', '').replace(
-      '.supabase.co',
-      ''
-    );
+    return input
+      .replace('https://', '')
+      .replace('http://', '')
+      .replace('.supabase.co', '');
   }
 
   if (!input.includes('http')) {
@@ -194,6 +234,50 @@ function toNumber(value: unknown) {
   return numeric;
 }
 
+function normalizeDateForSync(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const isoMatch = raw.match(/\d{4}-\d{2}-\d{2}/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  // Handle JS Date text such as "... GMT+0530 (India Standard Time)".
+  const normalized = raw
+    .replace(/\s*\(.*\)\s*$/, '')
+    .replace(/\sGMT([+-]\d{2})(\d{2})$/, ' GMT$1:$2');
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export function compareSyncSnapshots(
   local: SyncSnapshot,
   remote: SyncSnapshot
@@ -212,7 +296,10 @@ export function compareSyncSnapshots(
     }
   }
 
-  const decimalKeys: Array<keyof SyncSnapshot> = ['debit_total', 'credit_total'];
+  const decimalKeys: Array<keyof SyncSnapshot> = [
+    'debit_total',
+    'credit_total',
+  ];
   for (const key of decimalKeys) {
     if (Math.abs(local[key] - remote[key]) > 0.01) {
       mismatches.push(
@@ -265,27 +352,29 @@ async function fetchRemoteSyncSnapshot(
   companyId: string
 ): Promise<SyncSnapshot> {
   const snapshotApiUrl = getDefaultSnapshotApiUrl(apiUrl);
-  const response = (await sendAPIRequest(snapshotApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: token,
-    },
-    body: JSON.stringify({
-      target_company: companyId,
+  const response = (await withTimeout(
+    sendAPIRequest(snapshotApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: token,
+      },
+      body: JSON.stringify({
+        target_company: companyId,
+      }),
     }),
-  })) as
-    | {
-        accounts?: unknown;
-        parties?: unknown;
-        journal_entries?: unknown;
-        journal_entry_lines?: unknown;
-        debit_total?: unknown;
-        credit_total?: unknown;
-        error?: string;
-      }
-    | null;
+    BOOTSTRAP_REQUEST_TIMEOUT_MS,
+    'fetch_sync_snapshot'
+  )) as {
+    accounts?: unknown;
+    parties?: unknown;
+    journal_entries?: unknown;
+    journal_entry_lines?: unknown;
+    debit_total?: unknown;
+    credit_total?: unknown;
+    error?: string;
+  } | null;
 
   if (!response) {
     throw new Error('Empty response from sync snapshot API');
@@ -303,6 +392,408 @@ async function fetchRemoteSyncSnapshot(
     debit_total: Number(toNumber(response.debit_total).toFixed(2)),
     credit_total: Number(toNumber(response.credit_total).toFixed(2)),
   };
+}
+
+async function sendApplySyncEvent(
+  apiUrl: string,
+  token: string,
+  companyId: string,
+  event: {
+    event_id: string;
+    reference_type: string;
+    document_name: string;
+    operation: string;
+    payload: Record<string, unknown>;
+  }
+) {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= BOOTSTRAP_RETRY_ATTEMPTS; attempt++) {
+    try {
+      logCloudSync(
+        `apply_sync_event attempt ${attempt}/${BOOTSTRAP_RETRY_ATTEMPTS} for ${event.reference_type} ${event.document_name}`
+      );
+      const response = (await withTimeout(
+        sendAPIRequest(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            apikey: token,
+          },
+          body: JSON.stringify({
+            event: {
+              ...event,
+              company_id: companyId,
+            },
+          }),
+        }),
+        BOOTSTRAP_REQUEST_TIMEOUT_MS,
+        'apply_sync_event'
+      )) as { success?: boolean; error?: string } | null;
+
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      logCloudSync(
+        `apply_sync_event failed attempt ${attempt} for ${event.reference_type} ${event.document_name}: ${lastError.message}`
+      );
+      if (attempt >= BOOTSTRAP_RETRY_ATTEMPTS) {
+        break;
+      }
+
+      const delayMs = BOOTSTRAP_BASE_RETRY_DELAY_MS * attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw new Error(
+    `Failed after ${BOOTSTRAP_RETRY_ATTEMPTS} attempts for ${
+      event.reference_type
+    } ${event.document_name}: ${lastError?.message ?? 'Unknown error'}`
+  );
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>
+) {
+  if (!items.length) {
+    return;
+  }
+
+  let nextIndex = 0;
+  const safeConcurrency = Math.max(1, Math.min(concurrency, items.length));
+  const runners = Array.from({ length: safeConcurrency }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await worker(items[index]!);
+    }
+  });
+
+  await Promise.all(runners);
+}
+
+function normalizeJournalEntryEventPayload(payload: Record<string, unknown>) {
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+  const normalizedDate = normalizeDateForSync(data.date ?? data.date_value);
+  const normalizedReferenceDate = normalizeDateForSync(
+    data.referenceDate ?? data.reference_date
+  );
+
+  return {
+    ...payload,
+    data: {
+      ...data,
+      date: normalizedDate || null,
+      referenceDate: normalizedReferenceDate || null,
+      reference_date: normalizedReferenceDate || null,
+    },
+  };
+}
+
+export async function bootstrapCloudSyncFromLocal(
+  fyo: Fyo,
+  options?: {
+    force?: boolean;
+    onProgress?: (progress: BootstrapProgress) => void;
+  }
+): Promise<BootstrapResult> {
+  const onProgress = options?.onProgress;
+  const reportProgress = (progress: BootstrapProgress) => {
+    onProgress?.(progress);
+    logCloudSync(`bootstrap ${progress.stage}: ${progress.message}`);
+  };
+
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  await updateCloudSyncState(fyo, {
+    enrollmentStatus: 'enrolling',
+    lastError: '',
+  });
+
+  try {
+    reportProgress({
+      stage: 'starting',
+      message: 'Starting bootstrap',
+    });
+    reportProgress({
+      stage: 'checking_remote',
+      message: 'Checking remote snapshot',
+    });
+    const remoteSnapshot = await fetchRemoteSyncSnapshot(
+      config.pullApiUrl,
+      config.token,
+      config.companyId
+    );
+    const remoteHasData =
+      remoteSnapshot.accounts > 0 ||
+      remoteSnapshot.parties > 0 ||
+      remoteSnapshot.journal_entries > 0 ||
+      remoteSnapshot.journal_entry_lines > 0;
+
+    if (remoteHasData && !options?.force) {
+      throw new Error(
+        'Remote company already has data. Clear remote company data first, or run forced bootstrap.'
+      );
+    }
+
+    reportProgress({
+      stage: 'loading_local',
+      message: 'Loading local records',
+    });
+    const accounts = await fyo.db.getAll(ModelNameEnum.Account, {
+      fields: [
+        'name',
+        'rootType',
+        'parentAccount',
+        'accountType',
+        'isGroup',
+        'description',
+      ],
+      orderBy: 'name',
+    });
+    const parties = await fyo.db.getAll(ModelNameEnum.Party, {
+      fields: ['name', 'role', 'email', 'phone'],
+      orderBy: 'name',
+    });
+    const journalEntries = await fyo.db.getAll(ModelNameEnum.JournalEntry, {
+      fields: [
+        'name',
+        'entryType',
+        'date',
+        'referenceNumber',
+        'referenceDate',
+        'userRemark',
+      ],
+      orderBy: 'name',
+    });
+    const journalEntryLines = await fyo.db.getAll(
+      ModelNameEnum.JournalEntryAccount,
+      {
+        fields: [
+          'parent',
+          'account',
+          'debit',
+          'credit',
+          'loanProfile',
+          'loanComponent',
+        ],
+        orderBy: 'parent',
+      }
+    );
+
+    const linesByParent = new Map<string, Record<string, unknown>[]>();
+    for (const raw of journalEntryLines) {
+      const parent = String(raw.parent ?? '');
+      if (!parent) {
+        continue;
+      }
+
+      if (!linesByParent.has(parent)) {
+        linesByParent.set(parent, []);
+      }
+
+      linesByParent.get(parent)!.push({
+        account: String(raw.account ?? ''),
+        debit: toNumber(raw.debit),
+        credit: toNumber(raw.credit),
+        loanProfile: String(raw.loanProfile ?? ''),
+        loanComponent: String(raw.loanComponent ?? 'None'),
+      });
+    }
+
+    let eventIndex = 0;
+    const getEventId = (prefix: string, name: string) => {
+      eventIndex += 1;
+      return `bootstrap:${prefix}:${name}:${Date.now()}:${eventIndex}`;
+    };
+
+    let pushedAccounts = 0;
+    let pushedParties = 0;
+    let pushedJournalEntries = 0;
+    reportProgress({
+      stage: 'pushing_accounts',
+      message: `Pushing accounts 0/${accounts.length}`,
+      processed: 0,
+      total: accounts.length,
+    });
+    await runWithConcurrency(
+      accounts,
+      BOOTSTRAP_ACCOUNTS_CONCURRENCY,
+      async (account) => {
+        const name = String(account.name ?? '');
+        if (!name) {
+          return;
+        }
+
+        await sendApplySyncEvent(
+          config.pushApiUrl,
+          config.token,
+          config.companyId,
+          {
+            event_id: getEventId('Account', name),
+            reference_type: ModelNameEnum.Account,
+            document_name: name,
+            operation: 'create',
+            payload: {
+              data: {
+                name,
+                rootType: String(account.rootType ?? ''),
+                parentAccount: String(account.parentAccount ?? ''),
+                accountType: String(account.accountType ?? ''),
+                isGroup: !!account.isGroup,
+                description: String(account.description ?? ''),
+              },
+            },
+          }
+        );
+        pushedAccounts += 1;
+        if (pushedAccounts === accounts.length || pushedAccounts % 10 === 0) {
+          reportProgress({
+            stage: 'pushing_accounts',
+            message: `Pushing accounts ${pushedAccounts}/${accounts.length}`,
+            processed: pushedAccounts,
+            total: accounts.length,
+          });
+        }
+      }
+    );
+
+    reportProgress({
+      stage: 'pushing_parties',
+      message: `Pushing parties 0/${parties.length}`,
+      processed: 0,
+      total: parties.length,
+    });
+    await runWithConcurrency(
+      parties,
+      BOOTSTRAP_PARTIES_CONCURRENCY,
+      async (party) => {
+        const name = String(party.name ?? '');
+        if (!name) {
+          return;
+        }
+
+        await sendApplySyncEvent(
+          config.pushApiUrl,
+          config.token,
+          config.companyId,
+          {
+            event_id: getEventId('Party', name),
+            reference_type: ModelNameEnum.Party,
+            document_name: name,
+            operation: 'create',
+            payload: {
+              data: {
+                name,
+                role: String(party.role ?? ''),
+                email: String(party.email ?? ''),
+                phone: String(party.phone ?? ''),
+              },
+            },
+          }
+        );
+        pushedParties += 1;
+        if (pushedParties === parties.length || pushedParties % 10 === 0) {
+          reportProgress({
+            stage: 'pushing_parties',
+            message: `Pushing parties ${pushedParties}/${parties.length}`,
+            processed: pushedParties,
+            total: parties.length,
+          });
+        }
+      }
+    );
+
+    reportProgress({
+      stage: 'pushing_journal_entries',
+      message: `Pushing journal entries 0/${journalEntries.length}`,
+      processed: 0,
+      total: journalEntries.length,
+    });
+    await runWithConcurrency(
+      journalEntries,
+      BOOTSTRAP_JOURNAL_ENTRIES_CONCURRENCY,
+      async (je) => {
+        const name = String(je.name ?? '');
+        if (!name) {
+          return;
+        }
+
+        const lines = linesByParent.get(name) ?? [];
+        if (!lines.length) {
+          return;
+        }
+
+        await sendApplySyncEvent(
+          config.pushApiUrl,
+          config.token,
+          config.companyId,
+          {
+            event_id: getEventId('JournalEntry', name),
+            reference_type: ModelNameEnum.JournalEntry,
+            document_name: name,
+            operation: 'create',
+            payload: normalizeJournalEntryEventPayload({
+              data: {
+                name,
+                entryType: String(je.entryType ?? ''),
+                date: String(je.date ?? ''),
+                referenceNumber: String(je.referenceNumber ?? ''),
+                referenceDate: String(je.referenceDate ?? ''),
+                userRemark: String(je.userRemark ?? ''),
+                accounts: lines,
+              },
+            }),
+          }
+        );
+        pushedJournalEntries += 1;
+        if (
+          pushedJournalEntries === journalEntries.length ||
+          pushedJournalEntries % 5 === 0
+        ) {
+          reportProgress({
+            stage: 'pushing_journal_entries',
+            message: `Pushing journal entries ${pushedJournalEntries}/${journalEntries.length}`,
+            processed: pushedJournalEntries,
+            total: journalEntries.length,
+          });
+        }
+      }
+    );
+
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'active',
+      lastPushAt: new Date().toISOString(),
+      lastError: '',
+    });
+    reportProgress({
+      stage: 'completed',
+      message: `Bootstrap finished. Accounts=${pushedAccounts}, Parties=${pushedParties}, JournalEntries=${pushedJournalEntries}`,
+    });
+
+    return {
+      accounts: pushedAccounts,
+      parties: pushedParties,
+      journalEntries: pushedJournalEntries,
+      journalEntryLines: journalEntryLines.length,
+    };
+  } catch (error) {
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'error',
+      lastError: (error as Error).message,
+    });
+    throw error;
+  }
 }
 
 export async function runCloudSyncReconciliation(
@@ -329,6 +820,47 @@ export async function runCloudSyncReconciliation(
   });
 
   return result;
+}
+
+export async function clearCloudSyncRemoteCompanyData(fyo: Fyo) {
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const clearApiUrl = getDefaultClearApiUrl(config.pushApiUrl);
+  logCloudSync(`clearing remote company data for ${config.companyId}`);
+
+  const response = (await sendAPIRequest(clearApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.token}`,
+      apikey: config.token,
+    },
+    body: JSON.stringify({
+      target_company: config.companyId,
+    }),
+  })) as {
+    success?: boolean;
+    error?: string;
+    deleted?: Record<string, number>;
+  } | null;
+
+  if (!response) {
+    throw new Error('Empty response from clear remote data API');
+  }
+
+  if (response.error) {
+    throw new Error(response.error);
+  }
+
+  await updateCloudSyncState(fyo, {
+    enrollmentStatus: 'active',
+    lastError: '',
+  });
+
+  return response;
 }
 
 function shouldRunDailyReconciliation(stateDoc: CloudSyncState | null) {
@@ -401,6 +933,8 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
 
   syncing = true;
   try {
+    await reclaimStaleProcessingOutboxRows(fyo);
+
     const queued = await fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
       filters: { status: 'queued' },
       orderBy: 'created',
@@ -421,6 +955,37 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
     }
   } finally {
     syncing = false;
+  }
+}
+
+async function reclaimStaleProcessingOutboxRows(fyo: Fyo) {
+  const processing = await fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
+    fields: ['name', 'modified'],
+    filters: { status: 'processing' },
+    orderBy: 'modified',
+  });
+
+  const now = Date.now();
+  for (const row of processing) {
+    const name = row.name as string | undefined;
+    if (!name) {
+      continue;
+    }
+
+    const modifiedAt = new Date(String(row.modified ?? '')).getTime();
+    if (Number.isNaN(modifiedAt) || now - modifiedAt < PROCESSING_STALE_MS) {
+      continue;
+    }
+
+    const outboxDoc = (await fyo.doc.getDoc(
+      ModelNameEnum.CloudSyncOutbox,
+      name
+    )) as CloudSyncOutbox;
+    await outboxDoc.setAndSync({
+      status: 'failed',
+      errorMessage:
+        'Recovered from stale processing state. Previous sync attempt was interrupted.',
+    });
   }
 }
 
@@ -522,6 +1087,10 @@ async function processOutboxItem(
   await outboxDoc.setAndSync('attempts', (outboxDoc.attempts ?? 0) + 1);
 
   const payload = parsePayload(outboxDoc.payload);
+  const sanitizedPayload =
+    outboxDoc.referenceType === ModelNameEnum.JournalEntry
+      ? normalizeJournalEntryEventPayload(payload)
+      : payload;
 
   try {
     const response = (await sendAPIRequest(config.apiUrl, {
@@ -538,7 +1107,7 @@ async function processOutboxItem(
           reference_type: outboxDoc.referenceType,
           document_name: outboxDoc.documentName,
           operation: outboxDoc.operation,
-          payload,
+          payload: sanitizedPayload,
         },
       }),
     })) as { success?: boolean; error?: string } | null;
