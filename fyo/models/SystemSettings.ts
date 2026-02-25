@@ -20,6 +20,7 @@ export default class SystemSettings extends Doc {
   displayTermsAndConditions?: boolean;
   syncEnabled?: boolean;
   syncMode?: 'off' | 'pilot' | 'on';
+  syncProjectId?: string;
   syncCompanyId?: string;
   syncDeviceId?: string;
   syncApiUrl?: string;

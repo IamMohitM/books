@@ -180,6 +180,13 @@
       "section": "Sync"
     },
     {
+      "fieldname": "syncProjectId",
+      "label": "Sync Project ID",
+      "fieldtype": "Data",
+      "description": "Supabase project ref (for example: abcd1234efgh5678). RPC URLs are auto-derived from this value.",
+      "section": "Sync"
+    },
+    {
       "fieldname": "syncCompanyId",
       "label": "Sync Company ID",
       "fieldtype": "Data",
@@ -196,16 +203,16 @@
     },
     {
       "fieldname": "syncApiUrl",
-      "label": "Sync API URL",
+      "label": "Sync API URL Override",
       "fieldtype": "Data",
-      "description": "Supabase RPC URL for push, e.g. .../rest/v1/rpc/apply_sync_event.",
+      "description": "Optional advanced override for push endpoint. Leave blank to auto-derive from Sync Project ID.",
       "section": "Sync"
     },
     {
       "fieldname": "syncPullApiUrl",
-      "label": "Sync Pull API URL",
+      "label": "Sync Pull API URL Override",
       "fieldtype": "Data",
-      "description": "Supabase RPC URL for pull, e.g. .../rest/v1/rpc/fetch_sync_changes. Leave empty to auto-derive from push URL.",
+      "description": "Optional advanced override for pull endpoint. Leave blank to auto-derive from Sync Project ID.",
       "section": "Sync"
     },
     {

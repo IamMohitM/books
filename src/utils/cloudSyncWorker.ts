@@ -46,6 +46,7 @@ function getSystemSettings(fyo: Fyo) {
     | {
         syncEnabled?: boolean;
         syncMode?: string;
+        syncProjectId?: string;
         syncCompanyId?: string;
         syncAuthToken?: string;
         syncApiUrl?: string;
@@ -75,11 +76,72 @@ function getDefaultSnapshotApiUrl(pullApiUrl: string) {
   return pullApiUrl;
 }
 
+function normalizeProjectRef(projectIdOrUrl?: string) {
+  const input = String(projectIdOrUrl ?? '').trim();
+  if (!input) {
+    return '';
+  }
+
+  if (input.endsWith('.supabase.co')) {
+    return input.replace('https://', '').replace('http://', '').replace(
+      '.supabase.co',
+      ''
+    );
+  }
+
+  if (!input.includes('http')) {
+    return input.replace(/\/+$/, '');
+  }
+
+  try {
+    const url = new URL(input);
+    const host = url.hostname.toLowerCase();
+    if (!host.endsWith('.supabase.co')) {
+      return '';
+    }
+
+    return host.replace('.supabase.co', '');
+  } catch {
+    return '';
+  }
+}
+
+function getBaseRestRpcUrl(projectIdOrUrl?: string) {
+  const ref = normalizeProjectRef(projectIdOrUrl);
+  if (!ref) {
+    return '';
+  }
+
+  return `https://${ref}.supabase.co/rest/v1/rpc`;
+}
+
+function getDerivedPushApiUrl(projectIdOrUrl?: string) {
+  const baseRpcUrl = getBaseRestRpcUrl(projectIdOrUrl);
+  if (!baseRpcUrl) {
+    return '';
+  }
+
+  return `${baseRpcUrl}/apply_sync_event`;
+}
+
+function getDerivedPullApiUrl(projectIdOrUrl?: string) {
+  const baseRpcUrl = getBaseRestRpcUrl(projectIdOrUrl);
+  if (!baseRpcUrl) {
+    return '';
+  }
+
+  return `${baseRpcUrl}/fetch_sync_changes`;
+}
+
 function getWorkerConfig(fyo: Fyo) {
   const settings = getSystemSettings(fyo);
-  const pushApiUrl = settings?.syncApiUrl ?? '';
+  const derivedPushApiUrl = getDerivedPushApiUrl(settings?.syncProjectId);
+  const pushApiUrl = settings?.syncApiUrl?.trim() || derivedPushApiUrl;
+  const derivedPullApiUrl = getDerivedPullApiUrl(settings?.syncProjectId);
   const pullApiUrl =
-    settings?.syncPullApiUrl?.trim() || getDefaultPullApiUrl(pushApiUrl);
+    settings?.syncPullApiUrl?.trim() ||
+    derivedPullApiUrl ||
+    getDefaultPullApiUrl(pushApiUrl);
 
   return {
     enabled:

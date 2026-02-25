@@ -383,11 +383,13 @@ export default defineComponent({
       }
 
       const missing: string[] = [];
+      if (!ss.syncProjectId && !ss.syncApiUrl) {
+        missing.push(
+          this.t`Sync Project ID is required (or provide Sync API URL Override).`
+        );
+      }
       if (!ss.syncCompanyId) {
         missing.push(this.t`Sync Company ID is required.`);
-      }
-      if (!ss.syncApiUrl) {
-        missing.push(this.t`Sync API URL is required (apply_sync_event).`);
       }
       if (!ss.syncAuthToken) {
         missing.push(this.t`Sync Auth Token is required.`);
