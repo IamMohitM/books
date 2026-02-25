@@ -1045,6 +1045,19 @@ export async function pullCloudSyncChanges(fyo: Fyo) {
   });
 }
 
+export async function resetCloudSyncPullCursorAndRepull(fyo: Fyo) {
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const cursorDoc = await getOrCreateCursor(fyo, config.companyId);
+  cursorDoc._addDocToSyncQueue = false;
+  await cursorDoc.setAndSync('lastSeq', 0);
+
+  await pullCloudSyncChanges(fyo);
+}
+
 async function getOrCreateCursor(
   fyo: Fyo,
   companyId: string
@@ -1157,11 +1170,15 @@ export async function applyRemoteChange(fyo: Fyo, change: RemoteSyncChange) {
 
 async function applyRemoteAccountChange(
   fyo: Fyo,
-  payload: { data?: Record<string, unknown>; external_key?: string },
+  payload: {
+    data?: Record<string, unknown>;
+    external_key?: string;
+    id?: string;
+  },
   operation: string
 ) {
   const data = payload.data ?? {};
-  const name = String(data.name ?? payload.external_key ?? '');
+  const name = String(data.name ?? payload.external_key ?? payload.id ?? '');
   if (!name) {
     return;
   }
@@ -1196,11 +1213,15 @@ async function applyRemoteAccountChange(
 
 async function applyRemotePartyChange(
   fyo: Fyo,
-  payload: { data?: Record<string, unknown>; external_key?: string },
+  payload: {
+    data?: Record<string, unknown>;
+    external_key?: string;
+    id?: string;
+  },
   operation: string
 ) {
   const data = payload.data ?? {};
-  const name = String(data.name ?? payload.external_key ?? '');
+  const name = String(data.name ?? payload.external_key ?? payload.id ?? '');
   if (!name) {
     return;
   }
@@ -1255,11 +1276,15 @@ async function getExistingDocByName(
 
 async function applyRemoteJournalEntryChange(
   fyo: Fyo,
-  payload: { data?: Record<string, unknown>; external_key?: string },
+  payload: {
+    data?: Record<string, unknown>;
+    external_key?: string;
+    id?: string;
+  },
   operation: string
 ) {
   const data = payload.data ?? {};
-  const name = String(data.name ?? payload.external_key ?? '');
+  const name = String(data.name ?? payload.external_key ?? payload.id ?? '');
   if (!name) {
     return;
   }

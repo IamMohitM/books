@@ -22,6 +22,13 @@
         {{ t`Clear Remote Data (Dev)` }}
       </Button>
       <Button
+        v-if="showDevClearRemoteButton"
+        class="me-2"
+        @click="repullAllNow"
+      >
+        {{ t`Re-pull All (Dev)` }}
+      </Button>
+      <Button
         v-if="showCloudSyncPanel"
         class="me-2"
         @click="runReconciliationNow"
@@ -283,6 +290,7 @@ import {
   bootstrapCloudSyncFromLocal,
   clearCloudSyncRemoteCompanyData,
   flushCloudSyncOutbox,
+  resetCloudSyncPullCursorAndRepull,
   runCloudSyncReconciliation,
   startCloudSyncWorker,
   stopCloudSyncWorker,
@@ -801,6 +809,42 @@ export default defineComponent({
               showToast({
                 type: 'success',
                 message: this.t`Remote company data cleared.`,
+              });
+            },
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => null,
+          },
+        ],
+      });
+    },
+    async repullAllNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      await showDialog({
+        title: this.t`Re-pull All Remote Changes?`,
+        detail: this
+          .t`Development action: this resets local pull cursor to zero and fetches all remote changes again for this company.`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Re-pull`,
+            isPrimary: true,
+            action: async () => {
+              await resetCloudSyncPullCursorAndRepull(this.fyo);
+              await this.refreshCloudSyncStatus();
+              showToast({
+                type: 'success',
+                message: this.t`Re-pull finished.`,
               });
             },
           },
