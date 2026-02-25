@@ -76,6 +76,41 @@
       "fieldname": "lastReconciliationSummary",
       "label": "Last Reconciliation Summary",
       "fieldtype": "Text"
+    },
+    {
+      "fieldname": "lastDryRunAt",
+      "label": "Last Dry Run At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "lastDryRunStatus",
+      "label": "Last Dry Run Status",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "unknown",
+          "label": "Unknown"
+        },
+        {
+          "value": "passed",
+          "label": "Passed"
+        },
+        {
+          "value": "failed",
+          "label": "Failed"
+        }
+      ],
+      "default": "unknown"
+    },
+    {
+      "fieldname": "lastDryRunSummary",
+      "label": "Last Dry Run Summary",
+      "fieldtype": "Text"
+    },
+    {
+      "fieldname": "lastDryRunChecksum",
+      "label": "Last Dry Run Checksum",
+      "fieldtype": "Data"
     }
   ]
 }

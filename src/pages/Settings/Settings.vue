@@ -49,11 +49,17 @@
             <Button class="text-xs" @click="flushCloudSyncNow">
               {{ t`Flush Sync Now` }}
             </Button>
+            <Button class="text-xs" @click="runBootstrapDryRunNow">
+              {{ t`Run Dry Run` }}
+            </Button>
             <Button class="text-xs" @click="bootstrapCloudNow">
               {{ t`Bootstrap To Cloud` }}
             </Button>
             <Button class="text-xs" @click="runReconciliationNow">
               {{ t`Run Reconciliation` }}
+            </Button>
+            <Button class="text-xs" @click="exportDiagnosticsNow">
+              {{ t`Export Diagnostics` }}
             </Button>
             <Button
               v-if="showDevClearRemoteButton"
@@ -109,6 +115,26 @@
             class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
           >
             {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
+          </div>
+          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-1">{{ t`Dry Run` }}</div>
+            <div v-if="dryRun.checkedAt">
+              <div>{{ t`Last Checked` }}: {{ dryRun.checkedAt }}</div>
+              <div
+                :class="
+                  dryRun.canProceed
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                "
+              >
+                {{ dryRun.summary }}
+              </div>
+            </div>
+            <div v-else class="text-gray-700 dark:text-gray-200">
+              {{
+                t`Run before bootstrap to verify local balances and remote bootstrap preconditions.`
+              }}
+            </div>
           </div>
           <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
             <div class="font-semibold mb-1">{{ t`Bootstrap` }}</div>
@@ -280,12 +306,16 @@ import { showDialog, showToast } from 'src/utils/interactive';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
+import { getSavePath, showExportInFolder } from 'src/utils/ui';
 import {
   bootstrapCloudSyncFromLocal,
   clearCloudSyncRemoteCompanyData,
+  exportCloudSyncDiagnostics,
   flushCloudSyncOutbox,
+  runCloudSyncBootstrapDryRun,
   resetCloudSyncPullCursorAndRepull,
   runCloudSyncReconciliation,
+  setCloudSyncEnrollmentStatus,
   startCloudSyncWorker,
   stopCloudSyncWorker,
 } from 'src/utils/cloudSyncWorker';
@@ -321,6 +351,10 @@ export default defineComponent({
         lastReconciliationAt: '',
         lastReconciliationStatus: 'unknown',
         lastReconciliationSummary: '',
+        lastDryRunAt: '',
+        lastDryRunStatus: 'unknown',
+        lastDryRunSummary: '',
+        lastDryRunChecksum: '',
       },
       reconciliation: {
         running: false,
@@ -335,6 +369,11 @@ export default defineComponent({
         stage: '',
         processed: 0,
         total: 0,
+      },
+      dryRun: {
+        checkedAt: '',
+        canProceed: null as null | boolean,
+        summary: '',
       },
     } as {
       errors: Record<string, string>;
@@ -352,6 +391,10 @@ export default defineComponent({
         lastReconciliationAt: string;
         lastReconciliationStatus: string;
         lastReconciliationSummary: string;
+        lastDryRunAt: string;
+        lastDryRunStatus: string;
+        lastDryRunSummary: string;
+        lastDryRunChecksum: string;
       };
       reconciliation: {
         running: boolean;
@@ -366,6 +409,11 @@ export default defineComponent({
         stage: string;
         processed: number;
         total: number;
+      };
+      dryRun: {
+        checkedAt: string;
+        canProceed: null | boolean;
+        summary: string;
       };
     };
   },
@@ -630,6 +678,10 @@ export default defineComponent({
             lastReconciliationAt?: string;
             lastReconciliationStatus?: string;
             lastReconciliationSummary?: string;
+            lastDryRunAt?: string;
+            lastDryRunStatus?: string;
+            lastDryRunSummary?: string;
+            lastDryRunChecksum?: string;
           }
         | undefined;
       const lastError =
@@ -648,7 +700,26 @@ export default defineComponent({
         lastReconciliationStatus:
           syncState?.lastReconciliationStatus ?? 'unknown',
         lastReconciliationSummary: syncState?.lastReconciliationSummary ?? '',
+        lastDryRunAt: syncState?.lastDryRunAt ?? '',
+        lastDryRunStatus: syncState?.lastDryRunStatus ?? 'unknown',
+        lastDryRunSummary: syncState?.lastDryRunSummary ?? '',
+        lastDryRunChecksum: syncState?.lastDryRunChecksum ?? '',
       };
+
+      if (syncState?.lastDryRunAt) {
+        this.dryRun = {
+          checkedAt: String(syncState.lastDryRunAt),
+          canProceed:
+            syncState.lastDryRunStatus === 'passed'
+              ? true
+              : syncState.lastDryRunStatus === 'failed'
+              ? false
+              : null,
+          summary:
+            syncState.lastDryRunSummary ??
+            this.t`Dry run completed. Use Run Dry Run for latest checks.`,
+        };
+      }
     },
     async flushCloudSyncNow(): Promise<void> {
       if (this.syncSetupMissing.length) {
@@ -688,6 +759,20 @@ export default defineComponent({
             isPrimary: true,
             action: async () => {
               try {
+                const dryRunResult = await runCloudSyncBootstrapDryRun(
+                  this.fyo
+                );
+                this.dryRun = {
+                  checkedAt: new Date().toLocaleString(),
+                  canProceed: dryRunResult.canProceed,
+                  summary: dryRunResult.canProceed
+                    ? this.t`Dry run passed.`
+                    : dryRunResult.errors.join(' | '),
+                };
+                if (!dryRunResult.canProceed) {
+                  throw new Error(dryRunResult.errors.join(' | '));
+                }
+
                 const backupPath = await this.createLocalSyncBackup();
                 this.bootstrap = {
                   running: true,
@@ -715,14 +800,25 @@ export default defineComponent({
                   },
                 });
                 const verification = await runCloudSyncReconciliation(this.fyo);
+                if (!verification.ok) {
+                  await setCloudSyncEnrollmentStatus(
+                    this.fyo,
+                    'error',
+                    'Reconciliation mismatch detected'
+                  );
+                  throw new Error(
+                    `Bootstrap upload completed but reconciliation failed: ${verification.mismatches.join(
+                      ' | '
+                    )}`
+                  );
+                }
+
+                await setCloudSyncEnrollmentStatus(this.fyo, 'active', '');
                 this.bootstrap = {
                   running: false,
                   checkedAt: new Date().toLocaleString(),
-                  summary: verification.ok
-                    ? this
-                        .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification passed.`
-                    : this
-                        .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification found differences.`,
+                  summary: this
+                    .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification passed.`,
                   stage: 'completed',
                   processed: 0,
                   total: 0,
@@ -735,13 +831,15 @@ export default defineComponent({
                 };
                 await this.refreshCloudSyncStatus();
                 showToast({
-                  type: verification.ok ? 'success' : 'warning',
-                  message: verification.ok
-                    ? this.t`Bootstrap finished and verification passed.`
-                    : this
-                        .t`Bootstrap finished but verification found differences.`,
+                  type: 'success',
+                  message: this.t`Bootstrap finished and verification passed.`,
                 });
               } catch (error) {
+                await setCloudSyncEnrollmentStatus(
+                  this.fyo,
+                  'error',
+                  getErrorMessage(error as Error)
+                );
                 this.bootstrap = {
                   running: false,
                   checkedAt: new Date().toLocaleString(),
@@ -765,6 +863,44 @@ export default defineComponent({
           },
         ],
       });
+    },
+    async runBootstrapDryRunNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      try {
+        const result = await runCloudSyncBootstrapDryRun(this.fyo);
+        this.dryRun = {
+          checkedAt: new Date().toLocaleString(),
+          canProceed: result.canProceed,
+          summary: result.canProceed
+            ? this
+                .t`Dry run passed. Local data balanced and bootstrap preconditions satisfied.`
+            : result.errors.join(' | '),
+        };
+        showToast({
+          type: result.canProceed ? 'success' : 'warning',
+          message: result.canProceed
+            ? this.t`Dry run passed.`
+            : this.t`Dry run found blocking issues.`,
+        });
+      } catch (error) {
+        this.dryRun = {
+          checkedAt: new Date().toLocaleString(),
+          canProceed: false,
+          summary: getErrorMessage(error as Error),
+        };
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      }
     },
     async createLocalSyncBackup(): Promise<string> {
       const dbPath = String(this.fyo.db.dbPath ?? '').trim();
@@ -901,6 +1037,34 @@ export default defineComponent({
             .t`Reconciliation failed. Check sync configuration and network.`,
         });
         await this.refreshCloudSyncStatus();
+      }
+    },
+    async exportDiagnosticsNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      try {
+        const diagnostics = await exportCloudSyncDiagnostics(this.fyo);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `cloud-sync-diagnostics-${timestamp}`;
+        const { canceled, filePath } = await getSavePath(fileName, 'json');
+        if (canceled || !filePath) {
+          return;
+        }
+
+        await ipc.saveData(JSON.stringify(diagnostics, null, 2), filePath);
+        showExportInFolder(this.t`Diagnostics exported`, filePath);
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
       }
     },
     updateGroupedFields(): void {

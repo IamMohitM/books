@@ -49,6 +49,34 @@ export type BootstrapResult = {
   journalEntries: number;
   journalEntryLines: number;
 };
+
+export type BootstrapDryRunResult = {
+  canProceed: boolean;
+  remoteHasData: boolean;
+  localBalanced: boolean;
+  local: SyncSnapshot;
+  remote: SyncSnapshot;
+  errors: string[];
+  warnings: string[];
+  checksum: string;
+};
+
+export type CloudSyncDiagnostics = {
+  generatedAt: string;
+  companyId: string;
+  enrollmentStatus: string;
+  syncMode: string;
+  localSnapshot: SyncSnapshot;
+  remoteSnapshot?: SyncSnapshot;
+  dryRun?: BootstrapDryRunResult;
+  outbox: {
+    queued: number;
+    processing: number;
+    failed: number;
+    sent: number;
+  };
+  lastError: string;
+};
 type BootstrapProgress = {
   stage:
     | 'starting'
@@ -79,6 +107,7 @@ function getSystemSettings(fyo: Fyo) {
         syncApiUrl?: string;
         syncPullApiUrl?: string;
         syncIntervalSeconds?: number;
+        syncAllowedCompanies?: string;
       }
     | undefined;
 }
@@ -183,10 +212,19 @@ function getWorkerConfig(fyo: Fyo) {
     derivedPullApiUrl ||
     getDefaultPullApiUrl(pushApiUrl);
 
+  const isPilotMode = settings?.syncMode === 'pilot';
+  const allowedCompanies = String(settings?.syncAllowedCompanies ?? '')
+    .split(/[\n,]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const pilotAllowed =
+    !isPilotMode || allowedCompanies.includes(settings?.syncCompanyId ?? '');
+
   return {
     enabled:
       !!settings?.syncEnabled &&
       settings?.syncMode !== 'off' &&
+      pilotAllowed &&
       !!pushApiUrl &&
       !!pullApiUrl &&
       !!settings?.syncAuthToken &&
@@ -197,6 +235,17 @@ function getWorkerConfig(fyo: Fyo) {
     companyId: settings?.syncCompanyId ?? '',
     intervalSeconds: Math.max(settings?.syncIntervalSeconds ?? 15, 5),
   };
+}
+
+function getSnapshotChecksum(snapshot: SyncSnapshot) {
+  return [
+    snapshot.accounts,
+    snapshot.parties,
+    snapshot.journal_entries,
+    snapshot.journal_entry_lines,
+    snapshot.debit_total.toFixed(2),
+    snapshot.credit_total.toFixed(2),
+  ].join('|');
 }
 
 function getCloudSyncStateDoc(fyo: Fyo): CloudSyncState | null {
@@ -213,6 +262,10 @@ async function updateCloudSyncState(
     lastReconciliationAt: string;
     lastReconciliationStatus: string;
     lastReconciliationSummary: string;
+    lastDryRunAt: string;
+    lastDryRunStatus: string;
+    lastDryRunSummary: string;
+    lastDryRunChecksum: string;
   }>
 ) {
   const stateDoc = getCloudSyncStateDoc(fyo);
@@ -222,6 +275,17 @@ async function updateCloudSyncState(
 
   stateDoc._addDocToSyncQueue = false;
   await stateDoc.setAndSync(values).catch(() => undefined);
+}
+
+export async function setCloudSyncEnrollmentStatus(
+  fyo: Fyo,
+  status: 'not_enrolled' | 'enrolling' | 'active' | 'paused' | 'error',
+  lastError = ''
+) {
+  await updateCloudSyncState(fyo, {
+    enrollmentStatus: status,
+    lastError,
+  });
 }
 
 function toNumber(value: unknown) {
@@ -772,7 +836,7 @@ export async function bootstrapCloudSyncFromLocal(
     );
 
     await updateCloudSyncState(fyo, {
-      enrollmentStatus: 'active',
+      enrollmentStatus: 'enrolling',
       lastPushAt: new Date().toISOString(),
       lastError: '',
     });
@@ -794,6 +858,68 @@ export async function bootstrapCloudSyncFromLocal(
     });
     throw error;
   }
+}
+
+export async function runCloudSyncBootstrapDryRun(
+  fyo: Fyo,
+  options?: { force?: boolean }
+): Promise<BootstrapDryRunResult> {
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const [local, remote] = await Promise.all([
+    getLocalSyncSnapshot(fyo),
+    fetchRemoteSyncSnapshot(config.pullApiUrl, config.token, config.companyId),
+  ]);
+
+  const remoteHasData =
+    remote.accounts > 0 ||
+    remote.parties > 0 ||
+    remote.journal_entries > 0 ||
+    remote.journal_entry_lines > 0;
+  const localBalanced =
+    Math.abs(local.debit_total - local.credit_total) <= 0.01;
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!localBalanced) {
+    errors.push(
+      `Local trial balance mismatch: debit=${local.debit_total.toFixed(
+        2
+      )} credit=${local.credit_total.toFixed(2)}`
+    );
+  }
+
+  if (remoteHasData && !options?.force) {
+    errors.push(
+      'Remote company already has data. Clear remote company data first, or use forced bootstrap.'
+    );
+  } else if (remoteHasData && options?.force) {
+    warnings.push('Force mode enabled: remote company has existing data.');
+  }
+
+  const checksum = getSnapshotChecksum(local);
+  await updateCloudSyncState(fyo, {
+    lastDryRunAt: new Date().toISOString(),
+    lastDryRunStatus: errors.length === 0 ? 'passed' : 'failed',
+    lastDryRunSummary:
+      errors.length === 0 ? 'Dry run passed.' : errors.join('\n'),
+    lastDryRunChecksum: checksum,
+  });
+
+  return {
+    canProceed: errors.length === 0,
+    remoteHasData,
+    localBalanced,
+    local,
+    remote,
+    errors,
+    warnings,
+    checksum,
+  };
 }
 
 export async function runCloudSyncReconciliation(
@@ -1056,6 +1182,61 @@ export async function resetCloudSyncPullCursorAndRepull(fyo: Fyo) {
   await cursorDoc.setAndSync('lastSeq', 0);
 
   await pullCloudSyncChanges(fyo);
+}
+
+export async function exportCloudSyncDiagnostics(
+  fyo: Fyo
+): Promise<CloudSyncDiagnostics> {
+  const config = getWorkerConfig(fyo);
+  const stateDoc = getCloudSyncStateDoc(fyo);
+  const localSnapshot = await getLocalSyncSnapshot(fyo);
+  let remoteSnapshot: SyncSnapshot | undefined;
+  let dryRun: BootstrapDryRunResult | undefined;
+
+  if (config.enabled) {
+    try {
+      remoteSnapshot = await fetchRemoteSyncSnapshot(
+        config.pullApiUrl,
+        config.token,
+        config.companyId
+      );
+      dryRun = await runCloudSyncBootstrapDryRun(fyo);
+    } catch {
+      remoteSnapshot = undefined;
+    }
+  }
+
+  const [queued, processing, failed, sent] = await Promise.all([
+    fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'queued' },
+    }),
+    fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'processing' },
+    }),
+    fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'failed' },
+    }),
+    fyo.db.count(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'sent' },
+    }),
+  ]);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    companyId: config.companyId,
+    enrollmentStatus: String(stateDoc?.enrollmentStatus ?? 'not_enrolled'),
+    syncMode: String(getSystemSettings(fyo)?.syncMode ?? 'off'),
+    localSnapshot,
+    remoteSnapshot,
+    dryRun,
+    outbox: {
+      queued,
+      processing,
+      failed,
+      sent,
+    },
+    lastError: String(stateDoc?.lastError ?? ''),
+  };
 }
 
 async function getOrCreateCursor(

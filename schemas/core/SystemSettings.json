@@ -230,6 +230,13 @@
       "minvalue": 5,
       "description": "Background sync interval in seconds.",
       "section": "Sync"
+    },
+    {
+      "fieldname": "syncAllowedCompanies",
+      "label": "Sync Allowed Companies",
+      "fieldtype": "Text",
+      "description": "Pilot mode allowlist. Comma/newline separated company UUIDs.",
+      "section": "Sync"
     }
   ],
   "quickEditFields": [
