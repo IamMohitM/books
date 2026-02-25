@@ -112,6 +112,37 @@ export default function registerIpcMainActionListeners(main: Main) {
     }
   );
 
+  ipcMain.handle(IPC_ACTIONS.CREATE_DB_BACKUP, async (_, dbPath: string) => {
+    const sourcePath = String(dbPath ?? '').trim();
+    if (!sourcePath || sourcePath === ':memory:') {
+      throw new Error('Invalid database path for backup');
+    }
+
+    await fs.access(sourcePath, constants.R_OK);
+
+    const parsed = path.parse(sourcePath);
+    let fileName = parsed.name;
+    if (fileName.endsWith('.books')) {
+      fileName = fileName.slice(0, -6);
+    }
+
+    const backupDir = path.join(parsed.dir, 'backups');
+    await fs.ensureDir(backupDir);
+
+    const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, '');
+    const backupPath = path.join(
+      backupDir,
+      `${fileName}_sync_backup_${timestamp}.books.db`
+    );
+
+    await fs.copy(sourcePath, backupPath, {
+      overwrite: false,
+      errorOnExist: true,
+    });
+    await fs.access(backupPath, constants.R_OK);
+    return backupPath;
+  });
+
   ipcMain.handle(
     IPC_ACTIONS.GET_OPEN_FILEPATH,
     async (_, options: OpenDialogOptions) => {

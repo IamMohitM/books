@@ -179,6 +179,13 @@ const ipc = {
     )) as string;
   },
 
+  async createDbBackup(dbPath: string) {
+    return (await ipcRenderer.invoke(
+      IPC_ACTIONS.CREATE_DB_BACKUP,
+      dbPath
+    )) as string;
+  },
+
   async getEnv() {
     return (await ipcRenderer.invoke(IPC_ACTIONS.GET_ENV)) as {
       isDevelopment: boolean;

@@ -35,6 +35,7 @@ export enum IPC_ACTIONS {
   INIT_SHEDULER = 'init-scheduler',
   DELETE_FILE = 'delete-file',
   GET_DB_DEFAULT_PATH = 'get-db-default-path',
+  CREATE_DB_BACKUP = 'create-db-backup',
   SEND_API_REQUEST = 'send-api-request',
   // Database messages
   DB_CREATE = 'db-create',

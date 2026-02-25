@@ -1,40 +1,6 @@
 <template>
   <FormContainer>
     <template #header>
-      <Button
-        v-if="showCloudSyncPanel"
-        class="me-2"
-        @click="refreshCloudSyncStatus"
-      >
-        {{ t`Refresh Sync Status` }}
-      </Button>
-      <Button v-if="showCloudSyncPanel" class="me-2" @click="flushCloudSyncNow">
-        {{ t`Flush Sync Now` }}
-      </Button>
-      <Button v-if="showCloudSyncPanel" class="me-2" @click="bootstrapCloudNow">
-        {{ t`Bootstrap To Cloud` }}
-      </Button>
-      <Button
-        v-if="showDevClearRemoteButton"
-        class="me-2"
-        @click="clearRemoteDataNow"
-      >
-        {{ t`Clear Remote Data (Dev)` }}
-      </Button>
-      <Button
-        v-if="showDevClearRemoteButton"
-        class="me-2"
-        @click="repullAllNow"
-      >
-        {{ t`Re-pull All (Dev)` }}
-      </Button>
-      <Button
-        v-if="showCloudSyncPanel"
-        class="me-2"
-        @click="runReconciliationNow"
-      >
-        {{ t`Run Reconciliation` }}
-      </Button>
       <Button v-if="canSave" type="primary" @click="sync">
         {{ t`Save` }}
       </Button>
@@ -75,6 +41,34 @@
             {{
               t`Use this flow: 1) Save sync settings, 2) Flush desktop data to remote, 3) Run Reconciliation, 4) Open mobile app with the same company.`
             }}
+          </div>
+          <div class="mb-3 flex flex-wrap gap-2">
+            <Button class="text-xs" @click="refreshCloudSyncStatus">
+              {{ t`Refresh Sync Status` }}
+            </Button>
+            <Button class="text-xs" @click="flushCloudSyncNow">
+              {{ t`Flush Sync Now` }}
+            </Button>
+            <Button class="text-xs" @click="bootstrapCloudNow">
+              {{ t`Bootstrap To Cloud` }}
+            </Button>
+            <Button class="text-xs" @click="runReconciliationNow">
+              {{ t`Run Reconciliation` }}
+            </Button>
+            <Button
+              v-if="showDevClearRemoteButton"
+              class="text-xs"
+              @click="clearRemoteDataNow"
+            >
+              {{ t`Clear Remote Data (Dev)` }}
+            </Button>
+            <Button
+              v-if="showDevClearRemoteButton"
+              class="text-xs"
+              @click="repullAllNow"
+            >
+              {{ t`Re-pull All (Dev)` }}
+            </Button>
           </div>
           <div
             v-if="syncSetupMissing.length"
@@ -694,10 +688,11 @@ export default defineComponent({
             isPrimary: true,
             action: async () => {
               try {
+                const backupPath = await this.createLocalSyncBackup();
                 this.bootstrap = {
                   running: true,
                   checkedAt: '',
-                  summary: this.t`Starting bootstrap...`,
+                  summary: this.t`Local backup created: ${backupPath}`,
                   stage: 'starting',
                   processed: 0,
                   total: 0,
@@ -770,6 +765,14 @@ export default defineComponent({
           },
         ],
       });
+    },
+    async createLocalSyncBackup(): Promise<string> {
+      const dbPath = String(this.fyo.db.dbPath ?? '').trim();
+      if (!dbPath || dbPath === ':memory:') {
+        throw new Error('Cannot create backup for this database');
+      }
+
+      return await ipc.createDbBackup(dbPath);
     },
     async clearRemoteDataNow(): Promise<void> {
       if (this.syncSetupMissing.length) {
