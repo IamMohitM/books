@@ -39,13 +39,74 @@
           <div class="font-semibold mb-2">{{ t`Cloud Sync Status` }}</div>
           <div class="text-xs text-gray-700 dark:text-gray-200 mb-3">
             {{
-              t`Use this flow: 1) Save sync settings, 2) Flush desktop data to remote, 3) Run Reconciliation, 4) Open mobile app with the same company.`
+              t`Use this flow: 1) Save sync settings, 2) Click Sync Now for first-time enrollment and regular sync, 3) Open mobile app with the same company.`
             }}
           </div>
           <div class="mb-3 flex flex-wrap gap-2">
+            <Button class="text-xs" @click="syncNow">
+              {{ t`Sync Now` }}
+            </Button>
+            <Button class="text-xs" @click="initializeRemoteNow">
+              {{ t`Initialize Remote (Admin)` }}
+            </Button>
+            <Button
+              v-if="cloudSyncStatus.enrollmentStatus !== 'paused'"
+              class="text-xs"
+              @click="pauseSyncNow"
+            >
+              {{ t`Pause Sync` }}
+            </Button>
+            <Button
+              v-if="cloudSyncStatus.enrollmentStatus === 'paused'"
+              class="text-xs"
+              @click="resumeSyncNow"
+            >
+              {{ t`Resume Sync` }}
+            </Button>
             <Button class="text-xs" @click="refreshCloudSyncStatus">
               {{ t`Refresh Sync Status` }}
             </Button>
+          </div>
+          <div
+            v-if="remoteInit.open"
+            class="mb-3 p-2 rounded border dark:border-gray-800 text-xs"
+          >
+            <div class="mb-2 text-gray-700 dark:text-gray-200">
+              {{
+                t`Enter one-time Supabase Admin Access Token to initialize remote schema. This token is not saved.`
+              }}
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <input
+                v-model="remoteInit.token"
+                type="password"
+                class="
+                  px-2
+                  py-1
+                  border
+                  rounded
+                  text-sm
+                  bg-white
+                  dark:bg-gray-890 dark:border-gray-700
+                "
+                :placeholder="t`Admin Access Token`"
+              />
+              <Button
+                class="text-xs"
+                :disabled="remoteInit.running"
+                @click="executeRemoteInitNow"
+              >
+                {{ remoteInit.running ? t`Initializing...` : t`Initialize` }}
+              </Button>
+              <Button class="text-xs" @click="cancelRemoteInitNow">
+                {{ t`Cancel` }}
+              </Button>
+            </div>
+          </div>
+          <div
+            v-if="showDevClearRemoteButton"
+            class="mb-3 flex flex-wrap gap-2"
+          >
             <Button class="text-xs" @click="flushCloudSyncNow">
               {{ t`Flush Sync Now` }}
             </Button>
@@ -61,18 +122,10 @@
             <Button class="text-xs" @click="exportDiagnosticsNow">
               {{ t`Export Diagnostics` }}
             </Button>
-            <Button
-              v-if="showDevClearRemoteButton"
-              class="text-xs"
-              @click="clearRemoteDataNow"
-            >
+            <Button class="text-xs" @click="clearRemoteDataNow">
               {{ t`Clear Remote Data (Dev)` }}
             </Button>
-            <Button
-              v-if="showDevClearRemoteButton"
-              class="text-xs"
-              @click="repullAllNow"
-            >
+            <Button class="text-xs" @click="repullAllNow">
               {{ t`Re-pull All (Dev)` }}
             </Button>
           </div>
@@ -116,7 +169,10 @@
           >
             {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
           </div>
-          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+          <div
+            v-if="showDevClearRemoteButton"
+            class="mt-3 pt-3 border-t dark:border-gray-800 text-xs"
+          >
             <div class="font-semibold mb-1">{{ t`Dry Run` }}</div>
             <div v-if="dryRun.checkedAt">
               <div>{{ t`Last Checked` }}: {{ dryRun.checkedAt }}</div>
@@ -247,7 +303,9 @@
           :fields="fields"
           :doc="doc"
           :errors="errors"
+          :field-actions="getFieldActionsForSection()"
           @value-change="onValueChange"
+          @field-action="onSectionFieldAction"
         />
       </div>
 
@@ -312,6 +370,10 @@ import {
   clearCloudSyncRemoteCompanyData,
   exportCloudSyncDiagnostics,
   flushCloudSyncOutbox,
+  initializeCloudSyncRemoteSchema,
+  pauseCloudSync,
+  resumeCloudSync,
+  runCloudSyncCycle,
   runCloudSyncBootstrapDryRun,
   resetCloudSyncPullCursorAndRepull,
   runCloudSyncReconciliation,
@@ -375,6 +437,11 @@ export default defineComponent({
         canProceed: null as null | boolean,
         summary: '',
       },
+      remoteInit: {
+        open: false,
+        token: '',
+        running: false,
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -414,6 +481,11 @@ export default defineComponent({
         checkedAt: string;
         canProceed: null | boolean;
         summary: string;
+      };
+      remoteInit: {
+        open: boolean;
+        token: string;
+        running: boolean;
       };
     };
   },
@@ -501,6 +573,9 @@ export default defineComponent({
     showDevClearRemoteButton(): boolean {
       return this.showCloudSyncPanel && !!this.fyo.store.isDevelopment;
     },
+    showAdvancedSyncFields(): boolean {
+      return !!this.fyo.store.isDevelopment;
+    },
     bootstrapProgressPercent(): number {
       if (!this.bootstrap.running) {
         return 0;
@@ -571,6 +646,30 @@ export default defineComponent({
     await this.reset();
   },
   methods: {
+    async normalizeSyncModeForProductionUx(): Promise<void> {
+      const ss = this.fyo.singles.SystemSettings as
+        | {
+            syncEnabled?: boolean;
+            syncMode?: string;
+          }
+        | undefined;
+      if (!ss) {
+        return;
+      }
+
+      if (this.showAdvancedSyncFields) {
+        return;
+      }
+
+      const enabled = !!ss.syncEnabled;
+      const targetMode = enabled ? 'on' : 'off';
+      if (ss.syncMode !== targetMode) {
+        await (this.fyo.singles.SystemSettings as Doc).set(
+          'syncMode',
+          targetMode
+        );
+      }
+    },
     async reset() {
       const resetableDocs = this.schemas
         .map(({ name }) => this.fyo.singles[name])
@@ -583,6 +682,8 @@ export default defineComponent({
       this.update();
     },
     async sync(): Promise<void> {
+      await this.normalizeSyncModeForProductionUx();
+
       const syncableDocs = this.schemas
         .map(({ name }) => this.fyo.singles[name])
         .filter((doc) => doc?.canSave) as Doc[];
@@ -640,6 +741,23 @@ export default defineComponent({
       }
 
       this.update();
+    },
+    getFieldActionsForSection(): Record<string, string> {
+      if (this.activeTab !== ModelNameEnum.SystemSettings) {
+        return {};
+      }
+
+      return {
+        syncCompanyId: this.t`Generate`,
+      };
+    },
+    async onSectionFieldAction(fieldname: string): Promise<void> {
+      if (
+        this.activeTab === ModelNameEnum.SystemSettings &&
+        fieldname === 'syncCompanyId'
+      ) {
+        await this.generateCompanyIdNow();
+      }
     },
     update(): void {
       this.updateGroupedFields();
@@ -721,7 +839,288 @@ export default defineComponent({
         };
       }
     },
+    initializeRemoteNow(): void {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+          }
+        | undefined;
+      if (!systemSettings?.syncProjectId) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Set Sync Project ID first, save settings, then initialize remote.`,
+        });
+        return;
+      }
+
+      this.remoteInit.open = true;
+      this.remoteInit.token = '';
+      this.remoteInit.running = false;
+    },
+    cancelRemoteInitNow(): void {
+      this.remoteInit.open = false;
+      this.remoteInit.token = '';
+      this.remoteInit.running = false;
+    },
+    async executeRemoteInitNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+          }
+        | undefined;
+      if (!systemSettings?.syncProjectId) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Set Sync Project ID first, save settings, then initialize remote.`,
+        });
+        return;
+      }
+
+      const token = String(this.remoteInit.token ?? '').trim();
+      if (!token) {
+        showToast({
+          type: 'error',
+          message: this.t`Enter admin access token to continue.`,
+        });
+        return;
+      }
+
+      await showDialog({
+        title: this.t`Initialize Remote Schema?`,
+        detail: this
+          .t`This runs base schema + sync migrations on the configured Supabase project.`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Continue`,
+            isPrimary: true,
+            action: async () => {
+              this.remoteInit.running = true;
+              try {
+                const result = await initializeCloudSyncRemoteSchema(this.fyo, {
+                  accessToken: token,
+                });
+                await this.refreshCloudSyncStatus();
+                this.cancelRemoteInitNow();
+                showToast({
+                  type: 'success',
+                  message: this
+                    .t`Remote schema initialized for ${result.projectRef}. Applied ${result.appliedScripts.length} scripts.`,
+                });
+              } catch (error) {
+                this.remoteInit.running = false;
+                showToast({
+                  type: 'error',
+                  message: getErrorMessage(error as Error),
+                });
+                throw error;
+              }
+            },
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => null,
+          },
+        ],
+      });
+    },
+    async generateCompanyIdNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings;
+      if (!systemSettings) {
+        showToast({
+          type: 'error',
+          message: this.t`System Settings not available.`,
+        });
+        return;
+      }
+
+      const existing = String(systemSettings.syncCompanyId ?? '').trim();
+      if (existing) {
+        const shouldOverwrite = (await showDialog({
+          title: this.t`Replace Company ID?`,
+          detail: this
+            .t`A Sync Company ID already exists. Replacing it can connect this desktop to a different remote tenant.`,
+          type: 'warning',
+          buttons: [
+            {
+              label: this.t`Replace`,
+              isPrimary: true,
+              action: () => true,
+            },
+            {
+              label: this.t`Cancel`,
+              isEscape: true,
+              action: () => false,
+            },
+          ],
+        })) as boolean;
+
+        if (!shouldOverwrite) {
+          return;
+        }
+      }
+
+      const newId =
+        typeof crypto?.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      await systemSettings.set('syncCompanyId', newId);
+      this.update();
+      showToast({
+        type: 'success',
+        message: this.t`Generated Sync Company ID. Click Save to apply.`,
+      });
+    },
+    async syncNow(): Promise<void> {
+      if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
+        showToast({
+          type: 'warning',
+          message: this.t`Sync is paused. Resume sync to run sync now.`,
+        });
+        return;
+      }
+
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      try {
+        if (
+          this.cloudSyncStatus.enrollmentStatus === 'not_enrolled' ||
+          this.cloudSyncStatus.enrollmentStatus === 'error'
+        ) {
+          await this.autoEnrollForSyncNow();
+        }
+
+        await runCloudSyncCycle(this.fyo);
+        await this.refreshCloudSyncStatus();
+        showToast({
+          type: 'success',
+          message: this.t`Sync cycle completed.`,
+        });
+      } catch (error) {
+        await this.refreshCloudSyncStatus();
+        showToast({
+          type: 'error',
+          message: this.getFriendlySyncError(error as Error),
+        });
+      }
+    },
+    getFriendlySyncError(error: Error): string {
+      const message = getErrorMessage(error);
+      const lower = message.toLowerCase();
+
+      if (
+        lower.includes('fetch_sync_snapshot') ||
+        lower.includes('apply_sync_event') ||
+        lower.includes('relation') ||
+        lower.includes('does not exist')
+      ) {
+        return this
+          .t`Remote sync schema is not initialized for this Supabase project. Click Initialize Remote (Admin), then try Sync Now again.`;
+      }
+
+      return message;
+    },
+    async autoEnrollForSyncNow(): Promise<void> {
+      const dryRunResult = await runCloudSyncBootstrapDryRun(this.fyo);
+      this.dryRun = {
+        checkedAt: new Date().toLocaleString(),
+        canProceed: dryRunResult.canProceed,
+        summary: dryRunResult.canProceed
+          ? this.t`Dry run passed.`
+          : dryRunResult.errors.join(' | '),
+      };
+
+      if (!dryRunResult.localBalanced) {
+        throw new Error(dryRunResult.errors.join(' | '));
+      }
+
+      // If remote already has data, treat it as pre-seeded and continue with normal sync.
+      if (dryRunResult.remoteHasData) {
+        await setCloudSyncEnrollmentStatus(this.fyo, 'active', '');
+        await this.refreshCloudSyncStatus();
+        return;
+      }
+
+      const backupPath = await this.createLocalSyncBackup();
+      this.bootstrap = {
+        running: true,
+        checkedAt: '',
+        summary: this.t`Local backup created: ${backupPath}`,
+        stage: 'starting',
+        processed: 0,
+        total: 0,
+      };
+
+      const result = await bootstrapCloudSyncFromLocal(this.fyo, {
+        onProgress: (progress: {
+          stage: string;
+          message: string;
+          processed?: number;
+          total?: number;
+        }) => {
+          this.bootstrap = {
+            running: true,
+            checkedAt: '',
+            summary: progress.message,
+            stage: progress.stage,
+            processed: progress.processed ?? this.bootstrap.processed,
+            total: progress.total ?? this.bootstrap.total,
+          };
+        },
+      });
+
+      const verification = await runCloudSyncReconciliation(this.fyo);
+      if (!verification.ok) {
+        await setCloudSyncEnrollmentStatus(
+          this.fyo,
+          'error',
+          'Reconciliation mismatch detected'
+        );
+        throw new Error(
+          `Bootstrap upload completed but reconciliation failed: ${verification.mismatches.join(
+            ' | '
+          )}`
+        );
+      }
+
+      await setCloudSyncEnrollmentStatus(this.fyo, 'active', '');
+      this.bootstrap = {
+        running: false,
+        checkedAt: new Date().toLocaleString(),
+        summary: this
+          .t`Uploaded ${result.accounts} accounts, ${result.parties} parties, ${result.journalEntries} journal entries. Verification passed.`,
+        stage: 'completed',
+        processed: 0,
+        total: 0,
+      };
+      this.reconciliation = {
+        running: false,
+        checkedAt: new Date().toLocaleString(),
+        ok: verification.ok,
+        mismatches: verification.mismatches,
+      };
+      await this.refreshCloudSyncStatus();
+    },
     async flushCloudSyncNow(): Promise<void> {
+      if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
+        showToast({
+          type: 'warning',
+          message: this.t`Sync is paused. Resume sync to flush outbox.`,
+        });
+        return;
+      }
+
       if (this.syncSetupMissing.length) {
         showToast({
           type: 'error',
@@ -736,6 +1135,31 @@ export default defineComponent({
       showToast({
         type: 'success',
         message: this.t`Cloud sync flush finished.`,
+      });
+    },
+    async pauseSyncNow(): Promise<void> {
+      await pauseCloudSync(this.fyo);
+      await this.refreshCloudSyncStatus();
+      showToast({
+        type: 'success',
+        message: this.t`Cloud sync paused.`,
+      });
+    },
+    async resumeSyncNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      await resumeCloudSync(this.fyo);
+      await this.refreshCloudSyncStatus();
+      showToast({
+        type: 'success',
+        message: this.t`Cloud sync resumed.`,
       });
     },
     async bootstrapCloudNow(): Promise<void> {
@@ -960,6 +1384,14 @@ export default defineComponent({
       });
     },
     async repullAllNow(): Promise<void> {
+      if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
+        showToast({
+          type: 'warning',
+          message: this.t`Sync is paused. Resume sync to re-pull changes.`,
+        });
+        return;
+      }
+
       if (this.syncSetupMissing.length) {
         showToast({
           type: 'error',
@@ -1089,6 +1521,14 @@ export default defineComponent({
 
         const doc = this.fyo.singles[schemaName];
         if (evaluateHidden(field, doc)) {
+          continue;
+        }
+
+        if (
+          schemaName === ModelNameEnum.SystemSettings &&
+          !this.showAdvancedSyncFields &&
+          ['syncMode', 'syncAllowedCompanies'].includes(field.fieldname)
+        ) {
           continue;
         }
 

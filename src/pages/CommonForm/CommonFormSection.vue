@@ -41,18 +41,28 @@
           @change="(value: DocValue) => $emit('value-change', field, value)"
           @row-change="(field:Field, value:DocValue, parentfield:Field) => $emit('row-change',field, value, parentfield)"
         />
-        <FormControl
-          v-else
-          :ref="field.fieldname === 'name' ? 'nameField' : 'fields'"
-          :size="field.fieldtype === 'AttachImage' ? 'form' : undefined"
-          :show-label="true"
-          :border="true"
-          :df="field"
-          :value="doc[field.fieldname]"
-          @editrow="(doc: Doc) => $emit('editrow', doc)"
-          @change="(value: DocValue) => $emit('value-change', field, value)"
-          @row-change="(field:Field, value:DocValue, parentfield:Field) => $emit('row-change',field, value, parentfield)"
-        />
+        <div v-else class="flex items-end gap-2">
+          <div class="flex-1">
+            <FormControl
+              :ref="field.fieldname === 'name' ? 'nameField' : 'fields'"
+              :size="field.fieldtype === 'AttachImage' ? 'form' : undefined"
+              :show-label="true"
+              :border="true"
+              :df="field"
+              :value="doc[field.fieldname]"
+              @editrow="(doc: Doc) => $emit('editrow', doc)"
+              @change="(value: DocValue) => $emit('value-change', field, value)"
+              @row-change="(field:Field, value:DocValue, parentfield:Field) => $emit('row-change',field, value, parentfield)"
+            />
+          </div>
+          <Button
+            v-if="fieldActions?.[field.fieldname]"
+            class="text-xs mb-1"
+            @click="$emit('field-action', field.fieldname)"
+          >
+            {{ fieldActions[field.fieldname] }}
+          </Button>
+        </div>
         <div v-if="errors?.[field.fieldname]" class="text-sm text-red-600 mt-1">
           {{ errors[field.fieldname] }}
         </div>
@@ -65,13 +75,14 @@
 import { DocValue } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
 import { Field } from 'schemas/types';
+import Button from 'src/components/Button.vue';
 import FormControl from 'src/components/Controls/FormControl.vue';
 import Table from 'src/components/Controls/Table.vue';
 import { focusOrSelectFormControl } from 'src/utils/ui';
 import { defineComponent, PropType } from 'vue';
 
 export default defineComponent({
-  components: { FormControl, Table },
+  components: { FormControl, Table, Button },
   props: {
     title: { type: String, default: '' },
     errors: {
@@ -82,8 +93,12 @@ export default defineComponent({
     doc: { type: Object as PropType<Doc>, required: true },
     collapsible: { type: Boolean, default: true },
     fields: { type: Array as PropType<Field[]>, required: true },
+    fieldActions: {
+      type: Object as PropType<Record<string, string>>,
+      default: () => ({}),
+    },
   },
-  emits: ['editrow', 'value-change', 'row-change'],
+  emits: ['editrow', 'value-change', 'row-change', 'field-action'],
   data() {
     return { collapsed: false } as {
       collapsed: boolean;
