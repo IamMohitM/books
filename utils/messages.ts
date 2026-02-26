@@ -37,6 +37,7 @@ export enum IPC_ACTIONS {
   GET_DB_DEFAULT_PATH = 'get-db-default-path',
   CREATE_DB_BACKUP = 'create-db-backup',
   SEND_API_REQUEST = 'send-api-request',
+  GET_SYNC_INIT_SCRIPTS = 'get-sync-init-scripts',
   // Database messages
   DB_CREATE = 'db-create',
   DB_CONNECT = 'db-connect',

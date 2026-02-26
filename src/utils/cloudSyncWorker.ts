@@ -77,6 +77,11 @@ export type CloudSyncDiagnostics = {
   };
   lastError: string;
 };
+
+type RemoteInitializationResult = {
+  projectRef: string;
+  appliedScripts: string[];
+};
 type BootstrapProgress = {
   stage:
     | 'starting'
@@ -135,6 +140,21 @@ function getDefaultSnapshotApiUrl(pullApiUrl: string) {
   }
 
   return pullApiUrl;
+}
+
+function getDefaultCompaniesApiUrl(pushApiUrl: string) {
+  const marker = '/rest/v1/rpc/';
+  const markerIndex = pushApiUrl.indexOf(marker);
+  if (markerIndex >= 0) {
+    const base = pushApiUrl.slice(0, markerIndex);
+    return `${base}/rest/v1/companies`;
+  }
+
+  if (pushApiUrl.includes('/apply_sync_event')) {
+    return pushApiUrl.replace('/rpc/apply_sync_event', '/companies');
+  }
+
+  return pushApiUrl;
 }
 
 function getDefaultClearApiUrl(pushApiUrl: string) {
@@ -211,6 +231,7 @@ function getWorkerConfig(fyo: Fyo) {
     settings?.syncPullApiUrl?.trim() ||
     derivedPullApiUrl ||
     getDefaultPullApiUrl(pushApiUrl);
+  const companiesApiUrl = getDefaultCompaniesApiUrl(pushApiUrl);
 
   const isPilotMode = settings?.syncMode === 'pilot';
   const allowedCompanies = String(settings?.syncAllowedCompanies ?? '')
@@ -231,10 +252,41 @@ function getWorkerConfig(fyo: Fyo) {
       !!settings?.syncCompanyId,
     pushApiUrl,
     pullApiUrl,
+    companiesApiUrl,
     token: settings?.syncAuthToken ?? '',
     companyId: settings?.syncCompanyId ?? '',
     intervalSeconds: Math.max(settings?.syncIntervalSeconds ?? 15, 5),
   };
+}
+
+async function ensureRemoteCompanyExists(config: {
+  companiesApiUrl: string;
+  token: string;
+  companyId: string;
+}) {
+  try {
+    await sendAPIRequest(config.companiesApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.token}`,
+        apikey: config.token,
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify([
+        {
+          id: config.companyId,
+          name: `Company ${config.companyId.slice(0, 8)}`,
+        },
+      ]),
+    });
+  } catch (error) {
+    throw new Error(
+      `Unable to ensure remote company exists. Check Sync Auth Token permissions and Company ID. ${
+        (error as Error).message
+      }`
+    );
+  }
 }
 
 function getSnapshotChecksum(snapshot: SyncSnapshot) {
@@ -250,6 +302,11 @@ function getSnapshotChecksum(snapshot: SyncSnapshot) {
 
 function getCloudSyncStateDoc(fyo: Fyo): CloudSyncState | null {
   return (fyo.singles.CloudSyncState as CloudSyncState | undefined) ?? null;
+}
+
+function isSyncEnrollmentPaused(fyo: Fyo): boolean {
+  const stateDoc = getCloudSyncStateDoc(fyo);
+  return String(stateDoc?.enrollmentStatus ?? '') === 'paused';
 }
 
 async function updateCloudSyncState(
@@ -578,6 +635,12 @@ export async function bootstrapCloudSyncFromLocal(
   if (!config.enabled) {
     throw new Error('Cloud sync is not fully configured');
   }
+
+  await ensureRemoteCompanyExists({
+    companiesApiUrl: config.companiesApiUrl,
+    token: config.token,
+    companyId: config.companyId,
+  });
 
   await updateCloudSyncState(fyo, {
     enrollmentStatus: 'enrolling',
@@ -982,8 +1045,10 @@ export async function clearCloudSyncRemoteCompanyData(fyo: Fyo) {
   }
 
   await updateCloudSyncState(fyo, {
-    enrollmentStatus: 'active',
+    enrollmentStatus: 'not_enrolled',
     lastError: '',
+    lastReconciliationStatus: 'unknown',
+    lastReconciliationSummary: '',
   });
 
   return response;
@@ -1025,7 +1090,7 @@ export function startCloudSyncWorker(fyo: Fyo) {
   stopCloudSyncWorker();
 
   const config = getWorkerConfig(fyo);
-  if (!config.enabled) {
+  if (!config.enabled || isSyncEnrollmentPaused(fyo)) {
     return;
   }
 
@@ -1052,6 +1117,10 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
     return;
   }
 
+  if (isSyncEnrollmentPaused(fyo)) {
+    return;
+  }
+
   const config = getWorkerConfig(fyo);
   if (!config.enabled) {
     return;
@@ -1059,6 +1128,12 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
 
   syncing = true;
   try {
+    await ensureRemoteCompanyExists({
+      companiesApiUrl: config.companiesApiUrl,
+      token: config.token,
+      companyId: config.companyId,
+    });
+
     await reclaimStaleProcessingOutboxRows(fyo);
 
     const queued = await fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
@@ -1116,6 +1191,10 @@ async function reclaimStaleProcessingOutboxRows(fyo: Fyo) {
 }
 
 export async function runCloudSyncCycle(fyo: Fyo) {
+  if (isSyncEnrollmentPaused(fyo)) {
+    return;
+  }
+
   await flushCloudSyncOutbox(fyo);
   await pullCloudSyncChanges(fyo);
   await runAutoReconciliationIfDue(fyo);
@@ -1125,6 +1204,10 @@ export async function pullCloudSyncChanges(fyo: Fyo) {
   const online =
     typeof navigator === 'undefined' ? true : navigator.onLine !== false;
   if (!online) {
+    return;
+  }
+
+  if (isSyncEnrollmentPaused(fyo)) {
     return;
   }
 
@@ -1236,6 +1319,75 @@ export async function exportCloudSyncDiagnostics(
       sent,
     },
     lastError: String(stateDoc?.lastError ?? ''),
+  };
+}
+
+export async function pauseCloudSync(fyo: Fyo) {
+  stopCloudSyncWorker();
+  await setCloudSyncEnrollmentStatus(fyo, 'paused', '');
+}
+
+export async function resumeCloudSync(fyo: Fyo) {
+  await setCloudSyncEnrollmentStatus(fyo, 'active', '');
+  startCloudSyncWorker(fyo);
+}
+
+export async function initializeCloudSyncRemoteSchema(
+  fyo: Fyo,
+  options: { accessToken: string }
+): Promise<RemoteInitializationResult> {
+  const settings = getSystemSettings(fyo);
+  const projectRef = normalizeProjectRef(
+    settings?.syncProjectId || settings?.syncApiUrl
+  );
+  if (!projectRef) {
+    throw new Error('Sync Project ID is required to initialize remote schema');
+  }
+
+  const accessToken = String(options.accessToken ?? '').trim();
+  if (!accessToken) {
+    throw new Error('Supabase admin access token is required');
+  }
+
+  const queryApiUrl = `https://api.supabase.com/v1/projects/${projectRef}/database/query`;
+  const scripts = await ipc.getSyncInitScripts();
+
+  const appliedScripts: string[] = [];
+  for (const script of scripts) {
+    const sql = String(script.sql ?? '').trim();
+    if (!sql) {
+      continue;
+    }
+
+    try {
+      await sendAPIRequest(queryApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          query: sql,
+        }),
+      });
+      appliedScripts.push(script.name);
+    } catch (error) {
+      throw new Error(
+        `Remote initialization failed at ${script.name}: ${
+          (error as Error).message
+        }`
+      );
+    }
+  }
+
+  await updateCloudSyncState(fyo, {
+    enrollmentStatus: 'not_enrolled',
+    lastError: '',
+  });
+
+  return {
+    projectRef,
+    appliedScripts,
   };
 }
 

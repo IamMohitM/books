@@ -143,6 +143,65 @@ export default function registerIpcMainActionListeners(main: Main) {
     return backupPath;
   });
 
+  ipcMain.handle(IPC_ACTIONS.GET_SYNC_INIT_SCRIPTS, () => {
+    const scriptSpecs: Array<{ name: string; relativePath: string }> = [
+      { name: 'base_schema', relativePath: 'supabase/schema.sql' },
+      { name: 'base_policies', relativePath: 'supabase/policies.sql' },
+      {
+        name: 'migration_update_create_journal_entry',
+        relativePath:
+          'supabase/migrations/20260222000100_update_create_journal_entry.sql',
+      },
+      {
+        name: 'migration_sync_foundation',
+        relativePath: 'supabase/migrations/20260223000100_sync_foundation.sql',
+      },
+      {
+        name: 'migration_apply_sync_event',
+        relativePath: 'supabase/migrations/20260223000200_apply_sync_event.sql',
+      },
+      {
+        name: 'migration_change_log_and_pull',
+        relativePath:
+          'supabase/migrations/20260223000300_change_log_and_pull.sql',
+      },
+      {
+        name: 'migration_reconciliation_snapshot',
+        relativePath:
+          'supabase/migrations/20260223000400_reconciliation_snapshot.sql',
+      },
+      {
+        name: 'migration_fix_external_key_unique_indexes',
+        relativePath:
+          'supabase/migrations/20260225130600_fix_external_key_unique_indexes.sql',
+      },
+      {
+        name: 'migration_fix_apply_sync_event_empty_dates',
+        relativePath:
+          'supabase/migrations/20260225214500_fix_apply_sync_event_empty_dates.sql',
+      },
+      {
+        name: 'migration_change_log_payload_key_fallbacks',
+        relativePath:
+          'supabase/migrations/20260225221500_change_log_payload_key_fallbacks.sql',
+      },
+    ];
+
+    const scripts = scriptSpecs.map((spec) => {
+      const absolutePath = path.resolve(process.cwd(), spec.relativePath);
+      if (!fs.existsSync(absolutePath)) {
+        throw new Error(`Missing SQL script: ${spec.relativePath}`);
+      }
+
+      return {
+        name: spec.name,
+        sql: fs.readFileSync(absolutePath, 'utf8'),
+      };
+    });
+
+    return scripts;
+  });
+
   ipcMain.handle(
     IPC_ACTIONS.GET_OPEN_FILEPATH,
     async (_, options: OpenDialogOptions) => {

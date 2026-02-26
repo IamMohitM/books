@@ -218,6 +218,12 @@ const ipc = {
     >;
   },
 
+  async getSyncInitScripts() {
+    return (await ipcRenderer.invoke(
+      IPC_ACTIONS.GET_SYNC_INIT_SCRIPTS
+    )) as Array<{ name: string; sql: string }>;
+  },
+
   registerMainProcessErrorListener(listener: IPCRendererListener) {
     ipcRenderer.on(IPC_CHANNELS.LOG_MAIN_PROCESS_ERROR, listener);
   },
