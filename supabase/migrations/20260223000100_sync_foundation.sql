@@ -19,16 +19,13 @@ alter table if exists public.journal_entries
   add column if not exists device_id text;
 
 create unique index if not exists accounts_company_external_key_uniq
-  on public.accounts (company_id, external_key)
-  where external_key is not null;
+  on public.accounts (company_id, external_key);
 
 create unique index if not exists parties_company_external_key_uniq
-  on public.parties (company_id, external_key)
-  where external_key is not null;
+  on public.parties (company_id, external_key);
 
 create unique index if not exists journal_entries_company_external_key_uniq
-  on public.journal_entries (company_id, external_key)
-  where external_key is not null;
+  on public.journal_entries (company_id, external_key);
 
 create table if not exists public.sync_idempotency_keys (
   company_id uuid not null references public.companies(id) on delete cascade,
