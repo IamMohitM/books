@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, Button, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
-export default function AuthScreen() {
+export default function AuthScreen({
+  activeProfileLabel,
+}: {
+  activeProfileLabel: string;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,14 +23,23 @@ export default function AuthScreen() {
 
   const signUp = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (error) Alert.alert('Sign up failed', error.message);
-    else Alert.alert('Check your email for confirmation');
+    else {
+      const hasSession = Boolean(data?.session);
+      Alert.alert(
+        hasSession ? 'Signed up' : 'Check your email for confirmation',
+        hasSession
+          ? 'Account created. If you do not see company data yet, ask an owner to invite your email to this company.'
+          : 'Account created. After confirming email, sign in and ask an owner to invite your email to this company.'
+      );
+    }
   };
 
   return (
     <View style={styles.container}>
+      <Text style={styles.profileHint}>Signing into: {activeProfileLabel}</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -51,6 +64,7 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   container: { gap: 12 },
+  profileHint: { fontSize: 12, color: '#64748b' },
   input: {
     backgroundColor: 'white',
     padding: 12,

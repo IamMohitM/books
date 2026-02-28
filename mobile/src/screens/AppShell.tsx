@@ -12,41 +12,117 @@ type TabKey = 'transactions' | 'ledger' | 'reports' | 'settings';
 
 type CompanyUser = { company_id: string };
 
-export default function AppShell({ session }: { session: any }) {
+export default function AppShell({
+  session,
+  activeProfileLabel,
+  onSwitchProject,
+}: {
+  session: any;
+  activeProfileLabel: string;
+  onSwitchProject?: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<TabKey>('transactions');
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyMessage, setCompanyMessage] = useState('');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const loadCompany = async () => {
+      const currentUserId = String(session?.user?.id ?? '').trim();
+      if (!currentUserId) {
+        setCompanyId(null);
+        setCompanyMessage('No signed-in user session found. Please sign in again.');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('company_users')
         .select('company_id')
+        .eq('user_id', currentUserId)
         .limit(1);
 
-      if (!error && data && data.length > 0) {
-        setCompanyId((data[0] as CompanyUser).company_id);
+      if (error) {
+        setCompanyId(null);
+        setCompanyMessage('Unable to load company access right now. Pull to retry.');
+        return;
       }
+
+      if (data && data.length > 0) {
+        setCompanyId((data[0] as CompanyUser).company_id);
+        setCompanyMessage('');
+        return;
+      }
+
+      setCompanyId(null);
+      setCompanyMessage(
+        'Your account exists, but this email is not yet assigned to a company in this project. Ask an owner to invite this email as collaborator, then tap Refresh Access.'
+      );
     };
 
-    loadCompany();
-  }, []);
+    void loadCompany();
+  }, [session?.user?.id]);
 
   const content = useMemo(() => {
     if (!companyId) {
-      return <Text style={styles.loading}>No company assigned.</Text>;
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.loading}>No company assigned.</Text>
+          {!!companyMessage && <Text style={styles.emptyDetail}>{companyMessage}</Text>}
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={async () => {
+              const currentUserId = String(session?.user?.id ?? '').trim();
+              if (!currentUserId) {
+                setCompanyMessage('No signed-in user session found. Please sign in again.');
+                return;
+              }
+
+              const { data, error } = await supabase
+                .from('company_users')
+                .select('company_id')
+                .eq('user_id', currentUserId)
+                .limit(1);
+              if (error) {
+                setCompanyMessage(`Access refresh failed: ${error.message}`);
+                return;
+              }
+              if (data && data.length > 0) {
+                setCompanyId((data[0] as CompanyUser).company_id);
+                setCompanyMessage('');
+                return;
+              }
+
+              setCompanyMessage(
+                'Still no company mapping for this signed-in email in the selected project.'
+              );
+            }}
+          >
+            <Text style={styles.refreshButtonText}>Refresh Access</Text>
+          </TouchableOpacity>
+        </View>
+      );
     }
 
     if (activeTab === 'transactions') return <TransactionsScreen companyId={companyId} refreshKey={refreshKey} />;
     if (activeTab === 'ledger') return <LedgerScreen companyId={companyId} />;
     if (activeTab === 'reports') return <ReportsScreen companyId={companyId} />;
-    return <SettingsScreen companyId={companyId} onSignOut={() => supabase.auth.signOut()} />;
-  }, [activeTab, companyId, refreshKey]);
+    return (
+      <SettingsScreen
+        companyId={companyId}
+        onSignOut={() => supabase.auth.signOut()}
+        onSwitchProject={onSwitchProject}
+      />
+    );
+  }, [activeTab, companyId, refreshKey, onSwitchProject]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Cash Books</Text>
+      <Text style={styles.profileHint}>Project: {activeProfileLabel}</Text>
+      <Text style={styles.profileHint}>
+        Signed in as: {session?.user?.email ?? 'Unknown user'}
+      </Text>
       <View style={styles.content}>{content}</View>
       <View style={styles.tabs}>
         <Tab
@@ -116,6 +192,7 @@ function Tab({
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, paddingBottom: 10, backgroundColor: '#f8fafc' },
   header: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
+  profileHint: { fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 8 },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -144,6 +221,24 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#f8fafc' },
   content: { flex: 1 },
   loading: { marginTop: 40, textAlign: 'center' },
+  emptyState: {
+    marginTop: 32,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 10,
+  },
+  emptyDetail: { color: '#334155', fontSize: 12, lineHeight: 18 },
+  refreshButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  refreshButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
   centerSpacer: { width: 72 },
   quickAddButton: {
     position: 'absolute',

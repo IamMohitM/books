@@ -13,9 +13,14 @@ type Collaborator = {
 type Props = {
   companyId: string;
   onSignOut: () => void;
+  onSwitchProject?: () => void;
 };
 
-export default function SettingsScreen({ companyId, onSignOut }: Props) {
+export default function SettingsScreen({
+  companyId,
+  onSignOut,
+  onSwitchProject,
+}: Props) {
   const [email, setEmail] = useState('');
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [inviting, setInviting] = useState(false);
@@ -158,6 +163,11 @@ export default function SettingsScreen({ companyId, onSignOut }: Props) {
       <TouchableOpacity style={styles.signOutButton} onPress={onSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
+      {!!onSwitchProject && (
+        <TouchableOpacity style={styles.switchButton} onPress={onSwitchProject}>
+          <Text style={styles.switchText}>Switch Project</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -199,4 +209,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signOutText: { fontSize: 12, fontWeight: '600', color: '#0f172a' },
+  switchButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+  },
+  switchText: { fontSize: 12, fontWeight: '600', color: '#f8fafc' },
 });
