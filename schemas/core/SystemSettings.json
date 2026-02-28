@@ -187,6 +187,22 @@
       "section": "Sync"
     },
     {
+      "fieldname": "syncProjectProfiles",
+      "label": "Sync Project Profiles",
+      "fieldtype": "Text",
+      "description": "Internal JSON for multiple Supabase project profiles.",
+      "section": "Sync",
+      "hidden": true
+    },
+    {
+      "fieldname": "syncActiveProjectProfileId",
+      "label": "Active Sync Project Profile ID",
+      "fieldtype": "Data",
+      "description": "Internal identifier for active sync project profile.",
+      "section": "Sync",
+      "hidden": true
+    },
+    {
       "fieldname": "syncCompanyId",
       "label": "Sync Company ID",
       "fieldtype": "Data",

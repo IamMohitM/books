@@ -68,7 +68,8 @@ create table if not exists public.journal_entry_lines (
   created_at timestamptz not null default now()
 );
 
-create or replace view public.ledger_entries as
+drop view if exists public.ledger_entries;
+create view public.ledger_entries as
 select
   jel.id as line_id,
   je.company_id,
@@ -87,7 +88,8 @@ from public.journal_entry_lines jel
 join public.journal_entries je on je.id = jel.journal_entry_id
 join public.accounts a on a.id = jel.account_id;
 
-create or replace view public.account_balances as
+drop view if exists public.account_balances;
+create view public.account_balances as
 select
   a.company_id,
   a.id as account_id,
@@ -99,7 +101,8 @@ from public.accounts a
 left join public.journal_entry_lines jel on jel.account_id = a.id
 group by a.company_id, a.id, a.name;
 
-create or replace view public.journal_entries_with_user as
+drop view if exists public.journal_entries_with_user;
+create view public.journal_entries_with_user as
 select
   je.*,
   p.email as created_by_email,
@@ -107,7 +110,8 @@ select
 from public.journal_entries je
 left join public.profiles p on p.id = je.created_by;
 
-create or replace view public.company_users_with_profile as
+drop view if exists public.company_users_with_profile;
+create view public.company_users_with_profile as
 select
   cu.company_id,
   cu.user_id,
@@ -263,6 +267,66 @@ end;
 $$;
 
 grant execute on function public.invite_company_user(uuid, text, text) to authenticated;
+
+create or replace function public.admin_invite_company_user(
+  target_company uuid,
+  invite_email text,
+  invite_role text default 'editor'
+) returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_user_id uuid;
+  normalized_email text;
+  normalized_role text;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'admin_invite_company_user is restricted to service_role';
+  end if;
+
+  if target_company is null then
+    raise exception 'target_company is required';
+  end if;
+
+  normalized_email := lower(trim(coalesce(invite_email, '')));
+  if normalized_email = '' then
+    raise exception 'invite_email is required';
+  end if;
+
+  normalized_role := lower(trim(coalesce(invite_role, 'editor')));
+  if normalized_role not in ('owner', 'editor') then
+    raise exception 'invite_role must be owner or editor';
+  end if;
+
+  if not exists (
+    select 1
+    from public.companies c
+    where c.id = target_company
+  ) then
+    raise exception 'Company % not found', target_company;
+  end if;
+
+  select id into target_user_id
+  from auth.users
+  where lower(email) = normalized_email
+  limit 1;
+
+  if target_user_id is null then
+    raise exception 'User not found for email %', normalized_email;
+  end if;
+
+  insert into public.company_users (company_id, user_id, role)
+  values (target_company, target_user_id, normalized_role)
+  on conflict (company_id, user_id) do update
+    set role = excluded.role;
+
+  return target_user_id;
+end;
+$$;
+
+grant execute on function public.admin_invite_company_user(uuid, text, text) to service_role;
 
 create or replace function public.handle_new_user()
 returns trigger

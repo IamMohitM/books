@@ -78,6 +78,14 @@ export type CloudSyncDiagnostics = {
   lastError: string;
 };
 
+export type CollaboratorRow = {
+  user_id: string;
+  role: string;
+  email: string | null;
+  full_name: string | null;
+  created_at: string;
+};
+
 type RemoteInitializationResult = {
   projectRef: string;
   appliedScripts: string[];
@@ -202,6 +210,15 @@ function getBaseRestRpcUrl(projectIdOrUrl?: string) {
   }
 
   return `https://${ref}.supabase.co/rest/v1/rpc`;
+}
+
+function getSupabaseBaseUrl(projectIdOrUrl?: string) {
+  const ref = normalizeProjectRef(projectIdOrUrl);
+  if (!ref) {
+    return '';
+  }
+
+  return `https://${ref}.supabase.co`;
 }
 
 function getDerivedPushApiUrl(projectIdOrUrl?: string) {
@@ -1389,6 +1406,155 @@ export async function initializeCloudSyncRemoteSchema(
     projectRef,
     appliedScripts,
   };
+}
+
+export async function listCloudSyncCollaborators(
+  fyo: Fyo
+): Promise<CollaboratorRow[]> {
+  const config = getWorkerConfig(fyo);
+  const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
+  if (!baseUrl || !config.token || !config.companyId) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const endpoint = `${baseUrl}/rest/v1/company_users_with_profile?company_id=eq.${encodeURIComponent(
+    config.companyId
+  )}&select=user_id,role,email,full_name,created_at&order=created_at.asc`;
+  const response = (await sendAPIRequest(endpoint, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      apikey: config.token,
+    },
+  })) as CollaboratorRow[] | { error?: string } | null;
+
+  if (!response) {
+    return [];
+  }
+
+  if (!Array.isArray(response)) {
+    throw new Error(
+      (response as { error?: string }).error ?? 'Invalid response'
+    );
+  }
+
+  return response;
+}
+
+export async function inviteCloudSyncCollaborator(
+  fyo: Fyo,
+  email: string,
+  role: 'owner' | 'editor' = 'editor'
+) {
+  const config = getWorkerConfig(fyo);
+  const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
+  if (!baseUrl || !config.token || !config.companyId) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const inviteEmail = String(email ?? '')
+    .trim()
+    .toLowerCase();
+  if (!inviteEmail) {
+    throw new Error('Invite email is required');
+  }
+
+  const payload = {
+    target_company: config.companyId,
+    invite_email: inviteEmail,
+    invite_role: role,
+  };
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${config.token}`,
+    apikey: config.token,
+  };
+  let response: { error?: string } | string | null = null;
+
+  // Preferred path: edge function can invite missing users via magic link.
+  try {
+    response = (await sendAPIRequest(`${baseUrl}/functions/v1/invite-user`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        companyId: config.companyId,
+        email: inviteEmail,
+        role,
+        accessToken: config.token,
+      }),
+    })) as { error?: string } | string | null;
+
+    if (response && typeof response === 'object' && 'error' in response) {
+      throw new Error(response.error ?? 'Invite failed');
+    }
+    return response;
+  } catch (edgeError) {
+    const edgeMessage = String(
+      (edgeError as Error)?.message ?? edgeError ?? ''
+    ).toLowerCase();
+
+    // Fall back to SQL RPC path if function is unavailable.
+    const canFallbackToRpc =
+      edgeMessage.includes('404') ||
+      edgeMessage.includes('not found') ||
+      edgeMessage.includes('function');
+    if (!canFallbackToRpc) {
+      throw edgeError;
+    }
+  }
+
+  try {
+    response = (await sendAPIRequest(
+      `${baseUrl}/rest/v1/rpc/admin_invite_company_user`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }
+    )) as { error?: string } | string | null;
+  } catch (error) {
+    const message = String(
+      (error as Error)?.message ?? error ?? ''
+    ).toLowerCase();
+
+    if (message.includes('user not found for email')) {
+      throw new Error(
+        'Collaborator email does not exist in this Supabase project yet. Ask that user to sign up/login once (mobile or web auth), then invite again.'
+      );
+    }
+
+    const adminRpcMissing =
+      message.includes('pgrst202') &&
+      message.includes('admin_invite_company_user');
+
+    if (!adminRpcMissing) {
+      throw error;
+    }
+
+    // Backward compatibility: older remotes only have owner-auth RPC.
+    try {
+      response = (await sendAPIRequest(
+        `${baseUrl}/rest/v1/rpc/invite_company_user`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        }
+      )) as { error?: string } | string | null;
+    } catch (fallbackError) {
+      throw new Error(
+        `Collaborator invite RPC is not ready on remote. Run Initialize Remote (Admin) from desktop settings, then retry. Original error: ${
+          (fallbackError as Error).message
+        }`
+      );
+    }
+  }
+
+  if (response && typeof response === 'object' && 'error' in response) {
+    throw new Error(response.error ?? 'Invite failed');
+  }
+
+  return response;
 }
 
 async function getOrCreateCursor(

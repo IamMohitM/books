@@ -42,6 +42,94 @@
               t`Use this flow: 1) Save sync settings, 2) Click Sync Now for first-time enrollment and regular sync, 3) Open mobile app with the same company.`
             }}
           </div>
+          <div class="mb-3 p-2 rounded border dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-2">
+              {{ t`Where to get Sync values (Supabase)` }}
+            </div>
+            <div class="text-gray-700 dark:text-gray-200">
+              <div>
+                1.
+                <span class="font-semibold">{{ t`Sync Project ID` }}</span
+                >:
+                {{
+                  t`Supabase Dashboard -> Settings -> General -> Reference ID (project ref).`
+                }}
+              </div>
+              <div class="mt-1">
+                2.
+                <span class="font-semibold">{{ t`Sync Company ID` }}</span
+                >:
+                {{
+                  t`Generate in this screen (Generate button), or copy an existing company UUID from table public.companies.id.`
+                }}
+              </div>
+              <div class="mt-1">
+                3.
+                <span class="font-semibold">{{ t`Sync Auth Token` }}</span
+                >:
+                {{
+                  t`Supabase Dashboard -> Settings -> API -> service_role key.`
+                }}
+              </div>
+            </div>
+            <div class="mt-2 text-gray-600 dark:text-gray-300">
+              {{
+                t`Important: Sync Auth Token should be service_role for desktop sync/initialization. Mobile app should use publishable/anon key, not service_role.`
+              }}
+            </div>
+          </div>
+          <div class="mb-3 p-2 rounded border dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-2">{{ t`Connected Projects` }}</div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <select
+                v-model="projectProfiles.activeId"
+                class="
+                  px-2
+                  py-1
+                  border
+                  rounded
+                  text-sm
+                  bg-white
+                  dark:bg-gray-890 dark:border-gray-700
+                "
+                @change="onProjectProfileChange"
+              >
+                <option value="">{{ t`Select project` }}</option>
+                <option
+                  v-for="profile in projectProfiles.rows"
+                  :key="profile.id"
+                  :value="profile.id"
+                >
+                  {{ profile.companyName || profile.label }}
+                </option>
+              </select>
+              <input
+                v-model="projectProfiles.labelInput"
+                type="text"
+                class="
+                  px-2
+                  py-1
+                  border
+                  rounded
+                  text-sm
+                  bg-white
+                  dark:bg-gray-890 dark:border-gray-700
+                "
+                :placeholder="t`Project name (example: Main Company)`"
+              />
+              <Button class="text-xs" @click="saveCurrentAsProjectProfile">
+                {{ t`Save Project` }}
+              </Button>
+              <Button class="text-xs" @click="removeActiveProjectProfile">
+                {{ t`Delete Project` }}
+              </Button>
+            </div>
+            <div class="mt-1 text-gray-600 dark:text-gray-300">
+              {{
+                t`Use this only if you manage multiple companies/projects. If you use one project, you can ignore this section.`
+              }}
+            </div>
+          </div>
           <div class="mb-3 flex flex-wrap gap-2">
             <Button class="text-xs" @click="syncNow">
               {{ t`Sync Now` }}
@@ -168,6 +256,78 @@
             class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
           >
             {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
+          </div>
+          <div
+            v-if="canManageCollaborators"
+            class="mt-3 pt-3 border-t dark:border-gray-800 text-xs"
+          >
+            <div class="font-semibold mb-2">{{ t`Collaborators` }}</div>
+            <div class="flex flex-wrap gap-2 items-center mb-2">
+              <input
+                v-model="collaborators.email"
+                type="email"
+                class="
+                  px-2
+                  py-1
+                  border
+                  rounded
+                  text-sm
+                  bg-white
+                  dark:bg-gray-890 dark:border-gray-700
+                "
+                :placeholder="t`user@email.com`"
+                :disabled="collaborators.inviting"
+              />
+              <select
+                v-model="collaborators.role"
+                class="
+                  px-2
+                  py-1
+                  border
+                  rounded
+                  text-sm
+                  bg-white
+                  dark:bg-gray-890 dark:border-gray-700
+                "
+                :disabled="collaborators.inviting"
+              >
+                <option value="editor">{{ t`Editor` }}</option>
+                <option value="owner">{{ t`Owner` }}</option>
+              </select>
+              <Button
+                class="text-xs"
+                :disabled="collaborators.inviting"
+                @click="inviteCollaboratorNow"
+              >
+                {{
+                  collaborators.inviting
+                    ? t`Inviting...`
+                    : t`Invite Collaborator`
+                }}
+              </Button>
+              <Button
+                class="text-xs"
+                :disabled="collaborators.loading || collaborators.inviting"
+                @click="loadCollaborators"
+              >
+                {{ collaborators.loading ? t`Loading...` : t`Refresh` }}
+              </Button>
+            </div>
+            <div
+              v-if="!collaborators.rows.length"
+              class="text-gray-600 dark:text-gray-300"
+            >
+              {{ t`No collaborators yet.` }}
+            </div>
+            <div v-else class="space-y-1">
+              <div
+                v-for="row in collaborators.rows"
+                :key="`${row.user_id}-${row.role}`"
+                class="text-gray-700 dark:text-gray-200"
+              >
+                {{ row.full_name || row.email || row.user_id }} ({{ row.role }})
+              </div>
+            </div>
           </div>
           <div
             v-if="showDevClearRemoteButton"
@@ -370,7 +530,9 @@ import {
   clearCloudSyncRemoteCompanyData,
   exportCloudSyncDiagnostics,
   flushCloudSyncOutbox,
+  inviteCloudSyncCollaborator,
   initializeCloudSyncRemoteSchema,
+  listCloudSyncCollaborators,
   pauseCloudSync,
   resumeCloudSync,
   runCloudSyncCycle,
@@ -442,6 +604,31 @@ export default defineComponent({
         token: '',
         running: false,
       },
+      collaborators: {
+        loading: false,
+        inviting: false,
+        email: '',
+        role: 'editor' as 'owner' | 'editor',
+        rows: [] as Array<{
+          user_id: string;
+          role: string;
+          email: string | null;
+          full_name: string | null;
+          created_at: string;
+        }>,
+      },
+      projectProfiles: {
+        rows: [] as Array<{
+          id: string;
+          label: string;
+          projectId: string;
+          companyId: string;
+          companyName: string;
+          authToken: string;
+        }>,
+        activeId: '',
+        labelInput: '',
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -486,6 +673,31 @@ export default defineComponent({
         open: boolean;
         token: string;
         running: boolean;
+      };
+      collaborators: {
+        loading: boolean;
+        inviting: boolean;
+        email: string;
+        role: 'owner' | 'editor';
+        rows: Array<{
+          user_id: string;
+          role: string;
+          email: string | null;
+          full_name: string | null;
+          created_at: string;
+        }>;
+      };
+      projectProfiles: {
+        rows: Array<{
+          id: string;
+          label: string;
+          projectId: string;
+          companyId: string;
+          companyName: string;
+          authToken: string;
+        }>;
+        activeId: string;
+        labelInput: string;
       };
     };
   },
@@ -576,6 +788,9 @@ export default defineComponent({
     showAdvancedSyncFields(): boolean {
       return !!this.fyo.store.isDevelopment;
     },
+    canManageCollaborators(): boolean {
+      return this.showCloudSyncPanel && this.syncSetupMissing.length === 0;
+    },
     bootstrapProgressPercent(): number {
       if (!this.bootstrap.running) {
         return 0;
@@ -628,6 +843,7 @@ export default defineComponent({
     }
 
     docsPathRef.value = docsPathMap.Settings ?? '';
+    void this.hydrateProjectProfilesFromSettings();
     void this.refreshCloudSyncStatus();
     this.shortcuts?.pmod.set(COMPONENT_NAME, ['KeyS'], async () => {
       if (!this.canSave) {
@@ -682,6 +898,8 @@ export default defineComponent({
       this.update();
     },
     async sync(): Promise<void> {
+      this.syncActiveProjectProfileFromCurrentSettings();
+      await this.persistProjectProfilesToSystemSettings();
       await this.normalizeSyncModeForProductionUx();
 
       const syncableDocs = this.schemas
@@ -758,6 +976,324 @@ export default defineComponent({
       ) {
         await this.generateCompanyIdNow();
       }
+    },
+    getSystemSettingsDoc():
+      | (Doc & {
+          syncProjectId?: string;
+          syncCompanyId?: string;
+          syncAuthToken?: string;
+          syncProjectProfiles?: string;
+          syncActiveProjectProfileId?: string;
+        })
+      | null {
+      return (
+        (this.fyo.singles.SystemSettings as
+          | (Doc & {
+              syncProjectId?: string;
+              syncCompanyId?: string;
+              syncAuthToken?: string;
+              syncProjectProfiles?: string;
+              syncActiveProjectProfileId?: string;
+            })
+          | undefined) ?? null
+      );
+    },
+    parseProjectProfiles(raw: string | undefined) {
+      if (!raw) {
+        return [] as Array<{
+          id: string;
+          label: string;
+          projectId: string;
+          companyId: string;
+          companyName: string;
+          authToken: string;
+        }>;
+      }
+
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+        return parsed
+          .map((row) => ({
+            id: String((row as { id?: string }).id ?? ''),
+            label: String((row as { label?: string }).label ?? '').trim(),
+            projectId: String(
+              (row as { projectId?: string; syncProjectId?: string })
+                .projectId ??
+                (row as { syncProjectId?: string }).syncProjectId ??
+                ''
+            ).trim(),
+            companyId: String(
+              (row as { companyId?: string; syncCompanyId?: string })
+                .companyId ??
+                (row as { syncCompanyId?: string }).syncCompanyId ??
+                ''
+            ).trim(),
+            companyName: String(
+              (row as { companyName?: string }).companyName ?? ''
+            ).trim(),
+            authToken: String(
+              (row as { authToken?: string; syncAuthToken?: string })
+                .authToken ??
+                (row as { syncAuthToken?: string }).syncAuthToken ??
+                ''
+            ).trim(),
+          }))
+          .filter((row) => row.id && row.projectId);
+      } catch {
+        return [];
+      }
+    },
+    getDefaultProjectProfileLabel(
+      projectId: string,
+      companyId: string
+    ): string {
+      const currentCompanyName = String(
+        (
+          this.fyo.singles.AccountingSettings as
+            | { companyName?: string }
+            | undefined
+        )?.companyName ?? ''
+      ).trim();
+      if (currentCompanyName) {
+        return currentCompanyName;
+      }
+
+      const cleanProject = String(projectId ?? '').trim();
+      const cleanCompany = String(companyId ?? '').trim();
+      if (cleanCompany) {
+        return `Company ${cleanCompany.slice(0, 8)}`;
+      }
+      if (cleanProject) {
+        return `Project ${cleanProject.slice(0, 8)}`;
+      }
+      return 'Project';
+    },
+    async hydrateProjectProfilesFromSettings(): Promise<void> {
+      const ss = this.getSystemSettingsDoc();
+      if (!ss) {
+        return;
+      }
+
+      const parsed = this.parseProjectProfiles(ss.syncProjectProfiles);
+      if (!parsed.length && ss.syncProjectId) {
+        const legacyId =
+          typeof crypto?.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const label = this.getDefaultProjectProfileLabel(
+          String(ss.syncProjectId ?? ''),
+          String(ss.syncCompanyId ?? '')
+        );
+        this.projectProfiles.rows = [
+          {
+            id: legacyId,
+            label,
+            projectId: String(ss.syncProjectId ?? ''),
+            companyId: String(ss.syncCompanyId ?? ''),
+            companyName: String(
+              (
+                this.fyo.singles.AccountingSettings as
+                  | { companyName?: string }
+                  | undefined
+              )?.companyName ?? ''
+            ).trim(),
+            authToken: String(ss.syncAuthToken ?? ''),
+          },
+        ];
+        this.projectProfiles.activeId = legacyId;
+        this.projectProfiles.labelInput = label;
+        await this.persistProjectProfilesToSystemSettings();
+        return;
+      }
+
+      this.projectProfiles.rows = parsed;
+      this.projectProfiles.activeId = String(
+        ss.syncActiveProjectProfileId ??
+          parsed[0]?.id ??
+          this.projectProfiles.activeId ??
+          ''
+      );
+      this.projectProfiles.labelInput =
+        parsed.find((row) => row.id === this.projectProfiles.activeId)
+          ?.companyName ??
+        parsed.find((row) => row.id === this.projectProfiles.activeId)?.label ??
+        this.projectProfiles.labelInput;
+      await this.applyActiveProjectProfileToSettings();
+    },
+    async persistProjectProfilesToSystemSettings(): Promise<void> {
+      const ss = this.getSystemSettingsDoc();
+      if (!ss) {
+        return;
+      }
+
+      await ss.set(
+        'syncProjectProfiles',
+        JSON.stringify(this.projectProfiles.rows, null, 2)
+      );
+      await ss.set(
+        'syncActiveProjectProfileId',
+        this.projectProfiles.activeId || ''
+      );
+      await this.applyActiveProjectProfileToSettings();
+    },
+    syncActiveProjectProfileFromCurrentSettings(): void {
+      const ss = this.getSystemSettingsDoc();
+      if (!ss || !this.projectProfiles.activeId) {
+        return;
+      }
+
+      const activeIndex = this.projectProfiles.rows.findIndex(
+        (row) => row.id === this.projectProfiles.activeId
+      );
+      if (activeIndex < 0) {
+        return;
+      }
+
+      const projectId = String(ss.syncProjectId ?? '').trim();
+      const companyId = String(ss.syncCompanyId ?? '').trim();
+      const authToken = String(ss.syncAuthToken ?? '').trim();
+      const existing = this.projectProfiles.rows[activeIndex]!;
+      const label =
+        String(this.projectProfiles.labelInput ?? '').trim() ||
+        existing.companyName ||
+        existing.label ||
+        this.getDefaultProjectProfileLabel(projectId, companyId);
+
+      this.projectProfiles.rows[activeIndex] = {
+        ...existing,
+        label,
+        companyName: label,
+        projectId,
+        companyId,
+        authToken,
+      };
+    },
+    async applyActiveProjectProfileToSettings(): Promise<void> {
+      const ss = this.getSystemSettingsDoc();
+      if (!ss) {
+        return;
+      }
+
+      const active = this.projectProfiles.rows.find(
+        (row) => row.id === this.projectProfiles.activeId
+      );
+      if (!active) {
+        return;
+      }
+
+      await ss.set('syncProjectId', active.projectId);
+      await ss.set('syncCompanyId', active.companyId);
+      await ss.set('syncAuthToken', active.authToken);
+    },
+    async onProjectProfileChange(): Promise<void> {
+      const selected = this.projectProfiles.rows.find(
+        (row) => row.id === this.projectProfiles.activeId
+      );
+      this.projectProfiles.labelInput =
+        selected?.companyName || selected?.label || '';
+      await this.persistProjectProfilesToSystemSettings();
+      this.update();
+      await this.refreshCloudSyncStatus();
+    },
+    async saveCurrentAsProjectProfile(): Promise<void> {
+      const ss = this.getSystemSettingsDoc();
+      if (!ss) {
+        return;
+      }
+
+      const projectId = String(ss.syncProjectId ?? '').trim();
+      const companyId = String(ss.syncCompanyId ?? '').trim();
+      const authToken = String(ss.syncAuthToken ?? '').trim();
+      if (!projectId || !companyId || !authToken) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Fill Sync Project ID, Sync Company ID, and Sync Auth Token before saving a profile.`,
+        });
+        return;
+      }
+
+      const label =
+        String(this.projectProfiles.labelInput ?? '').trim() ||
+        this.getDefaultProjectProfileLabel(projectId, companyId);
+      const companyName = label;
+
+      const existingIndex = this.projectProfiles.rows.findIndex(
+        (row) =>
+          row.id === this.projectProfiles.activeId ||
+          row.projectId === projectId
+      );
+
+      if (existingIndex >= 0) {
+        this.projectProfiles.rows[existingIndex] = {
+          ...this.projectProfiles.rows[existingIndex]!,
+          label,
+          projectId,
+          companyId,
+          companyName,
+          authToken,
+        };
+        this.projectProfiles.activeId =
+          this.projectProfiles.rows[existingIndex]!.id;
+      } else {
+        const id =
+          typeof crypto?.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        this.projectProfiles.rows.push({
+          id,
+          label,
+          projectId,
+          companyId,
+          companyName,
+          authToken,
+        });
+        this.projectProfiles.activeId = id;
+      }
+
+      await this.persistProjectProfilesToSystemSettings();
+      showToast({
+        type: 'success',
+        message: this.t`Project profile saved. Click Save to persist settings.`,
+      });
+    },
+    async removeActiveProjectProfile(): Promise<void> {
+      if (!this.projectProfiles.activeId) {
+        return;
+      }
+
+      const shouldDelete = (await showDialog({
+        title: this.t`Remove active project profile?`,
+        detail: this
+          .t`This removes only local profile metadata. Remote data is unchanged.`,
+        type: 'warning',
+        buttons: [
+          { label: this.t`Remove`, isPrimary: true, action: () => true },
+          { label: this.t`Cancel`, isEscape: true, action: () => false },
+        ],
+      })) as boolean;
+
+      if (!shouldDelete) {
+        return;
+      }
+
+      this.projectProfiles.rows = this.projectProfiles.rows.filter(
+        (row) => row.id !== this.projectProfiles.activeId
+      );
+      this.projectProfiles.activeId = this.projectProfiles.rows[0]?.id ?? '';
+      this.projectProfiles.labelInput =
+        this.projectProfiles.rows[0]?.companyName ??
+        this.projectProfiles.rows[0]?.label ??
+        '';
+      await this.persistProjectProfilesToSystemSettings();
+      showToast({
+        type: 'success',
+        message: this.t`Project profile removed.`,
+      });
+      await this.refreshCloudSyncStatus();
     },
     update(): void {
       this.updateGroupedFields();
@@ -837,6 +1373,63 @@ export default defineComponent({
             syncState.lastDryRunSummary ??
             this.t`Dry run completed. Use Run Dry Run for latest checks.`,
         };
+      }
+
+      if (this.canManageCollaborators) {
+        await this.loadCollaborators();
+      } else {
+        this.collaborators.rows = [];
+      }
+    },
+    async loadCollaborators(): Promise<void> {
+      if (!this.canManageCollaborators || this.collaborators.loading) {
+        return;
+      }
+
+      this.collaborators.loading = true;
+      try {
+        this.collaborators.rows = await listCloudSyncCollaborators(this.fyo);
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      } finally {
+        this.collaborators.loading = false;
+      }
+    },
+    async inviteCollaboratorNow(): Promise<void> {
+      const email = String(this.collaborators.email ?? '')
+        .trim()
+        .toLowerCase();
+      if (!email) {
+        showToast({
+          type: 'error',
+          message: this.t`Enter collaborator email.`,
+        });
+        return;
+      }
+
+      this.collaborators.inviting = true;
+      try {
+        await inviteCloudSyncCollaborator(
+          this.fyo,
+          email,
+          this.collaborators.role
+        );
+        this.collaborators.email = '';
+        await this.loadCollaborators();
+        showToast({
+          type: 'success',
+          message: this.t`Collaborator invited.`,
+        });
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      } finally {
+        this.collaborators.inviting = false;
       }
     },
     initializeRemoteNow(): void {

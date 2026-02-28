@@ -185,6 +185,11 @@ export default function registerIpcMainActionListeners(main: Main) {
         relativePath:
           'supabase/migrations/20260225221500_change_log_payload_key_fallbacks.sql',
       },
+      {
+        name: 'migration_admin_invite_company_user',
+        relativePath:
+          'supabase/migrations/20260226110000_add_admin_invite_company_user.sql',
+      },
     ];
 
     const scripts = scriptSpecs.map((spec) => {

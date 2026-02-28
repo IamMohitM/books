@@ -32,42 +32,13 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? req.headers.get('authorization') ?? '';
     const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : authHeader;
     const token = headerToken || accessTokenFromBody || '';
+    const isServiceRoleToken = token === serviceRoleKey;
 
     if (!token) {
       return new Response(JSON.stringify({ error: 'Unauthorized: missing access token.' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-    }
-
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    const fallback =
-      userError || !user
-        ? await userClient.auth.getUser(token)
-        : { data: { user }, error: userError };
-
-    if (fallback.error || !fallback.data.user) {
-      const tokenSource = headerToken ? 'header' : accessTokenFromBody ? 'body' : 'unknown';
-      return new Response(
-        JSON.stringify({
-          error: 'Unauthorized: invalid user token.',
-          token_source: tokenSource,
-          token_length: token.length,
-          auth_error: fallback.error?.message ?? 'unknown',
-        }),
-        {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
     }
 
     if (!companyId || !inviteEmail) {
@@ -78,19 +49,50 @@ serve(async (req) => {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    const { data: ownerRow, error: ownerError } = await adminClient
-      .from('company_users')
-      .select('role')
-      .eq('company_id', companyId)
-      .eq('user_id', fallback.data.user.id)
-      .maybeSingle();
-
-    if (ownerError || !ownerRow || ownerRow.role !== 'owner') {
-      return new Response(JSON.stringify({ error: 'Only owners can invite collaborators.' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (!isServiceRoleToken) {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
       });
+
+      const {
+        data: { user },
+        error: userError,
+      } = await userClient.auth.getUser();
+
+      const fallback =
+        userError || !user
+          ? await userClient.auth.getUser(token)
+          : { data: { user }, error: userError };
+
+      if (fallback.error || !fallback.data.user) {
+        const tokenSource = headerToken ? 'header' : accessTokenFromBody ? 'body' : 'unknown';
+        return new Response(
+          JSON.stringify({
+            error: 'Unauthorized: invalid user token.',
+            token_source: tokenSource,
+            token_length: token.length,
+            auth_error: fallback.error?.message ?? 'unknown',
+          }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: ownerRow, error: ownerError } = await adminClient
+        .from('company_users')
+        .select('role')
+        .eq('company_id', companyId)
+        .eq('user_id', fallback.data.user.id)
+        .maybeSingle();
+
+      if (ownerError || !ownerRow || ownerRow.role !== 'owner') {
+        return new Response(JSON.stringify({ error: 'Only owners can invite collaborators.' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     let targetUserId: string | null = null;

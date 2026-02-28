@@ -21,6 +21,8 @@ export default class SystemSettings extends Doc {
   syncEnabled?: boolean;
   syncMode?: 'off' | 'pilot' | 'on';
   syncProjectId?: string;
+  syncProjectProfiles?: string;
+  syncActiveProjectProfileId?: string;
   syncCompanyId?: string;
   syncDeviceId?: string;
   syncApiUrl?: string;
