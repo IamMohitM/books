@@ -9,6 +9,18 @@
 - Supabase becomes shared cloud source of truth.
 - Desktop remains local-first with sync engine (outbox + inbox).
 - Sync is opt-in per company/environment via feature flag.
+- One Supabase project maps to one company ledger/account.
+- Client apps maintain a local project-profile registry (free-tier friendly) to allow one user to access multiple isolated projects.
+
+## Multi-Project Access (Free Tier Friendly)
+- No central multi-tenant database is required.
+- Each project remains fully isolated (`auth`, `company_users`, accounting data).
+- Desktop/mobile store project profiles locally:
+  - `project_ref` (or URL),
+  - publishable key (mobile),
+  - sync token + company id (desktop sync operator path).
+- User selects active project profile, and all reads/writes/sync operations are scoped to that project only.
+- Profile system is designed to scale beyond 2 projects later without schema redesign.
 
 ## Core Components
 

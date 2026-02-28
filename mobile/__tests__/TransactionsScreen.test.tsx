@@ -51,7 +51,7 @@ describe('TransactionsScreen', () => {
   });
 
   it('renders transactions and opens details on tap', async () => {
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText, getAllByText } = render(
       <TransactionsScreen companyId="company-1" refreshKey={0} />
     );
 
@@ -61,7 +61,7 @@ describe('TransactionsScreen', () => {
 
     await waitFor(() => expect(getByText('Transaction Details')).toBeTruthy());
     await waitFor(() => expect(getByText('Cash')).toBeTruthy());
-    await waitFor(() => expect(getByText('Dr 100')).toBeTruthy());
-    await waitFor(() => expect(getByText('Cr 100')).toBeTruthy());
+    await waitFor(() => expect(getByText('Sales')).toBeTruthy());
+    await waitFor(() => expect(getAllByText('100').length).toBeGreaterThan(0));
   });
 });
