@@ -28,10 +28,14 @@ for select using (
   )
 );
 
--- Companies: members can read
+-- Companies: members can read, service_role can create during sync
 drop policy if exists "companies_select_member" on public.companies;
 create policy "companies_select_member" on public.companies
 for select using (public.is_company_member(id));
+
+drop policy if exists "companies_insert_service_role" on public.companies;
+create policy "companies_insert_service_role" on public.companies
+for insert with check (true);
 
 -- Company users: members can read, owners can add
 drop policy if exists "company_users_select_member" on public.company_users;

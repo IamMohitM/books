@@ -22,6 +22,15 @@ create table if not exists public.company_users (
   primary key (company_id, user_id)
 );
 
+create table if not exists public.company_user_invitations (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  email text not null,
+  role text not null default 'editor',
+  created_at timestamptz not null default now(),
+  unique(company_id, email)
+);
+
 create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -337,6 +346,19 @@ begin
   insert into public.profiles (id, email)
   values (new.id, new.email)
   on conflict (id) do nothing;
+
+  -- Auto-add user to companies they were invited to
+  insert into public.company_users (company_id, user_id, role)
+  select company_id, new.id, role
+  from public.company_user_invitations
+  where lower(email) = lower(new.email)
+  on conflict (company_id, user_id) do update
+    set role = excluded.role;
+
+  -- Clean up invitations for this email
+  delete from public.company_user_invitations
+  where lower(email) = lower(new.email);
+
   return new;
 end;
 $$;
