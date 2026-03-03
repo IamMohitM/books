@@ -65,19 +65,45 @@ export default function App() {
       return;
     }
 
-    const client = setActiveMobileProfile(selectedProfileId);
-    client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    let mounted = true;
+    const setupProfile = async () => {
+      const client = await setActiveMobileProfile(selectedProfileId);
+      if (!mounted) return;
 
-    const { data: listener } = client.auth.onAuthStateChange(
-      (_event, newSession) => {
-        setSession(newSession);
+      const { data } = await client.auth.getSession();
+      if (mounted) {
+        setSession(data.session);
       }
-    );
 
+      const { data: listener } = client.auth.onAuthStateChange(
+        (_event, newSession) => {
+          if (mounted) {
+            setSession(newSession);
+          }
+        }
+      );
+
+      // Also manually check for session in case listener doesn't fire immediately
+      // This is especially important for signup which creates a session
+      const checkSessionInterval = setInterval(async () => {
+        if (!mounted) return;
+        const { data } = await client.auth.getSession();
+        if (mounted && data.session !== null) {
+          setSession(data.session);
+          clearInterval(checkSessionInterval);
+        }
+      }, 500);
+
+      return () => {
+        listener.subscription?.unsubscribe();
+        clearInterval(checkSessionInterval);
+      };
+    };
+
+    const subscriptionPromise = setupProfile();
     return () => {
-      listener.subscription.unsubscribe();
+      mounted = false;
+      subscriptionPromise.then((sub) => sub?.unsubscribe());
     };
   }, [profilesReady, selectedProfileId]);
 
@@ -106,6 +132,7 @@ export default function App() {
         anonKey: newProjectKey,
         label: newProjectLabel,
       });
+      await setActiveMobileProfile(profile.id);
       await persistMobileProjectProfilesToDisk();
       setSelectedProfileId(profile.id);
       setProfilesVersion((v) => v + 1);
@@ -130,14 +157,27 @@ export default function App() {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
-            await resetMobileProjectProfilesToDefault();
-            const first = mobileProjectProfiles[0];
-            if (first) {
-              setSelectedProfileId(first.id);
+            try {
+              await resetMobileProjectProfilesToDefault();
+
+              // Force complete refresh
+              const first = mobileProjectProfiles[0];
+              if (first) {
+                setSelectedProfileId(first.id);
+              }
+              setSession(null);
+              setProfilesVersion((v) => v + 1);
+
+              Alert.alert(
+                'Profiles Reset',
+                'All saved profiles cleared. App has been refreshed to default profile.'
+              );
+            } catch (error) {
+              Alert.alert(
+                'Reset Failed',
+                `Could not complete reset: ${(error as Error).message}`
+              );
             }
-            setSession(null);
-            setProfilesVersion((v) => v + 1);
-            Alert.alert('Profiles reset', 'Saved project profiles were cleared.');
           },
         },
       ]
@@ -174,7 +214,10 @@ export default function App() {
                         styles.profileChip,
                         active && styles.profileChipActive,
                       ]}
-                      onPress={() => setSelectedProfileId(profile.id)}
+                      onPress={() => {
+                        void setActiveMobileProfile(profile.id);
+                        setSelectedProfileId(profile.id);
+                      }}
                     >
                       <Text
                         style={[
@@ -201,7 +244,7 @@ export default function App() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Publishable/anon key"
+              placeholder="Legacy Anon Key (not Secret Key)"
               autoCapitalize="none"
               value={newProjectKey}
               onChangeText={setNewProjectKey}

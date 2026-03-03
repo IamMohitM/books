@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type MobileProjectProfile = {
   id: string;
@@ -18,6 +19,7 @@ export type MobileProjectValidationResult = {
 const PROFILE_STORE_FILE = `${
   FileSystem.documentDirectory ?? 'file:///tmp/'
 }sync-project-profiles.json`;
+const PROFILE_VALIDATION_TIMEOUT_MS = 6_000;
 
 function getExpoEnv(name: string): string {
   const env = (
@@ -136,10 +138,18 @@ function mergeProfiles(
 
 const envProfiles = parseProfilesFromEnv();
 export let mobileProjectProfiles: MobileProjectProfile[] = [...envProfiles];
+let profilesEpoch = 0;
 
 function createSupabaseClient(url: string, key: string): SupabaseClient {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  return createClient(url, key) as unknown as SupabaseClient;
+  return createClient(url, key, {
+    auth: {
+      storage: AsyncStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }) as unknown as SupabaseClient;
 }
 
 function generateLocalId() {
@@ -163,14 +173,27 @@ export let supabase: SupabaseClient = createSupabaseClient(
 export let supabasePublicAnonKey = activeProfile.anonKey;
 export let supabasePublicUrl = activeProfile.url;
 
+export function getSupabaseClient(): SupabaseClient {
+  return supabase;
+}
+
 export function getActiveMobileProfile(): MobileProjectProfile {
   return activeProfile;
 }
 
-export function setActiveMobileProfile(profileId: string): SupabaseClient {
+export async function setActiveMobileProfile(profileId: string): Promise<SupabaseClient> {
   const nextProfile = mobileProjectProfiles.find((p) => p.id === profileId);
   if (!nextProfile) {
     throw new Error(`Unknown profile: ${profileId}`);
+  }
+
+  // Sign out from current client before switching profiles
+  if (supabase && activeProfile.id !== profileId) {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn('Error signing out during profile switch:', error);
+    }
   }
 
   activeProfile = nextProfile;
@@ -182,13 +205,20 @@ export function setActiveMobileProfile(profileId: string): SupabaseClient {
 }
 
 export async function loadMobileProjectProfilesFromDisk() {
+  const startEpoch = profilesEpoch;
   try {
     const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
+    if (startEpoch !== profilesEpoch) {
+      return mobileProjectProfiles;
+    }
     if (!info.exists) {
       return mobileProjectProfiles;
     }
 
     const content = await FileSystem.readAsStringAsync(PROFILE_STORE_FILE);
+    if (startEpoch !== profilesEpoch) {
+      return mobileProjectProfiles;
+    }
     const parsed = JSON.parse(content) as Array<Partial<MobileProjectProfile>>;
     const diskRows: MobileProjectProfile[] = Array.isArray(parsed)
       ? parsed
@@ -206,7 +236,7 @@ export async function loadMobileProjectProfilesFromDisk() {
 
     if (!mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
       activeProfile = mobileProjectProfiles[0]!;
-      setActiveMobileProfile(activeProfile.id);
+      await setActiveMobileProfile(activeProfile.id);
     }
 
     return mobileProjectProfiles;
@@ -223,13 +253,38 @@ export async function persistMobileProjectProfilesToDisk() {
 }
 
 export async function resetMobileProjectProfilesToDefault() {
+  profilesEpoch += 1;
+
+  // Clear in-memory state FIRST
   mobileProjectProfiles =
     envProfiles.length > 0 ? [envProfiles[0]!] : [...envProfiles];
   activeProfile = mobileProjectProfiles[0]!;
-  setActiveMobileProfile(activeProfile.id);
-  await FileSystem.deleteAsync(PROFILE_STORE_FILE, { idempotent: true }).catch(
-    () => undefined
-  );
+  supabasePublicAnonKey = activeProfile.anonKey;
+  supabasePublicUrl = activeProfile.url;
+
+  // Sign out before resetting
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.warn('Error signing out during reset:', error);
+  }
+
+  await setActiveMobileProfile(activeProfile.id);
+
+  // Delete file and VERIFY deletion succeeded
+  try {
+    await FileSystem.deleteAsync(PROFILE_STORE_FILE, { idempotent: true });
+
+    // Verify file was actually deleted
+    const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
+    if (info.exists) {
+      throw new Error('File still exists after deletion');
+    }
+  } catch (error) {
+    console.error('Failed to delete profile store:', error);
+    throw new Error(`Reset failed: ${(error as Error).message}`);
+  }
+
   await persistMobileProjectProfilesToDisk();
   return mobileProjectProfiles;
 }
@@ -257,16 +312,32 @@ export async function validateMobileProjectCredentials(input: {
     };
   }
 
+  // Security check: reject secret keys
+  if (anonKey.startsWith('sb_secret_')) {
+    return {
+      ok: false,
+      normalizedProjectRef,
+      message: 'Invalid key. Use the Legacy Anon Key (or Publishable Key) from Supabase Settings > API Keys, not the Secret Key.',
+    };
+  }
+
   const url = `https://${normalizedProjectRef}.supabase.co`;
 
   try {
-    const response = await fetch(`${url}/auth/v1/settings`, {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      PROFILE_VALIDATION_TIMEOUT_MS
+    );
+    // Use /auth/v1/health endpoint which works with anon keys
+    const response = await fetch(`${url}/auth/v1/health`, {
       method: 'GET',
       headers: {
         apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
       },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (response.ok) {
       return { ok: true, normalizedProjectRef };
@@ -279,7 +350,7 @@ export async function validateMobileProjectCredentials(input: {
         ok: false,
         normalizedProjectRef,
         message:
-          'Invalid API key for this project. Use the legacy anon key from Supabase Settings -> API.',
+          'Invalid API key for this project. Use the legacy anon key from Supabase Settings -> API Keys.',
       };
     }
 
@@ -292,16 +363,29 @@ export async function validateMobileProjectCredentials(input: {
         ok: false,
         normalizedProjectRef,
         message:
-          'Key format is not accepted by this app build. Use the legacy anon key for this project.',
+          'Invalid key format. Use the legacy anon key from Supabase Settings -> API Keys.',
       };
     }
 
     return {
       ok: false,
       normalizedProjectRef,
-      message: `Could not verify project credentials (HTTP ${response.status}).`,
+      message: `Could not verify project (HTTP ${response.status}). Check project ref and key.`,
     };
   } catch (error) {
+    const message = String((error as Error)?.message ?? '');
+    if (
+      message.toLowerCase().includes('aborted') ||
+      message.toLowerCase().includes('timeout')
+    ) {
+      return {
+        ok: false,
+        normalizedProjectRef,
+        message:
+          'Validation timed out. Check network/project ref and try again.',
+      };
+    }
+
     return {
       ok: false,
       normalizedProjectRef,
@@ -349,4 +433,157 @@ export function addOrUpdateMobileProjectProfile(input: {
   };
   mobileProjectProfiles.push(profile);
   return profile;
+}
+
+export type NetworkDiagnostics = {
+  ok: boolean;
+  type: 'success' | 'network_timeout' | 'network_error' | 'isp_blocked';
+  message: string;
+};
+
+export async function testSupabaseConnection(
+  url: string,
+  anonKey: string,
+  timeoutMs: number = 8000
+): Promise<NetworkDiagnostics> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${url}/auth/v1/health`, {
+        method: 'GET',
+        headers: {
+          apikey: anonKey,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        return {
+          ok: true,
+          type: 'success',
+          message: 'Connected to Supabase successfully.',
+        };
+      }
+
+      return {
+        ok: false,
+        type: 'network_error',
+        message: `Supabase health check failed (HTTP ${response.status}).`,
+      };
+    } catch (error) {
+      clearTimeout(timeout);
+      throw error;
+    }
+  } catch (error) {
+    const message = String((error as Error)?.message ?? '').toLowerCase();
+
+    if (
+      message.includes('aborted') ||
+      message.includes('timeout') ||
+      message.includes('timed out')
+    ) {
+      return {
+        ok: false,
+        type: 'network_timeout',
+        message:
+          'Connection timed out. Check your internet or try a different network.',
+      };
+    }
+
+    if (
+      message.includes('network') ||
+      message.includes('dns') ||
+      message.includes('econnrefused') ||
+      message.includes('enotfound')
+    ) {
+      return {
+        ok: false,
+        type: 'isp_blocked',
+        message:
+          'Cannot reach Supabase. Your ISP may be blocking access. Try a VPN.',
+      };
+    }
+
+    return {
+      ok: false,
+      type: 'network_error',
+      message: `Network error: ${(error as Error)?.message ?? 'Unknown error'}`,
+    };
+  }
+}
+
+export type AuthErrorClassification = {
+  type: 'network' | 'timeout' | 'invalid_credentials' | 'other';
+  userMessage: string;
+};
+
+export function classifyAuthError(error: Error | null): AuthErrorClassification {
+  if (!error) {
+    return {
+      type: 'other',
+      userMessage: 'An unknown error occurred.',
+    };
+  }
+
+  const message = String(error.message ?? '').toLowerCase();
+
+  // Network errors
+  if (message.includes('network') || message.includes('failed to fetch')) {
+    return {
+      type: 'network',
+      userMessage: 'Network error. Check your internet connection.',
+    };
+  }
+
+  // Timeout errors
+  if (
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('aborted')
+  ) {
+    return {
+      type: 'timeout',
+      userMessage:
+        'Connection timed out. Check your internet or try a different network.',
+    };
+  }
+
+  // Auth errors
+  if (
+    message.includes('invalid login') ||
+    message.includes('invalid credentials') ||
+    message.includes('incorrect password') ||
+    message.includes('user not found')
+  ) {
+    return {
+      type: 'invalid_credentials',
+      userMessage:
+        "Incorrect password, or user doesn't exist in this project. If new, sign up first.",
+    };
+  }
+
+  // Email not confirmed
+  if (message.includes('email not confirmed')) {
+    return {
+      type: 'other',
+      userMessage:
+        'Email not confirmed yet. Confirm your email first, then sign in.',
+    };
+  }
+
+  // Rate limiting
+  if (message.includes('too many requests')) {
+    return {
+      type: 'other',
+      userMessage: 'Too many attempts. Please wait and try again.',
+    };
+  }
+
+  return {
+    type: 'other',
+    userMessage: error.message,
+  };
 }
