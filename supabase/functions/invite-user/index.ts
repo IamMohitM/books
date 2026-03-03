@@ -99,6 +99,7 @@ serve(async (req) => {
     const adminAuth = adminClient.auth.admin;
     let existingUserId: string | null = null;
 
+    // Check if user already has a Supabase account
     if (adminAuth && typeof adminAuth.getUserByEmail === 'function') {
       const { data: existingUser, error: existingError } = await adminAuth.getUserByEmail(inviteEmail);
       if (!existingError && existingUser?.user) {
@@ -115,33 +116,41 @@ serve(async (req) => {
     }
 
     if (existingUserId) {
+      // User already has account - add them to company
       targetUserId = existingUserId;
-    } else {
-      const { data: invitedUser, error: inviteError } = await adminAuth.inviteUserByEmail(inviteEmail);
+      const { error: upsertError } = await adminClient.from('company_users').upsert({
+        company_id: companyId,
+        user_id: targetUserId,
+        role: inviteRole,
+      });
 
-      if (inviteError || !invitedUser?.user) {
-        return new Response(JSON.stringify({ error: inviteError?.message ?? 'Unable to invite user.' }), {
+      if (upsertError) {
+        return new Response(JSON.stringify({ error: upsertError.message }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      targetUserId = invitedUser.user.id;
+    } else {
+      // User doesn't have account yet - create pending invitation record
+      // They will sign up later and get auto-added to company via the signal/trigger
+      const { data: inviteRecord, error: inviteError } = await adminClient
+        .from('company_user_invitations')
+        .upsert({
+          company_id: companyId,
+          email: inviteEmail,
+          role: inviteRole,
+        })
+        .select();
+
+      if (inviteError || !inviteRecord) {
+        return new Response(JSON.stringify({ error: inviteError?.message ?? 'Unable to create invitation.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
-    const { error: upsertError } = await adminClient.from('company_users').upsert({
-      company_id: companyId,
-      user_id: targetUserId,
-      role: inviteRole,
-    });
-
-    if (upsertError) {
-      return new Response(JSON.stringify({ error: upsertError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ user_id: targetUserId }), {
+    return new Response(JSON.stringify({ user_id: targetUserId ?? null, email: inviteEmail }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
