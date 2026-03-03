@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>com.anonymous.cash-books-mobile</string>
+          <string>com.books.cashbooks</string>
         </array>
       </dict>
     </array>

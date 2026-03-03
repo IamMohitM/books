@@ -9,7 +9,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.cash-books-mobile"
+      "bundleIdentifier": "com.books.cashbooks",
+      "entitlements": {
+        "com.apple.developer.applesignin": false
+      }
     },
     "android": {
       "package": "com.anonymous.cashbooksmobile"
