@@ -133,3 +133,16 @@ export type LoanSnapshot = {
   interestOwed: number;
   totalDue: number;
 };
+
+export type CashInHand = { cashInHand: number };
+
+export type CashInHandSummaryRow = {
+  period: string;
+  periodStart: string;
+  periodEnd: string;
+  openingBalance: number;
+  closingBalance: number;
+  netChange: number;
+};
+
+export type CashInHandSummary = CashInHandSummaryRow[];

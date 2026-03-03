@@ -7,6 +7,8 @@ import { translateSchema } from 'fyo/utils/translation';
 import { Field, RawValue, SchemaMap } from 'schemas/types';
 import { getMapFromList } from 'utils';
 import {
+  CashInHand,
+  CashInHandSummary,
   Cashflow,
   DatabaseBase,
   DatabaseDemuxBase,
@@ -296,6 +298,24 @@ export class DatabaseHandler extends DatabaseBase {
       fromDate,
       toDate
     )) as Cashflow;
+  }
+
+  async getCashInHand(asOfDate: string): Promise<CashInHand> {
+    return (await this.#demux.callBespoke(
+      'getCashInHand',
+      asOfDate
+    )) as CashInHand;
+  }
+
+  async getCashInHandSummary(
+    fromDate: string,
+    toDate: string
+  ): Promise<CashInHandSummary> {
+    return (await this.#demux.callBespoke(
+      'getCashInHandSummary',
+      fromDate,
+      toDate
+    )) as CashInHandSummary;
   }
 
   async getIncomeAndExpenses(

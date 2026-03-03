@@ -117,6 +117,83 @@ export class BespokeQueries {
       .groupBy(dateAsMonthYear)) as Cashflow;
   }
 
+  static async getCashInHand(db: DatabaseCore, asOfDate: string) {
+    const result = (await db.knex!('AccountingLedgerEntry')
+      .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+      .sum({
+        debit: 'AccountingLedgerEntry.debit',
+        credit: 'AccountingLedgerEntry.credit',
+      })
+      .where('AccountingLedgerEntry.reverted', false)
+      .where('AccountingLedgerEntry.date', '<=', asOfDate)
+      .where('Account.accountType', 'Cash')
+      .where('Account.isGroup', false)
+      .first()) as { debit?: number; credit?: number } | undefined;
+
+    const debit = result?.debit ?? 0;
+    const credit = result?.credit ?? 0;
+    const cashInHand = Number(debit) - Number(credit);
+    return { cashInHand };
+  }
+
+  static async getCashInHandSummary(
+    db: DatabaseCore,
+    fromDate: string,
+    toDate: string
+  ) {
+    // Generate month boundaries for the date range
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    const months: {
+      period: string;
+      periodStart: string;
+      periodEnd: string;
+    }[] = [];
+
+    const endOfRange = new Date(to.getFullYear(), to.getMonth() + 1, 0);
+
+    let current = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (current <= endOfRange) {
+      const start = new Date(current.getFullYear(), current.getMonth(), 1);
+      const end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+      const period = start.toLocaleString('default', {
+        month: 'short',
+        year: 'numeric',
+      });
+
+      months.push({ period, periodStart: startStr, periodEnd: endStr });
+
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    }
+
+    // Get opening and closing balances for each month
+    const summary = [];
+
+    for (const month of months) {
+      const opening = await BespokeQueries.getCashInHand(db, month.periodStart);
+      const closing = await BespokeQueries.getCashInHand(db, month.periodEnd);
+
+      const openingBalance = opening.cashInHand;
+      const closingBalance = closing.cashInHand;
+      const netChange = closingBalance - openingBalance;
+
+      summary.push({
+        period: month.period,
+        periodStart: month.periodStart,
+        periodEnd: month.periodEnd,
+        openingBalance,
+        closingBalance,
+        netChange,
+      });
+    }
+
+    return summary;
+  }
+
   static async getIncomeAndExpenses(
     db: DatabaseCore,
     fromDate: string,
@@ -175,8 +252,7 @@ export class BespokeQueries {
     toDate?: string
   ): Promise<LoanLedgerRow[]> {
     await BespokeQueries.ensureLoanLedgerColumns(db);
-    const loanProfileRow = (await db
-      .knex!(ModelNameEnum.LoanProfile)
+    const loanProfileRow = (await db.knex!(ModelNameEnum.LoanProfile)
       .select('liabilityAccount', 'interestExpenseAccount')
       .where('name', loanProfile)
       .first()) as
@@ -185,8 +261,7 @@ export class BespokeQueries {
     const liabilityAccount = loanProfileRow?.liabilityAccount;
     const interestExpenseAccount = loanProfileRow?.interestExpenseAccount;
 
-    const query = db
-      .knex!(ModelNameEnum.AccountingLedgerEntry)
+    const query = db.knex!(ModelNameEnum.AccountingLedgerEntry)
       .select(
         'name',
         'date',
@@ -267,8 +342,7 @@ export class BespokeQueries {
     loanProfileName: string,
     asOfDate: string
   ): Promise<LoanSnapshot | null> {
-    const loanProfile = (await db
-      .knex!(ModelNameEnum.LoanProfile)
+    const loanProfile = (await db.knex!(ModelNameEnum.LoanProfile)
       .select(
         'name',
         'lenderName',
@@ -357,10 +431,11 @@ export class BespokeQueries {
         asOfDate
       );
 
-      const preSystemTotals = await BespokeQueries.getLoanHistoricalPaymentTotals(
-        db,
-        loanProfile.name
-      );
+      const preSystemTotals =
+        await BespokeQueries.getLoanHistoricalPaymentTotals(
+          db,
+          loanProfile.name
+        );
 
       snapshots.push(
         BespokeQueries.computeLoanSnapshot(
@@ -404,16 +479,19 @@ export class BespokeQueries {
 
     const annualRate = Number(loanProfile.annualInterestRate ?? 0);
     const openingPrincipal = Number(loanProfile.openingPrincipal ?? 0);
-    const openingAccruedInterest = Number(loanProfile.openingAccruedInterest ?? 0);
-    const historicalInterestPaid = Number(loanProfile.historicalInterestPaid ?? 0);
+    const openingAccruedInterest = Number(
+      loanProfile.openingAccruedInterest ?? 0
+    );
+    const historicalInterestPaid = Number(
+      loanProfile.historicalInterestPaid ?? 0
+    );
     const includeHistoricalInterestPaid = Boolean(
       loanProfile.includeHistoricalInterestPaid ?? false
     );
     const preSystemInterestPaid =
       historicalInterestPaid + (preSystemTotals?.interestPaid ?? 0);
     const preSystemPrincipalPaid = preSystemTotals?.principalPaid ?? 0;
-    const preSystemPrincipalCredited =
-      preSystemTotals?.principalCredited ?? 0;
+    const preSystemPrincipalCredited = preSystemTotals?.principalCredited ?? 0;
 
     if (asOf.getTime() < start.getTime()) {
       return {
@@ -435,11 +513,14 @@ export class BespokeQueries {
     }
 
     let principalOutstanding = openingPrincipal + preSystemPrincipalCredited;
-    let interestPaid = includeHistoricalInterestPaid ? preSystemInterestPaid : 0;
+    let interestPaid = includeHistoricalInterestPaid
+      ? preSystemInterestPaid
+      : 0;
 
     for (const row of ledgerRows) {
       if (row.loanComponent === 'Principal') {
-        principalOutstanding += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+        principalOutstanding +=
+          Number(row.credit ?? 0) - Number(row.debit ?? 0);
       } else if (row.loanComponent === 'Interest') {
         interestPaid += Number(row.debit ?? 0) - Number(row.credit ?? 0);
       }
@@ -453,7 +534,8 @@ export class BespokeQueries {
       ledgerRows.filter((r) => r.loanComponent === 'Principal')
     );
 
-    const interestOwed = openingAccruedInterest + accruedInterest - interestPaid;
+    const interestOwed =
+      openingAccruedInterest + accruedInterest - interestPaid;
     return {
       loanProfile: loanProfile.name,
       liabilityAccount: loanProfile.liabilityAccount,
@@ -563,7 +645,9 @@ export class BespokeQueries {
 
   static toUtcDate(value: string) {
     const date = new Date(value);
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    return new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    );
   }
 
   static addDays(date: Date, days: number) {
