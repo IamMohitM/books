@@ -70,7 +70,7 @@
                 dark:text-gray-300
               "
             >
-              {{ t`Opening Balance` }}
+              {{ t`Opening` }}
             </th>
             <th
               class="
@@ -82,7 +82,7 @@
                 dark:text-gray-300
               "
             >
-              {{ t`Closing Balance` }}
+              {{ t`Debits` }}
             </th>
             <th
               class="
@@ -94,7 +94,19 @@
                 dark:text-gray-300
               "
             >
-              {{ t`Net Change` }}
+              {{ t`Credits` }}
+            </th>
+            <th
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
+              {{ t`Closing` }}
             </th>
           </tr>
         </thead>
@@ -107,7 +119,9 @@
               dark:border-gray-800
               hover:bg-gray-50
               dark:hover:bg-gray-800
+              cursor-pointer
             "
+            @click="selectMonth(row)"
           >
             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
               {{ row.period }}
@@ -115,19 +129,23 @@
             <td class="px-3 py-2 text-right text-gray-900 dark:text-gray-100">
               {{ fyo.format(row.openingBalance, 'Currency') }}
             </td>
-            <td class="px-3 py-2 text-right text-gray-900 dark:text-gray-100">
-              {{ fyo.format(row.closingBalance, 'Currency') }}
+            <td class="px-3 py-2 text-right text-green-600 dark:text-green-400">
+              {{ fyo.format(row.debits, 'Currency') }}
+            </td>
+            <td class="px-3 py-2 text-right text-red-600 dark:text-red-400">
+              {{ fyo.format(row.credits, 'Currency') }}
             </td>
             <td
-              class="px-3 py-2 text-right"
-              :class="
-                row.netChange >= 0
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-red-600 dark:text-red-400'
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-900
+                dark:text-gray-100
               "
             >
-              {{ row.netChange >= 0 ? '+' : '' }}
-              {{ fyo.format(row.netChange, 'Currency') }}
+              {{ fyo.format(row.closingBalance, 'Currency') }}
             </td>
           </tr>
         </tbody>
@@ -157,6 +175,7 @@ export default defineComponent({
       summaryData: [] as CashInHandSummaryRow[],
       dateRangeFrom: this.getDefaultFromDate(),
       dateRangeTo: this.getDefaultToDate(),
+      selectedMonth: null as CashInHandSummaryRow | null,
       fyo,
     };
   },
@@ -168,13 +187,17 @@ export default defineComponent({
     void this.setData();
   },
   methods: {
+    selectMonth(row: CashInHandSummaryRow) {
+      this.selectedMonth = row;
+      this.$emit('month-selected', row);
+    },
     getDefaultFromDate(): string {
       const today = new Date();
       const year = today.getFullYear();
       const month = today.getMonth();
 
-      // Go back 11 months from today
-      const fromDate = new Date(year, month - 11, 1);
+      // Go back 5 months from today to show last 6 months
+      const fromDate = new Date(year, month - 5, 1);
       const fromYear = fromDate.getFullYear();
       const fromMonth = String(fromDate.getMonth() + 1).padStart(2, '0');
       const fromDay = String(fromDate.getDate()).padStart(2, '0');
@@ -195,6 +218,7 @@ export default defineComponent({
         this.dateRangeTo as string
       );
       this.summaryData = result;
+      this.$emit('data-updated', result);
     },
   },
 });

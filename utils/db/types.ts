@@ -141,8 +141,20 @@ export type CashInHandSummaryRow = {
   periodStart: string;
   periodEnd: string;
   openingBalance: number;
+  debits: number;
+  credits: number;
   closingBalance: number;
   netChange: number;
 };
 
 export type CashInHandSummary = CashInHandSummaryRow[];
+
+export type CashInHandMonthDetail = {
+  periodStart: string;
+  periodEnd: string;
+  openingBalance: number;
+  debits: number;
+  credits: number;
+  closingBalance: number;
+  netChange: number;
+};

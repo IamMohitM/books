@@ -8,6 +8,7 @@ import { Field, RawValue, SchemaMap } from 'schemas/types';
 import { getMapFromList } from 'utils';
 import {
   CashInHand,
+  CashInHandMonthDetail,
   CashInHandSummary,
   Cashflow,
   DatabaseBase,
@@ -316,6 +317,17 @@ export class DatabaseHandler extends DatabaseBase {
       fromDate,
       toDate
     )) as CashInHandSummary;
+  }
+
+  async getCashInHandMonthDetail(
+    periodStart: string,
+    periodEnd: string
+  ): Promise<CashInHandMonthDetail> {
+    return (await this.#demux.callBespoke(
+      'getCashInHandMonthDetail',
+      periodStart,
+      periodEnd
+    )) as CashInHandMonthDetail;
   }
 
   async getIncomeAndExpenses(

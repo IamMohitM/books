@@ -170,28 +170,99 @@ export class BespokeQueries {
       current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
     }
 
-    // Get opening and closing balances for each month
     const summary = [];
+    let previousClosingBalance = 0;
 
+    // For each month, calculate: Opening + Debits - Credits = Closing
     for (const month of months) {
-      const opening = await BespokeQueries.getCashInHand(db, month.periodStart);
-      const closing = await BespokeQueries.getCashInHand(db, month.periodEnd);
+      const openingBalance = previousClosingBalance;
 
-      const openingBalance = opening.cashInHand;
-      const closingBalance = closing.cashInHand;
-      const netChange = closingBalance - openingBalance;
+      // Get all cash account debits and credits for this month
+      const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
+        .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+        .sum({
+          totalDebit: 'AccountingLedgerEntry.debit',
+          totalCredit: 'AccountingLedgerEntry.credit',
+        })
+        .where('AccountingLedgerEntry.reverted', false)
+        .whereBetween('AccountingLedgerEntry.date', [
+          month.periodStart,
+          month.periodEnd,
+        ])
+        .where('Account.accountType', 'Cash')
+        .where('Account.isGroup', false)
+        .first()) as
+        | {
+            totalDebit?: number;
+            totalCredit?: number;
+          }
+        | undefined;
+
+      const debits = monthlyFlow?.totalDebit ?? 0;
+      const credits = monthlyFlow?.totalCredit ?? 0;
+      const closingBalance = openingBalance + Number(debits) - Number(credits);
 
       summary.push({
         period: month.period,
         periodStart: month.periodStart,
         periodEnd: month.periodEnd,
         openingBalance,
+        debits: Number(debits),
+        credits: Number(credits),
         closingBalance,
-        netChange,
+        netChange: closingBalance - openingBalance,
       });
+
+      previousClosingBalance = closingBalance;
     }
 
     return summary;
+  }
+
+  static async getCashInHandMonthDetail(
+    db: DatabaseCore,
+    periodStart: string,
+    periodEnd: string
+  ) {
+    // Get cash balance as of the day before the month starts (opening for this month)
+    const dayBefore = new Date(periodStart);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const dayBeforeStr = dayBefore.toISOString().split('T')[0];
+
+    const openingResult = await BespokeQueries.getCashInHand(db, dayBeforeStr);
+    const openingBalance = openingResult.cashInHand;
+
+    // Get debits and credits for this month
+    const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
+      .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+      .sum({
+        totalDebit: 'AccountingLedgerEntry.debit',
+        totalCredit: 'AccountingLedgerEntry.credit',
+      })
+      .where('AccountingLedgerEntry.reverted', false)
+      .whereBetween('AccountingLedgerEntry.date', [periodStart, periodEnd])
+      .where('Account.accountType', 'Cash')
+      .where('Account.isGroup', false)
+      .first()) as
+      | {
+          totalDebit?: number;
+          totalCredit?: number;
+        }
+      | undefined;
+
+    const debits = monthlyFlow?.totalDebit ?? 0;
+    const credits = monthlyFlow?.totalCredit ?? 0;
+    const closingBalance = openingBalance + Number(debits) - Number(credits);
+
+    return {
+      periodStart,
+      periodEnd,
+      openingBalance,
+      debits: Number(debits),
+      credits: Number(credits),
+      closingBalance,
+      netChange: closingBalance - openingBalance,
+    };
   }
 
   static async getIncomeAndExpenses(
