@@ -286,7 +286,6 @@ async function ensureRemoteCompanyExists(config: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.token}`,
         apikey: config.token,
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
@@ -495,7 +494,6 @@ async function fetchRemoteSyncSnapshot(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
         apikey: token,
       },
       body: JSON.stringify({
@@ -555,7 +553,6 @@ async function sendApplySyncEvent(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
             apikey: token,
           },
           body: JSON.stringify({
@@ -1041,7 +1038,6 @@ export async function clearCloudSyncRemoteCompanyData(fyo: Fyo) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.token}`,
       apikey: config.token,
     },
     body: JSON.stringify({
@@ -1240,7 +1236,6 @@ export async function pullCloudSyncChanges(fyo: Fyo) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.token}`,
       apikey: config.token,
     },
     body: JSON.stringify({
@@ -1423,7 +1418,6 @@ export async function listCloudSyncCollaborators(
   const response = (await sendAPIRequest(endpoint, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${config.token}`,
       apikey: config.token,
     },
   })) as CollaboratorRow[] | { error?: string } | null;
@@ -1466,95 +1460,81 @@ export async function inviteCloudSyncCollaborator(
   };
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.token}`,
     apikey: config.token,
   };
   let response: { error?: string } | string | null = null;
-
-  // Preferred path: edge function can invite missing users via magic link.
-  try {
-    response = (await sendAPIRequest(`${baseUrl}/functions/v1/invite-user`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        companyId: config.companyId,
-        email: inviteEmail,
-        role,
-        accessToken: config.token,
-      }),
-    })) as { error?: string } | string | null;
-
-    if (response && typeof response === 'object' && 'error' in response) {
-      throw new Error(response.error ?? 'Invite failed');
-    }
-    return response;
-  } catch (edgeError) {
-    const edgeMessage = String(
-      (edgeError as Error)?.message ?? edgeError ?? ''
-    ).toLowerCase();
-
-    // Fall back to SQL RPC path if function is unavailable.
-    const canFallbackToRpc =
-      edgeMessage.includes('404') ||
-      edgeMessage.includes('not found') ||
-      edgeMessage.includes('function');
-    if (!canFallbackToRpc) {
-      throw edgeError;
-    }
-  }
-
-  try {
-    response = (await sendAPIRequest(
-      `${baseUrl}/rest/v1/rpc/admin_invite_company_user`,
-      {
+  const inviteAuthUserViaServiceToken = async () => {
+    try {
+      await sendAPIRequest(`${baseUrl}/auth/v1/invite`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          email: inviteEmail,
+        }),
+      });
+      return;
+    } catch (inviteError) {
+      const inviteMessage = String(
+        (inviteError as Error)?.message ?? inviteError ?? ''
+      ).toLowerCase();
+
+      // Safe to continue: user may already exist by the time this runs.
+      if (
+        inviteMessage.includes('already') ||
+        inviteMessage.includes('registered')
+      ) {
+        return;
       }
-    )) as { error?: string } | string | null;
-  } catch (error) {
-    const message = String(
-      (error as Error)?.message ?? error ?? ''
-    ).toLowerCase();
 
-    if (message.includes('user not found for email')) {
       throw new Error(
-        'Collaborator email does not exist in this Supabase project yet. Ask that user to sign up/login once (mobile or web auth), then invite again.'
-      );
-    }
-
-    const adminRpcMissing =
-      message.includes('pgrst202') &&
-      message.includes('admin_invite_company_user');
-
-    if (!adminRpcMissing) {
-      throw error;
-    }
-
-    // Backward compatibility: older remotes only have owner-auth RPC.
-    try {
-      response = (await sendAPIRequest(
-        `${baseUrl}/rest/v1/rpc/invite_company_user`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload),
-        }
-      )) as { error?: string } | string | null;
-    } catch (fallbackError) {
-      throw new Error(
-        `Collaborator invite RPC is not ready on remote. Run Initialize Remote (Admin) from desktop settings, then retry. Original error: ${
-          (fallbackError as Error).message
+        `Unable to create/invite auth user for ${inviteEmail}. ${
+          (inviteError as Error).message
         }`
       );
     }
-  }
+  };
+
+  // Use edge function which creates pending invitation for two-stage signup flow
+  response = (await sendAPIRequest(`${baseUrl}/functions/v1/invite-user`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      companyId: config.companyId,
+      email: inviteEmail,
+      role,
+      accessToken: config.token,
+    }),
+  })) as { error?: string } | string | null;
 
   if (response && typeof response === 'object' && 'error' in response) {
     throw new Error(response.error ?? 'Invite failed');
   }
 
   return response;
+}
+
+export async function removeCloudSyncCollaborator(fyo: Fyo, userId: string) {
+  const config = getWorkerConfig(fyo);
+  const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
+  if (!baseUrl || !config.token || !config.companyId) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const targetUserId = String(userId ?? '').trim();
+  if (!targetUserId) {
+    throw new Error('Collaborator user id is required');
+  }
+
+  const endpoint = `${baseUrl}/rest/v1/company_users?company_id=eq.${encodeURIComponent(
+    config.companyId
+  )}&user_id=eq.${encodeURIComponent(targetUserId)}`;
+  await sendAPIRequest(endpoint, {
+    method: 'DELETE',
+    headers: {
+      apikey: config.token,
+      Prefer: 'return=minimal',
+    },
+  });
 }
 
 async function getOrCreateCursor(
@@ -1609,7 +1589,6 @@ async function processOutboxItem(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.token}`,
         apikey: config.token,
       },
       body: JSON.stringify({

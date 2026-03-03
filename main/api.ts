@@ -58,6 +58,20 @@ export async function sendAPIRequest(
       throw new Error(`Invalid JSON response: ${responseText.slice(0, 300)}`);
     }
   } catch (error) {
+    if ((error as { name?: string }).name === 'AbortError') {
+      const timeoutError = new Error(
+        `Request timed out after ${API_REQUEST_TIMEOUT_MS}ms`
+      );
+      if (shouldLog) {
+        console.error(
+          `[cloud-sync-api] error !! ${endpoint} after ${
+            Date.now() - startedAt
+          }ms: ${timeoutError.message}`
+        );
+      }
+      throw timeoutError;
+    }
+
     if (shouldLog) {
       console.error(
         `[cloud-sync-api] error !! ${endpoint} after ${
