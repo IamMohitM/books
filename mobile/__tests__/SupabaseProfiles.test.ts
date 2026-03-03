@@ -1,6 +1,7 @@
 const mockWriteAsStringAsync = jest.fn(() => Promise.resolve(undefined));
 const mockGetInfoAsync = jest.fn(() => Promise.resolve({ exists: false }));
 const mockReadAsStringAsync = jest.fn(() => Promise.resolve('[]'));
+const mockDeleteAsync = jest.fn(() => Promise.resolve(undefined));
 
 jest.mock('expo-file-system', () => ({
   documentDirectory: 'file:///tmp/',
@@ -8,6 +9,7 @@ jest.mock('expo-file-system', () => ({
   writeAsStringAsync: mockWriteAsStringAsync,
   getInfoAsync: mockGetInfoAsync,
   readAsStringAsync: mockReadAsStringAsync,
+  deleteAsync: mockDeleteAsync,
 }));
 
 const mockCreateClient = jest.fn(() => ({
@@ -38,6 +40,7 @@ describe('mobile supabase project profiles', () => {
 
     mockGetInfoAsync.mockResolvedValue({ exists: false });
     mockReadAsStringAsync.mockResolvedValue('[]');
+    mockDeleteAsync.mockResolvedValue(undefined);
   });
 
   test('loads default profile from single-project env', () => {
@@ -92,5 +95,43 @@ describe('mobile supabase project profiles', () => {
     expect(
       mod.mobileProjectProfiles.some((p) => p.projectRef === 'cccc3333')
     ).toBe(true);
+  });
+
+  test('resetting then adding a new profile does not resurrect old disk profiles', async () => {
+    const diskRows = [
+      {
+        id: 'disk-profile-1',
+        label: 'Old Project',
+        projectRef: 'cccc3333',
+        anonKey: 'anon-key-c',
+      },
+    ];
+
+    mockGetInfoAsync.mockResolvedValue({ exists: true });
+    mockReadAsStringAsync.mockResolvedValue(JSON.stringify(diskRows));
+
+    const mod = loadSupabaseModule();
+    await mod.loadMobileProjectProfilesFromDisk();
+
+    expect(mod.mobileProjectProfiles.map((p) => p.projectRef)).toEqual(
+      expect.arrayContaining(['aaaa1111', 'cccc3333'])
+    );
+
+    await mod.resetMobileProjectProfilesToDefault();
+
+    expect(mod.mobileProjectProfiles.map((p) => p.projectRef)).toEqual([
+      'aaaa1111',
+    ]);
+
+    mod.addOrUpdateMobileProjectProfile({
+      projectRef: 'bbbb2222',
+      anonKey: 'anon-key-b',
+      label: 'Beta',
+    });
+
+    expect(mod.mobileProjectProfiles.map((p) => p.projectRef)).toEqual([
+      'aaaa1111',
+      'bbbb2222',
+    ]);
   });
 });
