@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase';
 import QuickAddModal from '../components/QuickAddModal';
 import LedgerScreen from './LedgerScreen';
 import ReportsScreen from './ReportsScreen';
@@ -36,7 +36,7 @@ export default function AppShell({
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from('company_users')
         .select('company_id')
         .eq('user_id', currentUserId)
@@ -78,7 +78,7 @@ export default function AppShell({
                 return;
               }
 
-              const { data, error } = await supabase
+              const { data, error } = await getSupabaseClient()
                 .from('company_users')
                 .select('company_id')
                 .eq('user_id', currentUserId)
@@ -110,7 +110,7 @@ export default function AppShell({
     return (
       <SettingsScreen
         companyId={companyId}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => getSupabaseClient().auth.signOut()}
         onSwitchProject={onSwitchProject}
       />
     );

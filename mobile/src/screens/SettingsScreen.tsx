@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { supabase, supabasePublicAnonKey, supabasePublicUrl } from '../lib/supabase';
+import { getSupabaseClient, supabasePublicAnonKey, supabasePublicUrl } from '../lib/supabase';
 
 type Collaborator = {
   user_id: string;
@@ -27,7 +27,7 @@ export default function SettingsScreen({
   const [status, setStatus] = useState<string | null>(null);
 
   const loadCollaborators = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('company_users_with_profile')
       .select('user_id,role,email,full_name,created_at')
       .eq('company_id', companyId)
@@ -54,7 +54,7 @@ export default function SettingsScreen({
     const {
       data: { session },
       error: sessionError,
-    } = await supabase.auth.getSession();
+    } = await getSupabaseClient().auth.getSession();
 
     if (sessionError || !session?.access_token) {
       setInviting(false);
