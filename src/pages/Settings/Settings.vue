@@ -68,13 +68,13 @@
                 <span class="font-semibold">{{ t`Sync Auth Token` }}</span
                 >:
                 {{
-                  t`Supabase Dashboard -> Settings -> API -> service_role key.`
+                  t`Supabase Dashboard → Settings → API → Copy the "service_role key" (starts with eyJ...).`
                 }}
               </div>
             </div>
             <div class="mt-2 text-gray-600 dark:text-gray-300">
               {{
-                t`Important: Sync Auth Token should be service_role for desktop sync/initialization. Mobile app should use publishable/anon key, not service_role.`
+                t`Desktop: Use the service_role key (full access for initialization). Mobile: Use publishable/anon key instead.`
               }}
             </div>
           </div>
@@ -307,7 +307,11 @@
               </Button>
               <Button
                 class="text-xs"
-                :disabled="collaborators.loading || collaborators.inviting"
+                :disabled="
+                  collaborators.loading ||
+                  collaborators.inviting ||
+                  !!collaborators.removingUserId
+                "
                 @click="loadCollaborators"
               >
                 {{ collaborators.loading ? t`Loading...` : t`Refresh` }}
@@ -323,9 +327,28 @@
               <div
                 v-for="row in collaborators.rows"
                 :key="`${row.user_id}-${row.role}`"
-                class="text-gray-700 dark:text-gray-200"
+                class="text-gray-700 dark:text-gray-200 flex items-center gap-2"
               >
-                {{ row.full_name || row.email || row.user_id }} ({{ row.role }})
+                <span class="flex-1 break-all"
+                  >{{ row.full_name || row.email || row.user_id }} ({{
+                    row.role
+                  }})</span
+                >
+                <Button
+                  class="text-xs"
+                  :disabled="
+                    collaborators.inviting ||
+                    collaborators.loading ||
+                    collaborators.removingUserId === row.user_id
+                  "
+                  @click="removeCollaboratorNow(row)"
+                >
+                  {{
+                    collaborators.removingUserId === row.user_id
+                      ? t`Removing...`
+                      : t`Remove Access`
+                  }}
+                </Button>
               </div>
             </div>
           </div>
@@ -533,6 +556,7 @@ import {
   inviteCloudSyncCollaborator,
   initializeCloudSyncRemoteSchema,
   listCloudSyncCollaborators,
+  removeCloudSyncCollaborator,
   pauseCloudSync,
   resumeCloudSync,
   runCloudSyncCycle,
@@ -607,6 +631,7 @@ export default defineComponent({
       collaborators: {
         loading: false,
         inviting: false,
+        removingUserId: '',
         email: '',
         role: 'editor' as 'owner' | 'editor',
         rows: [] as Array<{
@@ -677,6 +702,7 @@ export default defineComponent({
       collaborators: {
         loading: boolean;
         inviting: boolean;
+        removingUserId: string;
         email: string;
         role: 'owner' | 'editor';
         rows: Array<{
@@ -1430,6 +1456,58 @@ export default defineComponent({
         });
       } finally {
         this.collaborators.inviting = false;
+      }
+    },
+    async removeCollaboratorNow(row: {
+      user_id: string;
+      role: string;
+      email: string | null;
+      full_name: string | null;
+      created_at: string;
+    }): Promise<void> {
+      const displayName = row.full_name || row.email || row.user_id;
+      const ownerCount = this.collaborators.rows.filter(
+        (item) => item.role === 'owner'
+      ).length;
+      if (row.role === 'owner' && ownerCount <= 1) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cannot remove the last owner. Add another owner first.`,
+        });
+        return;
+      }
+
+      const shouldRemove = (await showDialog({
+        title: this.t`Remove collaborator access?`,
+        detail: this
+          .t`This will remove company access for ${displayName}. They can be invited again later.`,
+        type: 'warning',
+        buttons: [
+          { label: this.t`Remove`, isPrimary: true, action: () => true },
+          { label: this.t`Cancel`, isEscape: true, action: () => false },
+        ],
+      })) as boolean;
+
+      if (!shouldRemove) {
+        return;
+      }
+
+      this.collaborators.removingUserId = row.user_id;
+      try {
+        await removeCloudSyncCollaborator(this.fyo, row.user_id);
+        await this.loadCollaborators();
+        showToast({
+          type: 'success',
+          message: this.t`Collaborator access removed.`,
+        });
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      } finally {
+        this.collaborators.removingUserId = '';
       }
     },
     initializeRemoteNow(): void {
