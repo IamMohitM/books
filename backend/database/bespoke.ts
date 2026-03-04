@@ -1,5 +1,6 @@
 import {
   Cashflow,
+  CashReconciliationSummary,
   IncomeExpense,
   LoanLedgerRow,
   LoanSnapshot,
@@ -263,6 +264,104 @@ export class BespokeQueries {
       closingBalance,
       netChange: closingBalance - openingBalance,
     };
+  }
+
+  static async getCashReconciliationSummary(
+    db: DatabaseCore,
+    fromDate: string,
+    toDate: string
+  ) {
+    // Generate month boundaries for the date range
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    const months: {
+      period: string;
+      periodStart: string;
+      periodEnd: string;
+    }[] = [];
+
+    const current = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (current <= to) {
+      const monthStart = current.toISOString().split('T')[0];
+      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0)
+        .toISOString()
+        .split('T')[0];
+
+      const period = current.toLocaleString('default', {
+        month: 'short',
+        year: 'numeric',
+      });
+
+      months.push({
+        period,
+        periodStart: monthStart,
+        periodEnd: monthEnd,
+      });
+
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    const summary = [];
+    for (const month of months) {
+      // Get expected balance (accounting)
+      const expectedResult = await BespokeQueries.getCashInHand(
+        db,
+        month.periodEnd
+      );
+      const expectedBalance = expectedResult.cashInHand;
+
+      // Look for CashCountRecord for this period
+      let countRecord:
+        | {
+            name: string;
+            physicalCount: number;
+            status: string;
+          }
+        | undefined = undefined;
+
+      try {
+        countRecord = (await db.knex!('CashCountRecord')
+          .select('name', 'physicalCount', 'status')
+          .where('periodStart', month.periodStart)
+          .where('periodEnd', month.periodEnd)
+          .first()) as
+          | {
+              name: string;
+              physicalCount: number;
+              status: string;
+            }
+          | undefined;
+      } catch (error) {
+        // Table may not exist yet, continue without reconciliation data
+      }
+
+      let physicalCount: number | null = null;
+      let variance: number | null = null;
+      let reconciliationStatus: 'pending' | 'reconciled' | 'none' = 'none';
+      let recordName: string | null = null;
+
+      if (countRecord) {
+        physicalCount = Number(countRecord.physicalCount);
+        variance = expectedBalance - physicalCount;
+        reconciliationStatus =
+          countRecord.status === 'Submitted' ? 'reconciled' : 'pending';
+        recordName = countRecord.name;
+      }
+
+      summary.push({
+        period: month.period,
+        periodStart: month.periodStart,
+        periodEnd: month.periodEnd,
+        expectedBalance,
+        physicalCount,
+        variance,
+        reconciliationStatus,
+        recordName,
+      });
+    }
+
+    return summary;
   }
 
   static async getIncomeAndExpenses(

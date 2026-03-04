@@ -15,6 +15,7 @@ export enum ModelNameEnum {
   AccountingSettings = 'AccountingSettings',
   Address = 'Address',
   Batch = 'Batch',
+  CashCountRecord = 'CashCountRecord',
   Color = 'Color',
   Currency = 'Currency',
   GetStarted = 'GetStarted',

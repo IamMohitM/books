@@ -158,3 +158,16 @@ export type CashInHandMonthDetail = {
   closingBalance: number;
   netChange: number;
 };
+
+export type CashReconciliationRow = {
+  period: string;
+  periodStart: string;
+  periodEnd: string;
+  expectedBalance: number;
+  physicalCount: number | null;
+  variance: number | null;
+  reconciliationStatus: 'pending' | 'reconciled' | 'none';
+  recordName: string | null;
+};
+
+export type CashReconciliationSummary = CashReconciliationRow[];

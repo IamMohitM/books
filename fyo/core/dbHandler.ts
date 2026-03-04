@@ -10,6 +10,7 @@ import {
   CashInHand,
   CashInHandMonthDetail,
   CashInHandSummary,
+  CashReconciliationSummary,
   Cashflow,
   DatabaseBase,
   DatabaseDemuxBase,
@@ -328,6 +329,17 @@ export class DatabaseHandler extends DatabaseBase {
       periodStart,
       periodEnd
     )) as CashInHandMonthDetail;
+  }
+
+  async getCashReconciliationSummary(
+    fromDate: string,
+    toDate: string
+  ): Promise<CashReconciliationSummary> {
+    return (await this.#demux.callBespoke(
+      'getCashReconciliationSummary',
+      fromDate,
+      toDate
+    )) as CashReconciliationSummary;
   }
 
   async getIncomeAndExpenses(
