@@ -140,9 +140,7 @@ export class Importer {
     return true;
   }
 
-  async checkLinks(
-    existingNamesBySchema?: Record<string, Set<string>>
-  ) {
+  async checkLinks(existingNamesBySchema?: Record<string, Set<string>>) {
     const tfKeys = this.assignedTemplateFields
       .map((key, index) => ({
         key,

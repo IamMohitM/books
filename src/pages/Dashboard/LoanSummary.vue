@@ -83,7 +83,9 @@ export default defineComponent({
         .minus({ days: 1 })
         .toISODate();
 
-      const snapshots = await fyo.db.getLoanPortfolioSnapshot(asOfDate as string);
+      const snapshots = await fyo.db.getLoanPortfolioSnapshot(
+        asOfDate as string
+      );
       this.summary = snapshots.reduce(
         (acc, row) => {
           acc.principalOutstanding += row.principalOutstanding;

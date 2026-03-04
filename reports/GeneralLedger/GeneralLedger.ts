@@ -266,13 +266,17 @@ export class GeneralLedger extends LedgerReport {
 
     if (this.toDate) {
       filters.date ??= [];
-      const toDate = DateTime.fromISO(this.toDate as string).endOf('day').toISO();
+      const toDate = DateTime.fromISO(this.toDate as string)
+        .endOf('day')
+        .toISO();
       (filters.date as string[]).push('<=', toDate as string);
     }
 
     if (this.fromDate) {
       filters.date ??= [];
-      const fromDate = DateTime.fromISO(this.fromDate as string).startOf('day').toISO();
+      const fromDate = DateTime.fromISO(this.fromDate as string)
+        .startOf('day')
+        .toISO();
       (filters.date as string[]).push('>=', fromDate as string);
     }
 

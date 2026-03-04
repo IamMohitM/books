@@ -62,11 +62,7 @@ export class Account extends Doc {
   }
 
   async beforeSync() {
-    if (
-      this.originalName &&
-      this.name &&
-      this.originalName !== this.name
-    ) {
+    if (this.originalName && this.name && this.originalName !== this.name) {
       const newName = this.name;
       this.name = this.originalName;
       await this.rename(newName);

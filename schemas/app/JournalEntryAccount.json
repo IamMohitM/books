@@ -51,12 +51,6 @@
       "default": "None"
     }
   ],
-  "tableFields": [
-    "account",
-    "debit",
-    "credit",
-    "loanProfile",
-    "loanComponent"
-  ],
+  "tableFields": ["account", "debit", "credit", "loanProfile", "loanComponent"],
   "keywordFields": ["account"]
 }

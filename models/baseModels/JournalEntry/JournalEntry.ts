@@ -89,7 +89,9 @@ export class JournalEntry extends Transactional {
       return;
     }
 
-    const loanProfiles = new Set(loanRows.map((row) => row.loanProfile as string));
+    const loanProfiles = new Set(
+      loanRows.map((row) => row.loanProfile as string)
+    );
     if (loanProfiles.size > 1) {
       throw new ValidationError(
         t`All loan rows in one journal entry must use the same Loan Profile.`

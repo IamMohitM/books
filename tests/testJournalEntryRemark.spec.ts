@@ -27,8 +27,16 @@ test('submitted journal entry allows user remark update', async (t) => {
     entryType: 'Journal Entry',
     date: '2025-01-01',
   });
-  je.push('accounts', { account: asset, debit: fyo.pesa(100), credit: fyo.pesa(0) });
-  je.push('accounts', { account: income, debit: fyo.pesa(0), credit: fyo.pesa(100) });
+  je.push('accounts', {
+    account: asset,
+    debit: fyo.pesa(100),
+    credit: fyo.pesa(0),
+  });
+  je.push('accounts', {
+    account: income,
+    debit: fyo.pesa(0),
+    credit: fyo.pesa(100),
+  });
 
   await je.sync();
   await je.submit();
@@ -36,8 +44,15 @@ test('submitted journal entry allows user remark update', async (t) => {
   je.set('userRemark', 'Updated remark after submit');
   await je.sync();
 
-  const reloaded = await fyo.doc.getDoc(ModelNameEnum.JournalEntry, je.name as string);
-  t.equal(reloaded.get('userRemark'), 'Updated remark after submit', 'remark updated');
+  const reloaded = await fyo.doc.getDoc(
+    ModelNameEnum.JournalEntry,
+    je.name as string
+  );
+  t.equal(
+    reloaded.get('userRemark'),
+    'Updated remark after submit',
+    'remark updated'
+  );
   t.equal(reloaded.submitted, true, 'submission state preserved');
   t.end();
 });

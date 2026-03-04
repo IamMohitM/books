@@ -1,7 +1,10 @@
 import { DocValue } from 'fyo/core/types';
 import { Action, ListViewSettings, ValidationMap } from 'fyo/model/types';
 import { ValidationError } from 'fyo/utils/errors';
-import { AccountTypeEnum, AccountRootType } from 'models/baseModels/Account/types';
+import {
+  AccountTypeEnum,
+  AccountRootType,
+} from 'models/baseModels/Account/types';
 import { ModelNameEnum } from 'models/types';
 import { Money } from 'pesa';
 import { Doc } from 'fyo/model/doc';
@@ -26,7 +29,11 @@ export class LoanProfile extends Doc {
       }
 
       const [accountType, rootType] = (await Promise.all([
-        this.fyo.getValue(ModelNameEnum.Account, value as string, 'accountType'),
+        this.fyo.getValue(
+          ModelNameEnum.Account,
+          value as string,
+          'accountType'
+        ),
         this.fyo.getValue(ModelNameEnum.Account, value as string, 'rootType'),
       ])) as [string | undefined, AccountRootType | undefined];
 
@@ -55,7 +62,9 @@ export class LoanProfile extends Doc {
     },
     openingPrincipal: (value: DocValue) => {
       if ((value as Money)?.isNegative?.() ?? false) {
-        throw new ValidationError(this.fyo.t`Opening Principal cannot be less than 0.`);
+        throw new ValidationError(
+          this.fyo.t`Opening Principal cannot be less than 0.`
+        );
       }
     },
     openingAccruedInterest: (value: DocValue) => {
@@ -161,10 +170,11 @@ export class LoanProfile extends Doc {
   }): Promise<string> {
     let accountName = data.name;
     if (await this.fyo.db.exists(ModelNameEnum.Account, accountName)) {
-      const existing = (await this.fyo.db.get(ModelNameEnum.Account, accountName, [
-        'rootType',
-        'accountType',
-      ])) as { rootType: AccountRootType; accountType?: string };
+      const existing = (await this.fyo.db.get(
+        ModelNameEnum.Account,
+        accountName,
+        ['rootType', 'accountType']
+      )) as { rootType: AccountRootType; accountType?: string };
 
       if (
         existing.rootType === data.rootType &&

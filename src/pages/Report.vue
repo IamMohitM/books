@@ -151,7 +151,6 @@ export default defineComponent({
       // @ts-ignore
       window.rep = this;
     }
-
   },
   deactivated() {
     docsPathRef.value = '';

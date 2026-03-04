@@ -101,7 +101,10 @@ import FormHeader from 'src/components/FormHeader.vue';
 import { getErrorMessage } from 'src/utils';
 import { showDialog } from 'src/utils/interactive';
 import { getSetupWizardDoc } from 'src/utils/misc';
-import { getFieldsGroupedByTabAndSection, getSelectedFolderPath } from 'src/utils/ui';
+import {
+  getFieldsGroupedByTabAndSection,
+  getSelectedFolderPath,
+} from 'src/utils/ui';
 import { computed, defineComponent } from 'vue';
 import CommonFormSection from '../CommonForm/CommonFormSection.vue';
 

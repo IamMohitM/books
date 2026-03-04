@@ -2,7 +2,10 @@
   <Row
     :ratio="ratio"
     class="w-full px-2 group flex items-center justify-center"
-    :class="[rowSizeClass, readOnly ? '' : 'hover:bg-gray-25 dark:hover:bg-gray-900']"
+    :class="[
+      rowSizeClass,
+      readOnly ? '' : 'hover:bg-gray-25 dark:hover:bg-gray-900',
+    ]"
   >
     <!-- Index or Remove button -->
     <div

@@ -150,17 +150,21 @@ export class LoanLedger extends Report {
     const toDate = this.toDate ?? asOfDate;
     const fromDate = this.fromDate ?? undefined;
 
-    const profile = (await this.fyo.db.get(ModelNameEnum.LoanProfile, loanProfile, [
-      'name',
-      'lenderName',
-      'annualInterestRate',
-      'startDate',
-      'openingPrincipal',
-      'openingAccruedInterest',
-      'historicalInterestPaid',
-      'includeHistoricalInterestPaid',
-      'historicalPayments',
-    ])) as {
+    const profile = (await this.fyo.db.get(
+      ModelNameEnum.LoanProfile,
+      loanProfile,
+      [
+        'name',
+        'lenderName',
+        'annualInterestRate',
+        'startDate',
+        'openingPrincipal',
+        'openingAccruedInterest',
+        'historicalInterestPaid',
+        'includeHistoricalInterestPaid',
+        'historicalPayments',
+      ]
+    )) as {
       name: string;
       lenderName: string;
       annualInterestRate: number | string;
@@ -216,8 +220,12 @@ export class LoanLedger extends Report {
 
     const annualRate = toNumber(profile.annualInterestRate ?? 0) / 100;
     const openingPrincipal = toNumber(profile.openingPrincipal ?? 0);
-    const openingAccruedInterest = toNumber(profile.openingAccruedInterest ?? 0);
-    const historicalInterestPaid = toNumber(profile.historicalInterestPaid ?? 0);
+    const openingAccruedInterest = toNumber(
+      profile.openingAccruedInterest ?? 0
+    );
+    const historicalInterestPaid = toNumber(
+      profile.historicalInterestPaid ?? 0
+    );
     const historicalPayments = Array.isArray(profile.historicalPayments)
       ? profile.historicalPayments
       : [];
@@ -233,54 +241,53 @@ export class LoanLedger extends Report {
             },
           ]
         : []),
-      ...historicalPayments
-        .flatMap(
-          (row: {
-            date?: string;
-            paymentType?: string;
-            amount?: number | string | Money;
-            credit?: number | string | Money;
-          }) => {
-            const rows: {
-              date: string;
-              paymentType: string;
-              debit: number;
-              credit: number;
-              label: string;
-            }[] = [];
-            const amount = toNumber(row.amount ?? 0);
-            const credit = toNumber(row.credit ?? 0);
-            const date = row.date ?? profile.startDate;
+      ...historicalPayments.flatMap(
+        (row: {
+          date?: string;
+          paymentType?: string;
+          amount?: number | string | Money;
+          credit?: number | string | Money;
+        }) => {
+          const rows: {
+            date: string;
+            paymentType: string;
+            debit: number;
+            credit: number;
+            label: string;
+          }[] = [];
+          const amount = toNumber(row.amount ?? 0);
+          const credit = toNumber(row.credit ?? 0);
+          const date = row.date ?? profile.startDate;
 
-            if (row.paymentType && amount) {
-              const paymentType =
-                row.paymentType === 'Principal' ? 'Principal' : 'Interest';
-              const label =
-                paymentType === 'Principal'
-                  ? t`Principal Paid (Pre-System)`
-                  : t`Interest Paid (Pre-System)`;
-              rows.push({
-                date,
-                paymentType,
-                debit: amount,
-                credit: 0,
-                label,
-              });
-            }
-
-            if (credit) {
-              rows.push({
-                date,
-                paymentType: 'Principal',
-                debit: 0,
-                credit,
-                label: t`Principal Added (Pre-System)`,
-              });
-            }
-
-            return rows;
+          if (row.paymentType && amount) {
+            const paymentType =
+              row.paymentType === 'Principal' ? 'Principal' : 'Interest';
+            const label =
+              paymentType === 'Principal'
+                ? t`Principal Paid (Pre-System)`
+                : t`Interest Paid (Pre-System)`;
+            rows.push({
+              date,
+              paymentType,
+              debit: amount,
+              credit: 0,
+              label,
+            });
           }
-        ),
+
+          if (credit) {
+            rows.push({
+              date,
+              paymentType: 'Principal',
+              debit: 0,
+              credit,
+              label: t`Principal Added (Pre-System)`,
+            });
+          }
+
+          return rows;
+        }
+      ),
     ].sort((a, b) => {
       const dA = this.toUtcDate(a.date).getTime();
       const dB = this.toUtcDate(b.date).getTime();
@@ -337,7 +344,8 @@ export class LoanLedger extends Report {
     });
 
     const result: LoanLedgerComputedRow[] = [];
-    const shouldShowOpening = openingPrincipal !== 0 || openingAccruedInterest !== 0;
+    const shouldShowOpening =
+      openingPrincipal !== 0 || openingAccruedInterest !== 0;
     const pushOpeningRow = () => {
       const interestOwed = openingAccruedInterest + accrued - interestPaid;
       result.push({
@@ -478,7 +486,9 @@ export class LoanLedger extends Report {
 
   private toUtcDate(value: string) {
     const date = new Date(value);
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    return new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    );
   }
 
   private addDays(date: Date, days: number) {

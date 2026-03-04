@@ -19,7 +19,10 @@ export function evaluateReadOnly(field: Field, doc?: Doc) {
   }
 
   if (doc?.isSubmitted || doc?.parentdoc?.isSubmitted) {
-    if (doc?.schemaName === 'JournalEntry' && field.fieldname === 'userRemark') {
+    if (
+      doc?.schemaName === 'JournalEntry' &&
+      field.fieldname === 'userRemark'
+    ) {
       return evaluateFieldMeta(field, doc, 'readOnly');
     }
 

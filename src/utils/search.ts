@@ -91,7 +91,7 @@ function getCreateList(fyo: Fyo): SearchItem[] {
     ModelNameEnum.LoanProfile,
     ...(hasInventory
       ? [
-        ModelNameEnum.Shipment,
+          ModelNameEnum.Shipment,
           ModelNameEnum.PurchaseReceipt,
           ModelNameEnum.StockMovement,
         ]

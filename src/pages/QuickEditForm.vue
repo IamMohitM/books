@@ -194,11 +194,9 @@ export default defineComponent({
       }
 
       const isSubmittable = !!this.doc.schema.isSubmittable;
-      return (
-        !!(
-          ((isSubmittable && this.doc.submitted) || !isSubmittable) &&
-          !this.doc.notInserted
-        )
+      return !!(
+        ((isSubmittable && this.doc.submitted) || !isSubmittable) &&
+        !this.doc.notInserted
       );
     },
     fields() {

@@ -78,8 +78,9 @@ test('auto-map loan component account based on loan profile', async (t) => {
 
   await interestJv.sync();
 
-  const loanRow = (interestJv.accounts as { loanComponent?: string; account?: string }[])
-    ?.find((row) => row.loanComponent === 'Interest');
+  const loanRow = (
+    interestJv.accounts as { loanComponent?: string; account?: string }[]
+  )?.find((row) => row.loanComponent === 'Interest');
   t.equal(
     loanRow?.account,
     'Cost of Goods Sold',

@@ -889,7 +889,9 @@ export default defineComponent({
         `${schemaName}.cancelled`
       );
       const useStatusFields = hasSubmittedField || hasCancelledField;
-      const shouldSubmit = useStatusFields ? false : await this.askShouldSubmit();
+      const shouldSubmit = useStatusFields
+        ? false
+        : await this.askShouldSubmit();
       const statusByName = useStatusFields
         ? this.getImportStatusByName(schemaName)
         : new Map<string, { submitted?: boolean; cancelled?: boolean }>();
@@ -1058,7 +1060,10 @@ export default defineComponent({
       return namesBySchema;
     },
     getImportStatusByName(schemaName: string) {
-      const statusMap = new Map<string, { submitted?: boolean; cancelled?: boolean }>();
+      const statusMap = new Map<
+        string,
+        { submitted?: boolean; cancelled?: boolean }
+      >();
       const nameIndex = this.importer.assignedTemplateFields.indexOf(
         `${schemaName}.name`
       );
@@ -1121,7 +1126,8 @@ export default defineComponent({
         if (!progressed) {
           const remaining = [...pending.keys()];
           throw new ValidationError(
-            this.t`Could not resolve account group parents for: ${remaining.join(
+            this
+              .t`Could not resolve account group parents for: ${remaining.join(
               ', '
             )}.`
           );

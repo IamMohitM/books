@@ -11,7 +11,10 @@ import { Importer } from 'src/importer';
 import { Fyo } from 'fyo';
 import { getTestFyo, getTestSetupWizardOptions } from './helpers';
 import setupInstance from 'src/setup/setupInstance';
-import { AccountRootType, AccountTypeEnum } from 'models/baseModels/Account/types';
+import {
+  AccountRootType,
+  AccountTypeEnum,
+} from 'models/baseModels/Account/types';
 import { Report } from 'reports/Report';
 import { TrialBalance } from 'reports/TrialBalance/TrialBalance';
 import { GeneralLedger } from 'reports/GeneralLedger/GeneralLedger';
@@ -205,9 +208,21 @@ async function createTestData(fyo: Fyo) {
   await cancelledEntry.cancel();
 
   return {
-    accounts: [groupA, groupB, assetAccount, incomeAccount, expenseAccount, liabilityAccount, interestExpenseAccount],
+    accounts: [
+      groupA,
+      groupB,
+      assetAccount,
+      incomeAccount,
+      expenseAccount,
+      liabilityAccount,
+      interestExpenseAccount,
+    ],
     loanProfile: loanProfile.name as string,
-    journalEntries: [journalEntry.name as string, loanEntry.name as string, cancelledEntry.name as string],
+    journalEntries: [
+      journalEntry.name as string,
+      loanEntry.name as string,
+      cancelledEntry.name as string,
+    ],
     cancelledEntry: cancelledEntry.name as string,
     assetGroup: groupA,
     assetSubgroup: groupB,
@@ -221,18 +236,27 @@ function buildAccountCsvForImport(fyo: Fyo, accountNames: string[]) {
 
   return fyo.db
     .getAll(ModelNameEnum.Account, {
-      fields: ['name', 'rootType', 'parentAccount', 'accountType', 'isGroup', 'description'],
+      fields: [
+        'name',
+        'rootType',
+        'parentAccount',
+        'accountType',
+        'isGroup',
+        'description',
+      ],
       filters: { name: ['in', accountNames] },
     })
     .then((rows) => {
-      const dataRows = (rows as {
-        name: string;
-        rootType?: AccountRootType;
-        parentAccount?: string | null;
-        accountType?: string;
-        isGroup?: boolean;
-        description?: string | null;
-      }[]).map((account) => {
+      const dataRows = (
+        rows as {
+          name: string;
+          rootType?: AccountRootType;
+          parentAccount?: string | null;
+          accountType?: string;
+          isGroup?: boolean;
+          description?: string | null;
+        }[]
+      ).map((account) => {
         const values: Record<string, string | number> = {
           'Account.name': account.name,
           'Account.rootType': account.rootType ?? '',
@@ -305,9 +329,13 @@ async function importCsv(
     throw new Error('Invalid CSV');
   }
 
-  const absentLinks = await importer.checkLinks(getExistingNamesBySchema(importer));
+  const absentLinks = await importer.checkLinks(
+    getExistingNamesBySchema(importer)
+  );
   if (absentLinks.length) {
-    throw new Error(`Missing links: ${absentLinks.map((l) => l.name).join(', ')}`);
+    throw new Error(
+      `Missing links: ${absentLinks.map((l) => l.name).join(', ')}`
+    );
   }
 
   importer.populateDocs();
@@ -319,9 +347,14 @@ async function importCsv(
     `${schemaName}.cancelled`
   );
   const useStatusFields = hasSubmittedField || hasCancelledField;
-  const statusByName = new Map<string, { submitted?: boolean; cancelled?: boolean }>();
+  const statusByName = new Map<
+    string,
+    { submitted?: boolean; cancelled?: boolean }
+  >();
   if (useStatusFields) {
-    const nameIndex = importer.assignedTemplateFields.indexOf(`${schemaName}.name`);
+    const nameIndex = importer.assignedTemplateFields.indexOf(
+      `${schemaName}.name`
+    );
     const submittedIndex = importer.assignedTemplateFields.indexOf(
       `${schemaName}.submitted`
     );
@@ -384,7 +417,9 @@ async function importCsv(
         throw new Error('JournalEntry import missing name');
       }
       if (!statusByName.has(doc.name)) {
-        throw new Error(`JournalEntry name ${doc.name} not found in status map`);
+        throw new Error(
+          `JournalEntry name ${doc.name} not found in status map`
+        );
       }
     }
   }
@@ -414,7 +449,9 @@ async function importCsv(
       }
 
       if (!progressed) {
-        throw new Error(`Could not resolve account groups: ${[...pending.keys()].join(', ')}`);
+        throw new Error(
+          `Could not resolve account groups: ${[...pending.keys()].join(', ')}`
+        );
       }
     }
 
@@ -451,7 +488,12 @@ function normalizeReportData(reportData: any) {
   });
 }
 
-async function compareReports(t: test.Test, src: Report, dst: Report, label: string) {
+async function compareReports(
+  t: test.Test,
+  src: Report,
+  dst: Report,
+  label: string
+) {
   const srcData = normalizeReportData(src.reportData);
   const dstData = normalizeReportData(dst.reportData);
   t.deepEqual(dstData, srcData, `${label} matches`);
@@ -536,12 +578,24 @@ test('round-trip import/export reliability', async (t) => {
     const nameIdx = journalKeyRow.indexOf('JournalEntry.name');
     const submittedIdx = journalKeyRow.indexOf('JournalEntry.submitted');
     const cancelledIdx = journalKeyRow.indexOf('JournalEntry.cancelled');
-    const dataRows = journalParsed.slice(journalParsed.indexOf(journalKeyRow) + 1);
-    const cancelledRow = dataRows.find((row) => row[nameIdx] === data.cancelledEntry);
+    const dataRows = journalParsed.slice(
+      journalParsed.indexOf(journalKeyRow) + 1
+    );
+    const cancelledRow = dataRows.find(
+      (row) => row[nameIdx] === data.cancelledEntry
+    );
     t.ok(cancelledRow, 'journal export includes cancelled entry row');
     if (cancelledRow) {
-      t.equal(cancelledRow[submittedIdx], '1', 'cancelled entry submitted flag exported');
-      t.equal(cancelledRow[cancelledIdx], '1', 'cancelled entry cancelled flag exported');
+      t.equal(
+        cancelledRow[submittedIdx],
+        '1',
+        'cancelled entry submitted flag exported'
+      );
+      t.equal(
+        cancelledRow[cancelledIdx],
+        '1',
+        'cancelled entry cancelled flag exported'
+      );
     }
 
     const submittedRows = data.journalEntries
@@ -549,8 +603,16 @@ test('round-trip import/export reliability', async (t) => {
       .map((name) => dataRows.find((row) => row[nameIdx] === name))
       .filter(Boolean) as string[][];
     for (const row of submittedRows) {
-      t.equal(row[submittedIdx], '1', 'submitted entry submitted flag exported');
-      t.equal(row[cancelledIdx], '0', 'submitted entry cancelled flag exported');
+      t.equal(
+        row[submittedIdx],
+        '1',
+        'submitted entry submitted flag exported'
+      );
+      t.equal(
+        row[cancelledIdx],
+        '0',
+        'submitted entry cancelled flag exported'
+      );
     }
   }
 
@@ -562,13 +624,22 @@ test('round-trip import/export reliability', async (t) => {
     includeMetaFields: true,
   });
 
-  const cancelled = await fyoDst.doc.getDoc(ModelNameEnum.JournalEntry, data.cancelledEntry);
+  const cancelled = await fyoDst.doc.getDoc(
+    ModelNameEnum.JournalEntry,
+    data.cancelledEntry
+  );
   t.ok(cancelled.isCancelled, 'cancelled journal entry remains cancelled');
-  t.equal(cancelled.submitted, true, 'cancelled journal entry retains submitted flag');
+  t.equal(
+    cancelled.submitted,
+    true,
+    'cancelled journal entry retains submitted flag'
+  );
 
-  const importedGroup = await fyoDst.db.get(ModelNameEnum.Account, data.assetSubgroup, [
-    'parentAccount',
-  ]);
+  const importedGroup = await fyoDst.db.get(
+    ModelNameEnum.Account,
+    data.assetSubgroup,
+    ['parentAccount']
+  );
   t.equal(
     (importedGroup as { parentAccount?: string }).parentAccount,
     data.assetGroup,

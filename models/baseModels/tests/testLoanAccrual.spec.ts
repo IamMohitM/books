@@ -66,7 +66,11 @@ test('loan ledger includes same-day principal on as-of date', async (t) => {
   await jv.sync();
   await jv.submit();
 
-  const ledgerRows = await fyo.db.getLoanLedger('L-SAMEDAY', undefined, '2026-02-14');
+  const ledgerRows = await fyo.db.getLoanLedger(
+    'L-SAMEDAY',
+    undefined,
+    '2026-02-14'
+  );
   t.ok(
     ledgerRows.some((row) => row.loanComponent === 'Principal'),
     'ledger includes same-day principal row'
@@ -118,7 +122,11 @@ test('loan snapshot zero before start date', async (t) => {
   const snapshot = await fyo.db.getLoanSnapshot('L-BEFORE', '2026-02-10');
   t.ok(snapshot, 'snapshot generated');
   t.equal(snapshot?.principalOutstanding, 0, 'principal is zero before start');
-  t.equal(snapshot?.accruedInterest, 0, 'accrued interest is zero before start');
+  t.equal(
+    snapshot?.accruedInterest,
+    0,
+    'accrued interest is zero before start'
+  );
   t.equal(snapshot?.interestOwed, 0, 'interest owed is zero before start');
   t.equal(snapshot?.totalDue, 0, 'total due is zero before start');
 });
@@ -165,8 +173,7 @@ test('accrual handles mid-period principal increase excluding receipt day', asyn
   );
   t.ok(snapshot, 'snapshot generated');
 
-  const expected =
-    1000 * 0.12 * (1 / 365) + 2000 * 0.12 * (2 / 365);
+  const expected = 1000 * 0.12 * (1 / 365) + 2000 * 0.12 * (2 / 365);
   t.ok(
     Math.abs((snapshot?.accruedInterest ?? 0) - expected) < 0.01,
     `accrued interest ${snapshot?.accruedInterest} ~ ${expected}`
@@ -248,7 +255,11 @@ test('interest inferred from expense account when loanProfile missing', async (t
   await jv.submit();
 
   const snapshot = await fyo.db.getLoanSnapshot('L-INFER-INT', '2026-02-10');
-  t.equal(snapshot?.interestPaid, 100, 'interest inferred from expense account');
+  t.equal(
+    snapshot?.interestPaid,
+    100,
+    'interest inferred from expense account'
+  );
 });
 
 test('pre-system payments included in interest paid when enabled', async (t) => {
