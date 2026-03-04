@@ -281,6 +281,9 @@ export default defineComponent({
       }
     });
     this.shortcuts?.set(COMPONENT_NAME, ['F1'], () => this.openDocumentation());
+    this.shortcuts?.meta.set(COMPONENT_NAME, ['Comma'], () => {
+      routeTo('/settings');
+    });
 
     this.showDevMode = this.fyo.store.isDevelopment;
   },

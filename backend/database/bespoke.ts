@@ -1,5 +1,6 @@
 import {
   Cashflow,
+  CashReconciliationSummary,
   IncomeExpense,
   LoanLedgerRow,
   LoanSnapshot,
@@ -117,6 +118,252 @@ export class BespokeQueries {
       .groupBy(dateAsMonthYear)) as Cashflow;
   }
 
+  static async getCashInHand(db: DatabaseCore, asOfDate: string) {
+    const result = (await db.knex!('AccountingLedgerEntry')
+      .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+      .sum({
+        debit: 'AccountingLedgerEntry.debit',
+        credit: 'AccountingLedgerEntry.credit',
+      })
+      .where('AccountingLedgerEntry.reverted', false)
+      .where('AccountingLedgerEntry.date', '<=', asOfDate)
+      .where('Account.accountType', 'Cash')
+      .where('Account.isGroup', false)
+      .first()) as { debit?: number; credit?: number } | undefined;
+
+    const debit = result?.debit ?? 0;
+    const credit = result?.credit ?? 0;
+    const cashInHand = Number(debit) - Number(credit);
+    return { cashInHand };
+  }
+
+  static async getCashInHandSummary(
+    db: DatabaseCore,
+    fromDate: string,
+    toDate: string
+  ) {
+    // Generate month boundaries for the date range
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    const months: {
+      period: string;
+      periodStart: string;
+      periodEnd: string;
+    }[] = [];
+
+    const endOfRange = new Date(to.getFullYear(), to.getMonth() + 1, 0);
+
+    let current = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (current <= endOfRange) {
+      const start = new Date(current.getFullYear(), current.getMonth(), 1);
+      const end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+      const period = start.toLocaleString('default', {
+        month: 'short',
+        year: 'numeric',
+      });
+
+      months.push({ period, periodStart: startStr, periodEnd: endStr });
+
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    }
+
+    const summary = [];
+    let previousClosingBalance = 0;
+
+    // For each month, calculate: Opening + Debits - Credits = Closing
+    for (const month of months) {
+      const openingBalance = previousClosingBalance;
+
+      // Get all cash account debits and credits for this month
+      const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
+        .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+        .sum({
+          totalDebit: 'AccountingLedgerEntry.debit',
+          totalCredit: 'AccountingLedgerEntry.credit',
+        })
+        .where('AccountingLedgerEntry.reverted', false)
+        .whereBetween('AccountingLedgerEntry.date', [
+          month.periodStart,
+          month.periodEnd,
+        ])
+        .where('Account.accountType', 'Cash')
+        .where('Account.isGroup', false)
+        .first()) as
+        | {
+            totalDebit?: number;
+            totalCredit?: number;
+          }
+        | undefined;
+
+      const debits = monthlyFlow?.totalDebit ?? 0;
+      const credits = monthlyFlow?.totalCredit ?? 0;
+      const closingBalance = openingBalance + Number(debits) - Number(credits);
+
+      summary.push({
+        period: month.period,
+        periodStart: month.periodStart,
+        periodEnd: month.periodEnd,
+        openingBalance,
+        debits: Number(debits),
+        credits: Number(credits),
+        closingBalance,
+        netChange: closingBalance - openingBalance,
+      });
+
+      previousClosingBalance = closingBalance;
+    }
+
+    return summary;
+  }
+
+  static async getCashInHandMonthDetail(
+    db: DatabaseCore,
+    periodStart: string,
+    periodEnd: string
+  ) {
+    // Get cash balance as of the day before the month starts (opening for this month)
+    const dayBefore = new Date(periodStart);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const dayBeforeStr = dayBefore.toISOString().split('T')[0];
+
+    const openingResult = await BespokeQueries.getCashInHand(db, dayBeforeStr);
+    const openingBalance = openingResult.cashInHand;
+
+    // Get debits and credits for this month
+    const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
+      .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+      .sum({
+        totalDebit: 'AccountingLedgerEntry.debit',
+        totalCredit: 'AccountingLedgerEntry.credit',
+      })
+      .where('AccountingLedgerEntry.reverted', false)
+      .whereBetween('AccountingLedgerEntry.date', [periodStart, periodEnd])
+      .where('Account.accountType', 'Cash')
+      .where('Account.isGroup', false)
+      .first()) as
+      | {
+          totalDebit?: number;
+          totalCredit?: number;
+        }
+      | undefined;
+
+    const debits = monthlyFlow?.totalDebit ?? 0;
+    const credits = monthlyFlow?.totalCredit ?? 0;
+    const closingBalance = openingBalance + Number(debits) - Number(credits);
+
+    return {
+      periodStart,
+      periodEnd,
+      openingBalance,
+      debits: Number(debits),
+      credits: Number(credits),
+      closingBalance,
+      netChange: closingBalance - openingBalance,
+    };
+  }
+
+  static async getCashReconciliationSummary(
+    db: DatabaseCore,
+    fromDate: string,
+    toDate: string
+  ) {
+    // Generate month boundaries for the date range
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    const months: {
+      period: string;
+      periodStart: string;
+      periodEnd: string;
+    }[] = [];
+
+    const current = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (current <= to) {
+      const monthStart = current.toISOString().split('T')[0];
+      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0)
+        .toISOString()
+        .split('T')[0];
+
+      const period = current.toLocaleString('default', {
+        month: 'short',
+        year: 'numeric',
+      });
+
+      months.push({
+        period,
+        periodStart: monthStart,
+        periodEnd: monthEnd,
+      });
+
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    const summary = [];
+    for (const month of months) {
+      // Get expected balance (accounting)
+      const expectedResult = await BespokeQueries.getCashInHand(
+        db,
+        month.periodEnd
+      );
+      const expectedBalance = expectedResult.cashInHand;
+
+      // Look for CashCountRecord for this period
+      let countRecord:
+        | {
+            name: string;
+            physicalCount: number;
+            status: string;
+          }
+        | undefined = undefined;
+
+      try {
+        countRecord = (await db.knex!('CashCountRecord')
+          .select('name', 'physicalCount', 'status')
+          .where('periodStart', month.periodStart)
+          .where('periodEnd', month.periodEnd)
+          .first()) as
+          | {
+              name: string;
+              physicalCount: number;
+              status: string;
+            }
+          | undefined;
+      } catch (error) {
+        // Table may not exist yet, continue without reconciliation data
+      }
+
+      let physicalCount: number | null = null;
+      let variance: number | null = null;
+      let reconciliationStatus: 'pending' | 'reconciled' | 'none' = 'none';
+      let recordName: string | null = null;
+
+      if (countRecord) {
+        physicalCount = Number(countRecord.physicalCount);
+        variance = expectedBalance - physicalCount;
+        reconciliationStatus =
+          countRecord.status === 'Submitted' ? 'reconciled' : 'pending';
+        recordName = countRecord.name;
+      }
+
+      summary.push({
+        period: month.period,
+        periodStart: month.periodStart,
+        periodEnd: month.periodEnd,
+        expectedBalance,
+        physicalCount,
+        variance,
+        reconciliationStatus,
+        recordName,
+      });
+    }
+
+    return summary;
+  }
+
   static async getIncomeAndExpenses(
     db: DatabaseCore,
     fromDate: string,
@@ -175,8 +422,7 @@ export class BespokeQueries {
     toDate?: string
   ): Promise<LoanLedgerRow[]> {
     await BespokeQueries.ensureLoanLedgerColumns(db);
-    const loanProfileRow = (await db
-      .knex!(ModelNameEnum.LoanProfile)
+    const loanProfileRow = (await db.knex!(ModelNameEnum.LoanProfile)
       .select('liabilityAccount', 'interestExpenseAccount')
       .where('name', loanProfile)
       .first()) as
@@ -185,8 +431,7 @@ export class BespokeQueries {
     const liabilityAccount = loanProfileRow?.liabilityAccount;
     const interestExpenseAccount = loanProfileRow?.interestExpenseAccount;
 
-    const query = db
-      .knex!(ModelNameEnum.AccountingLedgerEntry)
+    const query = db.knex!(ModelNameEnum.AccountingLedgerEntry)
       .select(
         'name',
         'date',
@@ -267,8 +512,7 @@ export class BespokeQueries {
     loanProfileName: string,
     asOfDate: string
   ): Promise<LoanSnapshot | null> {
-    const loanProfile = (await db
-      .knex!(ModelNameEnum.LoanProfile)
+    const loanProfile = (await db.knex!(ModelNameEnum.LoanProfile)
       .select(
         'name',
         'lenderName',
@@ -357,10 +601,11 @@ export class BespokeQueries {
         asOfDate
       );
 
-      const preSystemTotals = await BespokeQueries.getLoanHistoricalPaymentTotals(
-        db,
-        loanProfile.name
-      );
+      const preSystemTotals =
+        await BespokeQueries.getLoanHistoricalPaymentTotals(
+          db,
+          loanProfile.name
+        );
 
       snapshots.push(
         BespokeQueries.computeLoanSnapshot(
@@ -404,16 +649,19 @@ export class BespokeQueries {
 
     const annualRate = Number(loanProfile.annualInterestRate ?? 0);
     const openingPrincipal = Number(loanProfile.openingPrincipal ?? 0);
-    const openingAccruedInterest = Number(loanProfile.openingAccruedInterest ?? 0);
-    const historicalInterestPaid = Number(loanProfile.historicalInterestPaid ?? 0);
+    const openingAccruedInterest = Number(
+      loanProfile.openingAccruedInterest ?? 0
+    );
+    const historicalInterestPaid = Number(
+      loanProfile.historicalInterestPaid ?? 0
+    );
     const includeHistoricalInterestPaid = Boolean(
       loanProfile.includeHistoricalInterestPaid ?? false
     );
     const preSystemInterestPaid =
       historicalInterestPaid + (preSystemTotals?.interestPaid ?? 0);
     const preSystemPrincipalPaid = preSystemTotals?.principalPaid ?? 0;
-    const preSystemPrincipalCredited =
-      preSystemTotals?.principalCredited ?? 0;
+    const preSystemPrincipalCredited = preSystemTotals?.principalCredited ?? 0;
 
     if (asOf.getTime() < start.getTime()) {
       return {
@@ -435,11 +683,14 @@ export class BespokeQueries {
     }
 
     let principalOutstanding = openingPrincipal + preSystemPrincipalCredited;
-    let interestPaid = includeHistoricalInterestPaid ? preSystemInterestPaid : 0;
+    let interestPaid = includeHistoricalInterestPaid
+      ? preSystemInterestPaid
+      : 0;
 
     for (const row of ledgerRows) {
       if (row.loanComponent === 'Principal') {
-        principalOutstanding += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+        principalOutstanding +=
+          Number(row.credit ?? 0) - Number(row.debit ?? 0);
       } else if (row.loanComponent === 'Interest') {
         interestPaid += Number(row.debit ?? 0) - Number(row.credit ?? 0);
       }
@@ -453,7 +704,8 @@ export class BespokeQueries {
       ledgerRows.filter((r) => r.loanComponent === 'Principal')
     );
 
-    const interestOwed = openingAccruedInterest + accruedInterest - interestPaid;
+    const interestOwed =
+      openingAccruedInterest + accruedInterest - interestPaid;
     return {
       loanProfile: loanProfile.name,
       liabilityAccount: loanProfile.liabilityAccount,
@@ -563,7 +815,9 @@ export class BespokeQueries {
 
   static toUtcDate(value: string) {
     const date = new Date(value);
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    return new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    );
   }
 
   static addDays(date: Date, days: number) {

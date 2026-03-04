@@ -1,36 +1,95 @@
-# Architecture: Select Database Folder On New Company
+# Architecture: Cash in Hand Reconciliation Refactoring
 
 ## Overview
-Extend the setup wizard UI to capture an optional database folder and pass it to the main process when creating the default database path.
 
-## Components
-- **Setup Wizard UI** (`src/pages/SetupWizard/SetupWizard.vue` + `schemas/app/SetupWizard.json`)
-  - Add `dbFolder` (read-only text) and `selectDbFolder` (button) fields.
-  - Handle button click to open a folder picker dialog and write the selected path to `dbFolder`.
-  - Make `email` and `bankName` optional fields.
-  - Default country to India and currency to INR via schema defaults.
+The Cash in Hand system currently calculates monthly accounting data (opening/closing balances, debits/credits). The refactoring introduces a **Physical Count Reconciliation** feature that enables users to:
 
-- **Renderer Utilities** (`src/utils/ui.ts`)
-  - Add `getSelectedFolderPath()` helper using an open-directory dialog.
+1. Record physical cash counts for a period
+2. Compare expected balance (from accounting) vs actual physical count
+3. Calculate variance
+4. Record adjustments via a selectable "Cash Over and Short" account
 
-- **IPC API** (`main/preload.ts`, `main/registerIpcMainActionListeners.ts`)
-  - Extend `ipc.getDbDefaultPath(companyName, dbFolder?)` to accept an optional folder path.
-  - In main process, use the provided folder as the database directory; otherwise keep existing default path logic.
+This follows the standard accounting reconciliation pattern: Expected (Ledger) vs Actual (Physical Count).
 
-- **Setup Completion** (`src/App.vue`)
-  - Pass the optional `dbFolder` from setup wizard options into `ipc.getDbDefaultPath`.
-- **Setup Initialization** (`src/setup/setupInstance.ts`)
-  - Default `bankName` when missing and allow empty `email`.
+## Technology Stack
 
-## Data Flow
-1. User clicks **Choose Folder** in Setup Wizard.
-2. Renderer opens directory picker and stores selected path in `dbFolder` field.
-3. On submit, `setupComplete` receives `dbFolder` and requests a default DB path from main process.
-4. Main process builds file path inside selected folder (or defaults if none).
+- **Vue 3 (TypeScript)** - Component framework
+- **SQLite/Knex.js** - Database layer
+- **IPC (Electron)** - Client-server communication
 
 ## Compatibility
 - Default path behavior remains unchanged when no folder is selected.
 - Existing overwrite/new file handling remains in place.
+
+## Data Model
+
+### CashCountRecord Schema
+```
+{
+  name: string (auto-generated)
+  period: string
+  periodStart: date
+  periodEnd: date
+  expectedBalance: number (read-only, from accounting)
+  physicalCount: number (user input)
+  variance: number (expectedBalance - physicalCount)
+  varianceAccount: string (Link to Account)
+  journalEntryName: string (Link to JournalEntry)
+  status: string (Draft, Reconciled)
+  notes: string (optional)
+  createdDate: date
+  submittedDate: date
+}
+```
+
+### Query Result: CashReconciliationRow
+```
+{
+  period: string
+  periodStart: string
+  periodEnd: string
+  expectedBalance: number
+  physicalCount: number | null
+  variance: number | null
+  reconciliationStatus: "pending" | "reconciled" | "none"
+  recordName: string | null
+}
+```
+
+## API Design
+
+### Backend Query: getCashReconciliationSummary
+- **Input**: fromDate, toDate (ISO strings)
+- **Output**: CashReconciliationRow[]
+- **Logic**: Join expected balance (from accounting) with actual (from CashCountRecord)
+
+### Components
+1. **CashInHand.vue** - Daily cash balance widget with date picker
+2. **CashInHandSummary.vue** - Monthly cash flow (Opening | Debits | Credits | Closing)
+
+## Key Decisions
+
+1. **Simplified Cash Tracking**: Monthly cash flow calculation (Opening + Debits - Credits = Closing)
+2. **Daily Balance Widget**: Separate component showing current cash as of selected date
+3. **Reconciliation Infrastructure**: Backend support available for future physical count features
+4. **Database**: SQLite for desktop, Supabase Postgres for mobile collaboration
+
+## Files Created/Modified
+
+### New Components
+- `src/pages/Dashboard/CashInHand.vue` - Daily cash balance widget
+- `src/pages/Dashboard/CashInHandSummary.vue` - Monthly cash flow summary
+
+### Backend Infrastructure
+- `backend/database/bespoke.ts` - getCashInHandSummary() and getCashReconciliationSummary()
+- `fyo/core/dbHandler.ts` - Client wrappers for cash queries
+- `utils/db/types.ts` - CashInHandSummaryRow and CashReconciliationRow types
+- `models/index.ts` - CashCountRecord model registration
+- `models/types.ts` - CashCountRecord in ModelNameEnum
+- `schemas/schemas.ts` - CashCountRecord schema registration
+
+### Updated Components
+- `src/pages/Dashboard/Dashboard.vue` - Integrated CashInHand widget
 
 # Mobile Collaboration Architecture
 
