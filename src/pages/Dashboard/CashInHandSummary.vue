@@ -196,7 +196,6 @@ export default defineComponent({
       const year = today.getFullYear();
       const month = today.getMonth();
 
-      // Go back 5 months from today to show last 6 months
       const fromDate = new Date(year, month - 5, 1);
       const fromYear = fromDate.getFullYear();
       const fromMonth = String(fromDate.getMonth() + 1).padStart(2, '0');
