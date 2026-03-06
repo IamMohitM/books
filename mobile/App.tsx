@@ -3,6 +3,7 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -36,6 +37,7 @@ export default function App() {
   const [newProjectKey, setNewProjectKey] = useState('');
   const [newProjectLabel, setNewProjectLabel] = useState('');
   const [validatingProject, setValidatingProject] = useState(false);
+  const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -197,9 +199,7 @@ export default function App() {
           activeProfileLabel={selectedProfile?.label ?? 'Project'}
           onSwitchProject={
             hasMultipleProfiles
-              ? () => {
-                  setSession(null);
-                }
+              ? () => setShowProjectSwitcher(true)
               : undefined
           }
         />
@@ -294,6 +294,57 @@ export default function App() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       )}
+      <Modal visible={showProjectSwitcher} animationType="slide" transparent>
+        <View style={styles.switcherOverlay}>
+          <View style={styles.switcherCard}>
+            <Text style={styles.switcherTitle}>Switch Project</Text>
+            <Text style={styles.switcherHint}>
+              Select a project. You may be asked to sign in again.
+            </Text>
+            <View style={styles.switcherList}>
+              {mobileProjectProfiles.map((profile) => {
+                const active = profile.id === selectedProfileId;
+                return (
+                  <TouchableOpacity
+                    key={profile.id}
+                    style={[
+                      styles.switcherRow,
+                      active && styles.switcherRowActive,
+                    ]}
+                    onPress={async () => {
+                      try {
+                        const client = await setActiveMobileProfile(profile.id);
+                        setSelectedProfileId(profile.id);
+                        const { data } = await client.auth.getSession();
+                        setSession(data.session);
+                        setShowProjectSwitcher(false);
+                      } catch (error) {
+                        Alert.alert('Switch failed', (error as Error).message);
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.switcherLabel,
+                        active && styles.switcherLabelActive,
+                      ]}
+                    >
+                      {profile.label}
+                    </Text>
+                    {active && <Text style={styles.switcherActive}>Active</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              style={styles.switcherClose}
+              onPress={() => setShowProjectSwitcher(false)}
+            >
+              <Text style={styles.switcherCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -352,4 +403,42 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   resetProfilesText: { color: '#0f172a', fontWeight: '600', fontSize: 12 },
+  switcherOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    padding: 20,
+  },
+  switcherCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  switcherTitle: { fontSize: 16, fontWeight: '700' },
+  switcherHint: { fontSize: 12, color: '#64748b' },
+  switcherList: { gap: 8, marginTop: 6 },
+  switcherRow: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8fafc',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  switcherRowActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  switcherLabel: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  switcherLabelActive: { color: '#f8fafc' },
+  switcherActive: { fontSize: 11, color: '#f8fafc' },
+  switcherClose: {
+    marginTop: 4,
+    borderRadius: 8,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  switcherCloseText: { fontSize: 12, fontWeight: '600', color: '#0f172a' },
 });

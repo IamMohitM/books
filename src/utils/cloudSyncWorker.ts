@@ -86,6 +86,27 @@ export type CollaboratorRow = {
   created_at: string;
 };
 
+export type CollaboratorInviteRow = {
+  id: string;
+  company_id: string;
+  email: string;
+  role: string;
+  created_at: string;
+};
+
+export type InviteFunctionStatus = {
+  ok: boolean;
+  status: number;
+  message: string;
+};
+
+export type RemoteSchemaCheck = {
+  ok: boolean;
+  missingTables: string[];
+  missingViews: string[];
+  rlsMissing: string[];
+};
+
 type RemoteInitializationResult = {
   projectRef: string;
   appliedScripts: string[];
@@ -287,6 +308,7 @@ async function ensureRemoteCompanyExists(config: {
       headers: {
         'Content-Type': 'application/json',
         apikey: config.token,
+        Authorization: `Bearer ${config.token}`,
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify([
@@ -1433,6 +1455,153 @@ export async function listCloudSyncCollaborators(
   }
 
   return response;
+}
+
+export async function listCloudSyncInvitations(
+  fyo: Fyo
+): Promise<CollaboratorInviteRow[]> {
+  const config = getWorkerConfig(fyo);
+  const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
+  if (!baseUrl || !config.token || !config.companyId) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const endpoint = `${baseUrl}/rest/v1/company_user_invitations?company_id=eq.${encodeURIComponent(
+    config.companyId
+  )}&select=id,company_id,email,role,created_at&order=created_at.desc`;
+  const response = (await sendAPIRequest(endpoint, {
+    method: 'GET',
+    headers: {
+      apikey: config.token,
+      Authorization: `Bearer ${config.token}`,
+    },
+  })) as CollaboratorInviteRow[] | { error?: string } | null;
+
+  if (!response) {
+    return [];
+  }
+
+  if (!Array.isArray(response)) {
+    throw new Error(
+      (response as { error?: string }).error ?? 'Invalid response'
+    );
+  }
+
+  return response;
+}
+
+export async function checkInviteFunction(
+  fyo: Fyo
+): Promise<InviteFunctionStatus> {
+  const config = getWorkerConfig(fyo);
+  const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
+  if (!baseUrl) {
+    return { ok: false, status: 0, message: 'Missing Sync Project ID.' };
+  }
+
+  const endpoint = `${baseUrl}/functions/v1/invite-user`;
+  try {
+    await sendAPIRequest(endpoint, {
+      method: 'OPTIONS',
+      headers: {
+        apikey: config.token,
+        Authorization: config.token ? `Bearer ${config.token}` : '',
+      },
+    });
+    return { ok: true, status: 200, message: 'invite-user is reachable.' };
+  } catch (error) {
+    const message = (error as Error)?.message ?? 'Invite function check failed';
+    const match = /HTTP\\s+(\\d+)/i.exec(message);
+    const status = match ? Number(match[1]) : 0;
+    return {
+      ok: false,
+      status: status || 0,
+      message,
+    };
+  }
+}
+
+export async function verifyRemoteSchema(
+  projectRef: string,
+  accessToken: string
+): Promise<RemoteSchemaCheck> {
+  const queryApiUrl = `https://api.supabase.com/v1/projects/${projectRef}/database/query`;
+  const requiredTables = [
+    'companies',
+    'company_users',
+    'company_user_invitations',
+    'profiles',
+    'journal_entries',
+    'journal_entry_lines',
+  ];
+  const requiredViews = [
+    'company_users_with_profile',
+    'journal_entries_with_user',
+  ];
+
+  const tablesResult = (await sendAPIRequest(queryApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      query: `
+        select lower(table_name) as name
+        from information_schema.tables
+        where table_schema = 'public';
+      `,
+    }),
+  })) as Array<{ name: string }>;
+
+  const viewsResult = (await sendAPIRequest(queryApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      query: `
+        select lower(table_name) as name
+        from information_schema.views
+        where table_schema = 'public';
+      `,
+    }),
+  })) as Array<{ name: string }>;
+
+  const rlsResult = (await sendAPIRequest(queryApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      query: `
+        select lower(relname) as name, relrowsecurity
+        from pg_class
+        where relname in ('companies','company_users','company_user_invitations','profiles');
+      `,
+    }),
+  })) as Array<{ name: string; relrowsecurity: boolean }>;
+
+  const tableSet = new Set(tablesResult.map((row) => row.name));
+  const viewSet = new Set(viewsResult.map((row) => row.name));
+  const rlsMap = new Map(
+    rlsResult.map((row) => [row.name, row.relrowsecurity])
+  );
+
+  const missingTables = requiredTables.filter((name) => !tableSet.has(name));
+  const missingViews = requiredViews.filter((name) => !viewSet.has(name));
+  const rlsMissing = ['companies','company_users','company_user_invitations','profiles'].filter(
+    (name) => !rlsMap.get(name)
+  );
+
+  return {
+    ok: missingTables.length === 0 && missingViews.length === 0 && rlsMissing.length === 0,
+    missingTables,
+    missingViews,
+    rlsMissing,
+  };
 }
 
 export async function inviteCloudSyncCollaborator(

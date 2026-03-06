@@ -52,6 +52,10 @@
           "label": "Journal Entry"
         },
         {
+          "value": "CashCountRecord",
+          "label": "Cash Count Record"
+        },
+        {
           "value": "StockMovement",
           "label": "Stock Movement"
         },

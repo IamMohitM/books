@@ -334,6 +334,18 @@
                     row.role
                   }})</span
                 >
+                <span
+                  v-if="row.status === 'invited'"
+                  class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"
+                >
+                  {{ t`Invited` }}
+                </span>
+                <span
+                  v-else
+                  class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800"
+                >
+                  {{ t`Active` }}
+                </span>
                 <Button
                   class="text-xs"
                   :disabled="
@@ -556,6 +568,9 @@ import {
   inviteCloudSyncCollaborator,
   initializeCloudSyncRemoteSchema,
   listCloudSyncCollaborators,
+  listCloudSyncInvitations,
+  verifyRemoteSchema,
+  checkInviteFunction,
   removeCloudSyncCollaborator,
   pauseCloudSync,
   resumeCloudSync,
@@ -640,6 +655,7 @@ export default defineComponent({
           email: string | null;
           full_name: string | null;
           created_at: string;
+          status?: 'active' | 'invited';
         }>,
       },
       projectProfiles: {
@@ -711,6 +727,7 @@ export default defineComponent({
           email: string | null;
           full_name: string | null;
           created_at: string;
+          status?: 'active' | 'invited';
         }>;
       };
       projectProfiles: {
@@ -1414,7 +1431,38 @@ export default defineComponent({
 
       this.collaborators.loading = true;
       try {
-        this.collaborators.rows = await listCloudSyncCollaborators(this.fyo);
+        const [activeRows, inviteRows] = await Promise.all([
+          listCloudSyncCollaborators(this.fyo),
+          listCloudSyncInvitations(this.fyo),
+        ]);
+
+        const activeByEmail = new Map(
+          activeRows
+            .filter((row) => row.email)
+            .map((row) => [String(row.email).toLowerCase(), row])
+        );
+
+        const merged = [...activeRows].map((row) => ({
+          ...row,
+          status: 'active' as const,
+        }));
+
+        for (const invite of inviteRows) {
+          const emailKey = String(invite.email ?? '').toLowerCase();
+          if (emailKey && !activeByEmail.has(emailKey)) {
+            merged.push({
+              user_id: `invite-${invite.id}`,
+              role: invite.role,
+              email: invite.email,
+              full_name: null,
+              created_at: invite.created_at,
+              status: 'invited' as const,
+            });
+          }
+        }
+
+        merged.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+        this.collaborators.rows = merged;
       } catch (error) {
         showToast({
           type: 'error',
@@ -1464,7 +1512,15 @@ export default defineComponent({
       email: string | null;
       full_name: string | null;
       created_at: string;
+      status?: 'active' | 'invited';
     }): Promise<void> {
+      if (row.status === 'invited') {
+        showToast({
+          type: 'error',
+          message: this.t`This user is still pending signup. Remove the invitation from Supabase if needed.`,
+        });
+        return;
+      }
       const displayName = row.full_name || row.email || row.user_id;
       const ownerCount = this.collaborators.rows.filter(
         (item) => item.role === 'owner'
@@ -1574,6 +1630,41 @@ export default defineComponent({
                   accessToken: token,
                 });
                 await this.refreshCloudSyncStatus();
+                const schemaCheck = await verifyRemoteSchema(result.projectRef, token);
+                if (!schemaCheck.ok) {
+                  const missingParts = [
+                    schemaCheck.missingTables.length
+                      ? this.t`Missing tables: ${schemaCheck.missingTables.join(', ')}`
+                      : '',
+                    schemaCheck.missingViews.length
+                      ? this.t`Missing views: ${schemaCheck.missingViews.join(', ')}`
+                      : '',
+                    schemaCheck.rlsMissing.length
+                      ? this.t`RLS not enabled: ${schemaCheck.rlsMissing.join(', ')}`
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' | ');
+                  showToast({
+                    type: 'warning',
+                    message: this.t`Remote schema check incomplete. ${missingParts}`,
+                  });
+                } else {
+                  showToast({
+                    type: 'success',
+                    message: this.t`Remote schema and policies verified.`,
+                  });
+                }
+                const inviteStatus = await checkInviteFunction(this.fyo);
+                if (!inviteStatus.ok) {
+                  const message = inviteStatus.status === 404
+                    ? this.t`invite-user function is missing. Deploy it, then set SERVICE_ROLE_KEY secret.`
+                    : this.t`invite-user function check failed: ${inviteStatus.message}`;
+                  showToast({
+                    type: 'warning',
+                    message,
+                  });
+                }
                 this.cancelRemoteInitNow();
                 showToast({
                   type: 'success',

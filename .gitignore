@@ -13,6 +13,7 @@ node_modules
 /mobile/.env
 /supabase/.env
 
+
 # Log files
 npm-debug.log*
 yarn-debug.log*
@@ -37,3 +38,13 @@ log_creds.txt
 
 artifacts/
 /mobile/.expo
+
+
+*/supabase/.temp
+supabase/.temp
+.mcp.json
+
+.claude/
+.cline/
+.agents/
+.agent/
