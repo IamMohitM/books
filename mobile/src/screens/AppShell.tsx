@@ -100,6 +100,17 @@ export default function AppShell({
           >
             <Text style={styles.refreshButtonText}>Refresh Access</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.emptySignOutButton}
+            onPress={() => getSupabaseClient().auth.signOut()}
+          >
+            <Text style={styles.emptySignOutText}>Sign Out</Text>
+          </TouchableOpacity>
+          {!!onSwitchProject && (
+            <TouchableOpacity style={styles.emptySwitchButton} onPress={onSwitchProject}>
+              <Text style={styles.emptySwitchText}>Switch Project</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -241,6 +252,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   refreshButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
+  emptySignOutButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  emptySignOutText: { color: '#0f172a', fontSize: 12, fontWeight: '600' },
+  emptySwitchButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  emptySwitchText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
   centerSpacer: { width: 60 },
   quickAddAnchor: {
     position: 'absolute',

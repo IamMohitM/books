@@ -16,6 +16,9 @@ type JournalEntry = {
   entry_type: string;
   user_remark: string | null;
   created_by_email: string | null;
+  main_account_name?: string | null;
+  amount?: number | null;
+  main_is_debit?: boolean;
 };
 
 type EntryLine = {
@@ -41,8 +44,63 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       .order('date', { ascending: false })
       .limit(100);
 
-    if (data) {
-      setEntries(data as JournalEntry[]);
+    if (data && data.length > 0) {
+      const entryIds = data.map((entry) => entry.id);
+      const { data: lines } = await supabase
+        .from('ledger_entries')
+        .select('journal_entry_id,account_name,debit,credit')
+        .in('journal_entry_id', entryIds);
+
+      const lineMap = new Map<
+        string,
+        { account_name: string | null; amount: number; isDebit: boolean }
+      >();
+      const cashMap = new Map<
+        string,
+        { account_name: string | null; amount: number; isDebit: boolean }
+      >();
+
+      (lines ?? []).forEach((line: any) => {
+        const debit = Number(line.debit ?? 0);
+        const credit = Number(line.credit ?? 0);
+        const amount = debit > 0 ? debit : credit;
+        const isDebit = debit > 0;
+        const accountName = String(line.account_name ?? '');
+        const isCash = accountName.toLowerCase().includes('cash');
+        if (isCash && amount > 0) {
+          cashMap.set(line.journal_entry_id, {
+            account_name: line.account_name ?? null,
+            amount,
+            isDebit,
+          });
+        }
+        const existing = lineMap.get(line.journal_entry_id);
+        if (
+          !existing ||
+          amount > existing.amount ||
+          (amount === existing.amount && isDebit && !existing.isDebit)
+        ) {
+          lineMap.set(line.journal_entry_id, {
+            account_name: line.account_name ?? null,
+            amount,
+            isDebit,
+          });
+        }
+      });
+
+      const merged = (data as JournalEntry[]).map((entry) => {
+        const summary = cashMap.get(entry.id) ?? lineMap.get(entry.id);
+        return {
+          ...entry,
+          main_account_name: summary?.account_name ?? null,
+          amount: summary?.amount ?? null,
+          main_is_debit: summary?.isDebit ?? undefined,
+        };
+      });
+
+      setEntries(merged);
+    } else {
+      setEntries([]);
     }
     setLoading(false);
   }, [companyId]);
@@ -81,16 +139,28 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadEntries} />}
         renderItem={({ item }) => (
+          (() => {
+            const isCashAccount =
+              String(item.main_account_name ?? '').toLowerCase().includes('cash');
+            const amountColor = isCashAccount
+              ? item.main_is_debit
+                ? styles.amountPositive
+                : styles.amountNegative
+              : styles.cardAmount;
+            return (
           <TouchableOpacity
             style={styles.card}
             onPress={() => setSelectedEntry(item)}
             testID={`transaction-${item.id}`}
           >
-            <Text style={styles.cardTitle}>{item.entry_type}</Text>
+            <View style={styles.cardRow}>
+              <Text style={styles.cardTitle}>{item.main_account_name ?? 'Account'}</Text>
+              <Text style={amountColor}>{item.amount ?? '-'}</Text>
+            </View>
             <Text style={styles.cardMeta}>{item.date}</Text>
-            <Text style={styles.cardMeta}>{item.created_by_email ?? 'Unknown'}</Text>
-            {!!item.user_remark && <Text style={styles.cardNote}>{item.user_remark}</Text>}
           </TouchableOpacity>
+            );
+          })()
         )}
       />
       <Modal visible={!!selectedEntry} animationType="slide" transparent>
@@ -147,9 +217,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 18, fontWeight: '600' },
   card: { backgroundColor: 'white', padding: 12, borderRadius: 10, marginTop: 10 },
-  cardTitle: { fontSize: 14, fontWeight: '600' },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  cardAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  amountPositive: { fontSize: 14, fontWeight: '700', color: '#16a34a' },
+  amountNegative: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
   cardMeta: { fontSize: 12, color: '#64748b' },
-  cardNote: { marginTop: 6, fontSize: 12 },
   modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
   modalCard: { margin: 20, backgroundColor: 'white', borderRadius: 12, padding: 16, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

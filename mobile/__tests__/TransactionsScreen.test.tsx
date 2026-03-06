@@ -55,7 +55,8 @@ describe('TransactionsScreen', () => {
       <TransactionsScreen companyId="company-1" refreshKey={0} />
     );
 
-    await waitFor(() => expect(getByText('Journal Entry')).toBeTruthy());
+    await waitFor(() => expect(getByText('Cash')).toBeTruthy());
+    await waitFor(() => expect(getByText('2026-02-23')).toBeTruthy());
 
     fireEvent.press(getByTestId('transaction-entry-1'));
 
