@@ -23,8 +23,20 @@ describe('TransactionsScreen', () => {
   ];
 
   const lines = [
-    { line_id: 'line-1', account_name: 'Cash', debit: 100, credit: 0 },
-    { line_id: 'line-2', account_name: 'Sales', debit: 0, credit: 100 },
+    {
+      line_id: 'line-1',
+      journal_entry_id: 'entry-1',
+      account_name: 'Cash',
+      debit: 200,
+      credit: 0,
+    },
+    {
+      line_id: 'line-2',
+      journal_entry_id: 'entry-1',
+      account_name: 'Sales',
+      debit: 0,
+      credit: 100,
+    },
   ];
 
   beforeEach(() => {
@@ -40,6 +52,7 @@ describe('TransactionsScreen', () => {
     const linesQuery: any = {
       select: jest.fn(() => linesQuery),
       eq: jest.fn(() => linesQuery),
+      in: jest.fn(async () => ({ data: lines })),
       order: jest.fn(async () => ({ data: lines })),
     };
 
@@ -55,7 +68,7 @@ describe('TransactionsScreen', () => {
       <TransactionsScreen companyId="company-1" refreshKey={0} />
     );
 
-    await waitFor(() => expect(getByText('Cash')).toBeTruthy());
+    await waitFor(() => expect(getByText('Cash • Sales')).toBeTruthy());
     await waitFor(() => expect(getByText('2026-02-23')).toBeTruthy());
 
     fireEvent.press(getByTestId('transaction-entry-1'));

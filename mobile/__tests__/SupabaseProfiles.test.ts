@@ -1,7 +1,20 @@
+let profileStoreExists = false;
 const mockWriteAsStringAsync = jest.fn(() => Promise.resolve(undefined));
-const mockGetInfoAsync = jest.fn(() => Promise.resolve({ exists: false }));
+const mockGetInfoAsync = jest.fn(() => Promise.resolve({ exists: profileStoreExists }));
 const mockReadAsStringAsync = jest.fn(() => Promise.resolve('[]'));
-const mockDeleteAsync = jest.fn(() => Promise.resolve(undefined));
+const mockDeleteAsync = jest.fn(() => {
+  profileStoreExists = false;
+  return Promise.resolve(undefined);
+});
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(() => Promise.resolve(null)),
+    setItem: jest.fn(() => Promise.resolve(undefined)),
+    removeItem: jest.fn(() => Promise.resolve(undefined)),
+  },
+}));
 
 jest.mock('expo-file-system', () => ({
   documentDirectory: 'file:///tmp/',
@@ -15,6 +28,7 @@ jest.mock('expo-file-system', () => ({
 const mockCreateClient = jest.fn(() => ({
   auth: {
     getSession: jest.fn(() => Promise.resolve({ data: { session: null } })),
+    signOut: jest.fn(() => Promise.resolve({ error: null })),
     onAuthStateChange: jest.fn(() => ({
       data: { subscription: { unsubscribe: jest.fn() } },
     })),
@@ -38,9 +52,8 @@ describe('mobile supabase project profiles', () => {
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://aaaa1111.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'anon-key-a';
 
-    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    profileStoreExists = false;
     mockReadAsStringAsync.mockResolvedValue('[]');
-    mockDeleteAsync.mockResolvedValue(undefined);
   });
 
   test('loads default profile from single-project env', () => {
@@ -83,7 +96,7 @@ describe('mobile supabase project profiles', () => {
       },
     ];
 
-    mockGetInfoAsync.mockResolvedValue({ exists: true });
+    profileStoreExists = true;
     mockReadAsStringAsync.mockResolvedValue(JSON.stringify(diskRows));
 
     const mod = loadSupabaseModule();
@@ -107,7 +120,7 @@ describe('mobile supabase project profiles', () => {
       },
     ];
 
-    mockGetInfoAsync.mockResolvedValue({ exists: true });
+    profileStoreExists = true;
     mockReadAsStringAsync.mockResolvedValue(JSON.stringify(diskRows));
 
     const mod = loadSupabaseModule();
