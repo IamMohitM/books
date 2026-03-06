@@ -48,6 +48,7 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
   const [debitParentId, setDebitParentId] = useState<string>('');
   const [creditParentId, setCreditParentId] = useState<string>('');
   const [activeParentPicker, setActiveParentPicker] = useState<'debit' | 'credit' | null>(null);
+  const [pendingCreateSide, setPendingCreateSide] = useState<'debit' | 'credit' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,6 +101,10 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
   const creditSelectedName = creditAccountId ? accounts.find((acc) => acc.id === creditAccountId)?.name ?? '' : '';
   const debitParent = groupAccounts.find((acc) => acc.id === debitParentId);
   const creditParent = groupAccounts.find((acc) => acc.id === creditParentId);
+  const debitMatches = debitFiltered.length;
+  const creditMatches = creditFiltered.length;
+  const debitShowScrollHint = debitMatches > 4;
+  const creditShowScrollHint = creditMatches > 4;
 
   const createAccount = async (kind: 'debit' | 'credit') => {
     const query = kind === 'debit' ? debitQuery : creditQuery;
@@ -147,14 +152,16 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
     setAccounts(nextAccounts);
     if (kind === 'debit') {
       setDebitAccountId((data as Account).id);
-      setDebitSearch('');
+      setDebitSearch((data as Account).name ?? query);
       setDebitParentId('');
       setDebitSuccess(`Created ${query} under ${parentName}.`);
+      setDebitFocused(false);
     } else {
       setCreditAccountId((data as Account).id);
-      setCreditSearch('');
+      setCreditSearch((data as Account).name ?? query);
       setCreditParentId('');
       setCreditSuccess(`Created ${query} under ${parentName}.`);
+      setCreditFocused(false);
     }
     setActiveParentPicker(null);
   };
@@ -238,17 +245,30 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                     onBlur={() => setDebitFocused(false)}
                     onChangeText={(text) => {
                       setDebitSearch(text);
-                      if (debitSelectedName && text.toLowerCase() !== debitSelectedName.toLowerCase()) {
+                      const match = accounts.find(
+                        (acc) => acc.name.toLowerCase() === text.trim().toLowerCase()
+                      );
+                      if (match) {
+                        setDebitAccountId(match.id);
+                        setDebitSuccess(null);
+                      } else if (
+                        debitSelectedName &&
+                        text.toLowerCase() !== debitSelectedName.toLowerCase()
+                      ) {
                         setDebitAccountId('');
                       }
                     }}
                     testID="debit-search"
                   />
-                  {debitFocused && !debitExactMatch && debitQuery.length > 0 && (
+                  {debitFocused && debitQuery.length > 0 && (
                     <TouchableOpacity
-                      style={[styles.createButton, (!debitParent || creatingAccount) && styles.createButtonDisabled]}
-                      onPress={() => createAccount('debit')}
-                      disabled={creatingAccount || !debitParent}
+                      style={[styles.createButton, creatingAccount && styles.createButtonDisabled]}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setPendingCreateSide('debit');
+                        setActiveParentPicker('debit');
+                      }}
+                      disabled={creatingAccount}
                     >
                       <Text style={styles.createButtonText}>
                         {creatingAccount ? 'Creating...' : 'Create'}
@@ -258,28 +278,16 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 </View>
                 {debitFocused && (
                   <>
-                    {!debitExactMatch && debitQuery.length > 0 && (
-                      <View style={styles.parentRow}>
-                        <Text style={styles.parentLabel}>Parent account</Text>
-                        {!debitParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
-                        <TouchableOpacity
-                          style={styles.parentSelect}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setActiveParentPicker('debit');
-                          }}
-                        >
-                          <Text style={styles.parentSelectText}>
-                            {debitParent?.name ?? 'Choose parent account'}
-                          </Text>
-                        </TouchableOpacity>
-                        {debitParent && (
-                          <Text style={styles.parentMeta}>Category: {debitParent.root_type ?? 'Unknown'}</Text>
-                        )}
-                      </View>
-                    )}
                     {!!debitError && <Text style={styles.errorText}>{debitError}</Text>}
                     {!!debitSuccess && <Text style={styles.successText}>{debitSuccess}</Text>}
+                    <View style={styles.matchRow}>
+                      <Text style={styles.matchText}>
+                        {debitMatches === 0 ? 'No matches' : `${debitMatches} matching accounts`}
+                      </Text>
+                      {debitShowScrollHint && (
+                        <Text style={styles.scrollHint}>Scroll for more</Text>
+                      )}
+                    </View>
                     <FlatList
                       data={debitFiltered}
                       keyExtractor={(item) => item.id}
@@ -321,17 +329,30 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                     onBlur={() => setCreditFocused(false)}
                     onChangeText={(text) => {
                       setCreditSearch(text);
-                      if (creditSelectedName && text.toLowerCase() !== creditSelectedName.toLowerCase()) {
+                      const match = accounts.find(
+                        (acc) => acc.name.toLowerCase() === text.trim().toLowerCase()
+                      );
+                      if (match) {
+                        setCreditAccountId(match.id);
+                        setCreditSuccess(null);
+                      } else if (
+                        creditSelectedName &&
+                        text.toLowerCase() !== creditSelectedName.toLowerCase()
+                      ) {
                         setCreditAccountId('');
                       }
                     }}
                     testID="credit-search"
                   />
-                  {creditFocused && !creditExactMatch && creditQuery.length > 0 && (
+                  {creditFocused && creditQuery.length > 0 && (
                     <TouchableOpacity
-                      style={[styles.createButton, (!creditParent || creatingAccount) && styles.createButtonDisabled]}
-                      onPress={() => createAccount('credit')}
-                      disabled={creatingAccount || !creditParent}
+                      style={[styles.createButton, creatingAccount && styles.createButtonDisabled]}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setPendingCreateSide('credit');
+                        setActiveParentPicker('credit');
+                      }}
+                      disabled={creatingAccount}
                     >
                       <Text style={styles.createButtonText}>
                         {creatingAccount ? 'Creating...' : 'Create'}
@@ -341,28 +362,16 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 </View>
                 {creditFocused && (
                   <>
-                    {!creditExactMatch && creditQuery.length > 0 && (
-                      <View style={styles.parentRow}>
-                        <Text style={styles.parentLabel}>Parent account</Text>
-                        {!creditParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
-                        <TouchableOpacity
-                          style={styles.parentSelect}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setActiveParentPicker('credit');
-                          }}
-                        >
-                          <Text style={styles.parentSelectText}>
-                            {creditParent?.name ?? 'Choose parent account'}
-                          </Text>
-                        </TouchableOpacity>
-                        {creditParent && (
-                          <Text style={styles.parentMeta}>Category: {creditParent.root_type ?? 'Unknown'}</Text>
-                        )}
-                      </View>
-                    )}
                     {!!creditError && <Text style={styles.errorText}>{creditError}</Text>}
                     {!!creditSuccess && <Text style={styles.successText}>{creditSuccess}</Text>}
+                    <View style={styles.matchRow}>
+                      <Text style={styles.matchText}>
+                        {creditMatches === 0 ? 'No matches' : `${creditMatches} matching accounts`}
+                      </Text>
+                      {creditShowScrollHint && (
+                        <Text style={styles.scrollHint}>Scroll for more</Text>
+                      )}
+                    </View>
                     <FlatList
                       data={creditFiltered}
                       keyExtractor={(item) => item.id}
@@ -402,10 +411,20 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                         <Text style={styles.parentClose}>Done</Text>
                       </TouchableOpacity>
                     </View>
+                    {!!pendingCreateSide && (
+                      <View style={styles.parentMetaRow}>
+                        <Text style={styles.parentMetaLabel}>Creating</Text>
+                        <Text style={styles.parentMetaValue}>
+                          {pendingCreateSide === 'debit' ? debitQuery : creditQuery}
+                        </Text>
+                      </View>
+                    )}
                     <FlatList
                       data={groupAccounts}
                       keyExtractor={(item) => item.id}
                       keyboardShouldPersistTaps="handled"
+                      style={styles.parentList}
+                      contentContainerStyle={styles.parentListContent}
                       renderItem={({ item }) => (
                         <TouchableOpacity
                           style={[
@@ -427,6 +446,34 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                         </TouchableOpacity>
                       )}
                     />
+                    <View style={styles.parentFooter}>
+                      <TouchableOpacity
+                        style={[
+                          styles.parentSaveButton,
+                          (!pendingCreateSide ||
+                            (pendingCreateSide === 'debit' ? !debitParent : !creditParent) ||
+                            creatingAccount) &&
+                            styles.parentSaveButtonDisabled,
+                        ]}
+                        onPress={async () => {
+                          if (!pendingCreateSide) {
+                            return;
+                          }
+                          await createAccount(pendingCreateSide);
+                          setActiveParentPicker(null);
+                          setPendingCreateSide(null);
+                        }}
+                        disabled={
+                          !pendingCreateSide ||
+                          (pendingCreateSide === 'debit' ? !debitParent : !creditParent) ||
+                          creatingAccount
+                        }
+                      >
+                        <Text style={styles.parentSaveButtonText}>
+                          {creatingAccount ? 'Saving...' : 'Save'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               </Modal>
@@ -465,18 +512,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700' },
   input: { borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, fontSize: 15 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  label: { fontSize: 13, color: '#64748b' },
+  label: { fontSize: 14, color: '#64748b' },
   accountBox: {
-    maxHeight: 220,
+    maxHeight: 300,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
     backgroundColor: '#ffffff',
-    padding: 10,
+    padding: 12,
     gap: 8,
   },
   searchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  searchInput: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10, fontSize: 14 },
+  searchInput: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10, fontSize: 15 },
   createButton: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -484,10 +531,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   createButtonDisabled: { opacity: 0.5 },
-  createButtonText: { color: '#f8fafc', fontSize: 13, fontWeight: '700' },
+  createButtonText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
   parentRow: { gap: 6 },
-  parentLabel: { fontSize: 13, color: '#64748b' },
-  parentHint: { fontSize: 12, color: '#94a3b8' },
+  parentLabel: { fontSize: 15, color: '#64748b' },
+  parentHint: { fontSize: 13, color: '#94a3b8' },
   parentSelect: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -496,29 +543,76 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#f8fafc',
   },
-  parentSelectText: { fontSize: 13, color: '#0f172a' },
+  parentSelectText: { fontSize: 15, color: '#0f172a' },
   parentItem: { paddingVertical: 10, paddingHorizontal: 12 },
   parentItemActive: { backgroundColor: '#e2e8f0' },
-  parentItemText: { fontSize: 13 },
-  parentMeta: { fontSize: 12, color: '#64748b' },
+  parentItemText: { fontSize: 15 },
+  parentMeta: { fontSize: 13, color: '#64748b' },
   errorText: { fontSize: 13, color: '#dc2626' },
   successText: { fontSize: 13, color: '#16a34a' },
   emptyText: { fontSize: 13, color: '#94a3b8', paddingVertical: 8 },
-  accountListInner: { paddingVertical: 6 },
-  accountItem: { paddingVertical: 10, paddingHorizontal: 12 },
+  matchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+  },
+  matchText: { fontSize: 13, color: '#475569', fontWeight: '600' },
+  scrollHint: { fontSize: 12, color: '#0f172a', fontWeight: '700' },
+  accountListInner: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    maxHeight: 160,
+  },
+  accountItem: { paddingVertical: 12, paddingHorizontal: 12 },
   accountItemActive: { backgroundColor: '#e2e8f0' },
-  accountText: { fontSize: 14 },
+  accountText: { fontSize: 15 },
   parentModal: {
     margin: 20,
     padding: 18,
     backgroundColor: 'white',
     borderRadius: 14,
-    maxHeight: '70%',
+    maxHeight: '80%',
     gap: 12,
+    paddingBottom: 12,
   },
   parentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  parentTitle: { fontSize: 18, fontWeight: '700' },
-  parentClose: { fontSize: 14, color: '#2563eb', fontWeight: '700' },
+  parentTitle: { fontSize: 19, fontWeight: '700' },
+  parentClose: { fontSize: 15, color: '#2563eb', fontWeight: '700' },
+  parentMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+  },
+  parentMetaLabel: { fontSize: 12, color: '#64748b', fontWeight: '600' },
+  parentMetaValue: { fontSize: 14, color: '#0f172a', fontWeight: '700' },
+  parentList: { maxHeight: 360 },
+  parentListContent: { paddingBottom: 16 },
+  parentFooter: {
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+  },
+  parentSaveButton: {
+    width: '100%',
+    minHeight: 46,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  parentSaveButtonDisabled: { opacity: 0.6 },
+  parentSaveButtonText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
   primaryButton: {
     flex: 1,
     backgroundColor: '#0f172a',

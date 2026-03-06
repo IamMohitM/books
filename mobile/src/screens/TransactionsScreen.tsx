@@ -17,6 +17,7 @@ type JournalEntry = {
   user_remark: string | null;
   created_by_email: string | null;
   main_account_name?: string | null;
+  secondary_account_name?: string | null;
   amount?: number | null;
   main_is_debit?: boolean;
 };
@@ -59,6 +60,10 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
         string,
         { account_name: string | null; amount: number; isDebit: boolean }
       >();
+      const lineGroups = new Map<
+        string,
+        { account_name: string | null; amount: number; isDebit: boolean }[]
+      >();
 
       (lines ?? []).forEach((line: any) => {
         const debit = Number(line.debit ?? 0);
@@ -86,13 +91,27 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
             isDebit,
           });
         }
+
+        const existingLines = lineGroups.get(line.journal_entry_id) ?? [];
+        existingLines.push({
+          account_name: line.account_name ?? null,
+          amount,
+          isDebit,
+        });
+        lineGroups.set(line.journal_entry_id, existingLines);
       });
 
       const merged = (data as JournalEntry[]).map((entry) => {
         const summary = cashMap.get(entry.id) ?? lineMap.get(entry.id);
+        const lines = lineGroups.get(entry.id) ?? [];
+        const topAccounts = lines
+          .sort((a, b) => b.amount - a.amount)
+          .map((line) => line.account_name)
+          .filter((name): name is string => !!name);
         return {
           ...entry,
           main_account_name: summary?.account_name ?? null,
+          secondary_account_name: topAccounts[1] ?? null,
           amount: summary?.amount ?? null,
           main_is_debit: summary?.isDebit ?? undefined,
         };
@@ -154,7 +173,11 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
             testID={`transaction-${item.id}`}
           >
             <View style={styles.cardRow}>
-              <Text style={styles.cardTitle}>{item.main_account_name ?? 'Account'}</Text>
+              <Text style={styles.cardTitle}>
+                {item.secondary_account_name
+                  ? `${item.main_account_name ?? 'Account'} • ${item.secondary_account_name}`
+                  : item.main_account_name ?? 'Account'}
+              </Text>
               <Text style={amountColor}>{item.amount ?? '-'}</Text>
             </View>
             <Text style={styles.cardMeta}>{item.date}</Text>
