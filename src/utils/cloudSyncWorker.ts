@@ -1461,6 +1461,7 @@ export async function inviteCloudSyncCollaborator(
   const headers = {
     'Content-Type': 'application/json',
     apikey: config.token,
+    Authorization: `Bearer ${config.token}`,
   };
   let response: { error?: string } | string | null = null;
   const inviteAuthUserViaServiceToken = async () => {

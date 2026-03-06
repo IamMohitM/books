@@ -187,15 +187,6 @@ export async function setActiveMobileProfile(profileId: string): Promise<Supabas
     throw new Error(`Unknown profile: ${profileId}`);
   }
 
-  // Sign out from current client before switching profiles
-  if (supabase && activeProfile.id !== profileId) {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.warn('Error signing out during profile switch:', error);
-    }
-  }
-
   activeProfile = nextProfile;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   supabase = createSupabaseClient(activeProfile.url, activeProfile.anonKey);

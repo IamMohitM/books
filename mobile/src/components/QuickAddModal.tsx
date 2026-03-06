@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -219,11 +218,7 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.modal}>
-            <ScrollView
-              contentContainerStyle={styles.modalContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
+            <View style={styles.modalContent}>
               <Text style={styles.title}>Quick Add</Text>
               <TextInput
                 style={styles.input}
@@ -447,7 +442,7 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 <Button title={loading ? 'Saving...' : 'Save'} onPress={submit} testID="quickadd-save" />
               </View>
               {!!submitError && <Text style={styles.errorText}>{submitError}</Text>}
-            </ScrollView>
+            </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -457,8 +452,8 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modal: { margin: 20, backgroundColor: 'white', borderRadius: 12, maxHeight: '90%' },
-  modalContent: { padding: 16, gap: 12 },
+  modal: { margin: 20, backgroundColor: 'white', borderRadius: 12, padding: 16, gap: 12, maxHeight: '90%' },
+  modalContent: { gap: 12 },
   title: { fontSize: 18, fontWeight: '600' },
   input: { borderWidth: 1, borderColor: '#e2e8f0', padding: 10, borderRadius: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
