@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Button,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -438,8 +437,17 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 onChangeText={setNote}
               />
               <View style={styles.row}>
-                <Button title="Cancel" onPress={onClose} testID="quickadd-cancel" />
-                <Button title={loading ? 'Saving...' : 'Save'} onPress={submit} testID="quickadd-save" />
+                <TouchableOpacity style={styles.secondaryButton} onPress={onClose} testID="quickadd-cancel">
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+                  onPress={submit}
+                  testID="quickadd-save"
+                  disabled={loading}
+                >
+                  <Text style={styles.primaryButtonText}>{loading ? 'Saving...' : 'Save'}</Text>
+                </TouchableOpacity>
               </View>
               {!!submitError && <Text style={styles.errorText}>{submitError}</Text>}
             </View>
@@ -452,63 +460,80 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modal: { margin: 20, backgroundColor: 'white', borderRadius: 12, padding: 16, gap: 12, maxHeight: '90%' },
-  modalContent: { gap: 12 },
-  title: { fontSize: 18, fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#e2e8f0', padding: 10, borderRadius: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  label: { fontSize: 12, color: '#64748b' },
+  modal: { margin: 20, backgroundColor: 'white', borderRadius: 14, padding: 18, gap: 14, maxHeight: '92%' },
+  modalContent: { gap: 14 },
+  title: { fontSize: 20, fontWeight: '700' },
+  input: { borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, fontSize: 15 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  label: { fontSize: 13, color: '#64748b' },
   accountBox: {
     maxHeight: 220,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#ffffff',
-    padding: 8,
-    gap: 6,
+    padding: 10,
+    gap: 8,
   },
   searchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  searchInput: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', padding: 8, borderRadius: 8 },
+  searchInput: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10, fontSize: 14 },
   createButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     backgroundColor: '#0f172a',
   },
   createButtonDisabled: { opacity: 0.5 },
-  createButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
+  createButtonText: { color: '#f8fafc', fontSize: 13, fontWeight: '700' },
   parentRow: { gap: 6 },
-  parentLabel: { fontSize: 12, color: '#64748b' },
-  parentHint: { fontSize: 11, color: '#94a3b8' },
+  parentLabel: { fontSize: 13, color: '#64748b' },
+  parentHint: { fontSize: 12, color: '#94a3b8' },
   parentSelect: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     backgroundColor: '#f8fafc',
   },
-  parentSelectText: { fontSize: 12, color: '#0f172a' },
-  parentItem: { paddingVertical: 8, paddingHorizontal: 10 },
+  parentSelectText: { fontSize: 13, color: '#0f172a' },
+  parentItem: { paddingVertical: 10, paddingHorizontal: 12 },
   parentItemActive: { backgroundColor: '#e2e8f0' },
-  parentItemText: { fontSize: 12 },
-  parentMeta: { fontSize: 11, color: '#64748b' },
-  errorText: { fontSize: 12, color: '#dc2626' },
-  successText: { fontSize: 12, color: '#16a34a' },
-  emptyText: { fontSize: 12, color: '#94a3b8', paddingVertical: 6 },
-  accountListInner: { paddingVertical: 4 },
-  accountItem: { paddingVertical: 8, paddingHorizontal: 10 },
+  parentItemText: { fontSize: 13 },
+  parentMeta: { fontSize: 12, color: '#64748b' },
+  errorText: { fontSize: 13, color: '#dc2626' },
+  successText: { fontSize: 13, color: '#16a34a' },
+  emptyText: { fontSize: 13, color: '#94a3b8', paddingVertical: 8 },
+  accountListInner: { paddingVertical: 6 },
+  accountItem: { paddingVertical: 10, paddingHorizontal: 12 },
   accountItemActive: { backgroundColor: '#e2e8f0' },
-  accountText: { fontSize: 13 },
+  accountText: { fontSize: 14 },
   parentModal: {
     margin: 20,
-    padding: 16,
+    padding: 18,
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 14,
     maxHeight: '70%',
-    gap: 10,
+    gap: 12,
   },
   parentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  parentTitle: { fontSize: 16, fontWeight: '600' },
-  parentClose: { fontSize: 13, color: '#2563eb', fontWeight: '600' },
+  parentTitle: { fontSize: 18, fontWeight: '700' },
+  parentClose: { fontSize: 14, color: '#2563eb', fontWeight: '700' },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  primaryButtonDisabled: { opacity: 0.6 },
+  primaryButtonText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
 });

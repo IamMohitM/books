@@ -197,22 +197,22 @@ function Tab({
       style={[styles.tab, isActive && styles.tabActive]}
       accessibilityLabel={label}
     >
-      <Feather name={icon} size={20} color={iconColor} />
+      <Feather name={icon} size={22} color={iconColor} />
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, paddingBottom: 10, backgroundColor: '#f8fafc' },
-  header: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  profileHint: { fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 8 },
+  container: { flex: 1, padding: 20, paddingBottom: 12, backgroundColor: '#f8fafc' },
+  header: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  profileHint: { fontSize: 13, color: '#64748b', marginTop: -6, marginBottom: 8 },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     backgroundColor: '#0f172a',
     borderRadius: 18,
     marginTop: 8,
@@ -225,49 +225,49 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    minHeight: 44,
-    paddingVertical: 10,
+    minHeight: 48,
+    paddingVertical: 12,
     backgroundColor: 'rgba(248,250,252,0.08)',
     borderRadius: 14,
     alignItems: 'center',
   },
   tabActive: { backgroundColor: '#f8fafc' },
   content: { flex: 1 },
-  loading: { marginTop: 40, textAlign: 'center' },
+  loading: { marginTop: 40, textAlign: 'center', fontSize: 15 },
   emptyState: {
     marginTop: 32,
-    padding: 14,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 10,
+    gap: 12,
   },
-  emptyDetail: { color: '#334155', fontSize: 12, lineHeight: 18 },
+  emptyDetail: { color: '#334155', fontSize: 13, lineHeight: 20 },
   refreshButton: {
     alignSelf: 'flex-start',
     backgroundColor: '#0f172a',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  refreshButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
+  refreshButtonText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
   emptySignOutButton: {
     alignSelf: 'flex-start',
     backgroundColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  emptySignOutText: { color: '#0f172a', fontSize: 12, fontWeight: '600' },
+  emptySignOutText: { color: '#0f172a', fontSize: 14, fontWeight: '700' },
   emptySwitchButton: {
     alignSelf: 'flex-start',
     backgroundColor: '#0f172a',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  emptySwitchText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
+  emptySwitchText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
   centerSpacer: { width: 60 },
   quickAddAnchor: {
     position: 'absolute',
@@ -277,9 +277,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quickAddButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     backgroundColor: '#38bdf8',
     justifyContent: 'center',
     alignItems: 'center',
@@ -291,5 +291,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  quickAddText: { color: '#0f172a', fontSize: 30, fontWeight: '800', marginTop: -2 },
+  quickAddText: { color: '#0f172a', fontSize: 32, fontWeight: '800', marginTop: -2 },
 });

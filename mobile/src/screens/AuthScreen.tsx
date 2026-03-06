@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { getSupabaseClient, classifyAuthError, testSupabaseConnection, getActiveMobileProfile } from '../lib/supabase';
 
 export default function AuthScreen({
@@ -120,22 +120,44 @@ export default function AuthScreen({
         value={password}
       />
       <View style={styles.buttonRow}>
-        <Button title={loading ? '...' : 'Sign In'} onPress={signIn} />
-        <Button title={loading ? '...' : 'Sign Up'} onPress={signUp} />
+        <TouchableOpacity style={styles.primaryButton} onPress={signIn} disabled={loading}>
+          <Text style={styles.primaryButtonText}>{loading ? '...' : 'Sign In'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButton} onPress={signUp} disabled={loading}>
+          <Text style={styles.secondaryButtonText}>{loading ? '...' : 'Sign Up'}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 12 },
-  profileHint: { fontSize: 12, color: '#64748b' },
+  container: { gap: 16 },
+  profileHint: { fontSize: 14, color: '#64748b' },
   input: {
     backgroundColor: 'white',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    fontSize: 15,
   },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  buttonRow: { flexDirection: 'row', gap: 10 },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  primaryButtonText: { color: '#f8fafc', fontWeight: '700', fontSize: 14 },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: '#0f172a', fontWeight: '700', fontSize: 14 },
 });

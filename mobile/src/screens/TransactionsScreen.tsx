@@ -164,8 +164,8 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
         )}
       />
       <Modal visible={!!selectedEntry} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard} testID="transaction-details">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedEntry(null)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={styles.modalCard} testID="transaction-details">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Transaction Details</Text>
               <TouchableOpacity onPress={() => setSelectedEntry(null)}>
@@ -191,22 +191,22 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
             </View>
             {detailsLoading ? (
               <Text style={styles.modalMeta}>Loading...</Text>
-            ) : (
-              <FlatList
-                data={lines}
-                keyExtractor={(item) => item.line_id}
-                renderItem={({ item }) => (
-                  <View style={styles.tableRow}>
-                    <Text style={styles.tableAccount}>{item.account_name}</Text>
-                    <Text style={styles.tableAmount}>{item.debit || '-'}</Text>
-                    <Text style={styles.tableAmount}>{item.credit || '-'}</Text>
-                  </View>
-                )}
-                ListEmptyComponent={<Text style={styles.modalMeta}>No lines found.</Text>}
-              />
-            )}
-          </View>
-        </View>
+              ) : (
+                <FlatList
+                  data={lines}
+                  keyExtractor={(item) => item.line_id}
+                  renderItem={({ item }) => (
+                    <View style={styles.tableRow}>
+                      <Text style={styles.tableAccount}>{item.account_name}</Text>
+                      <Text style={styles.tableAmount}>{item.debit || '-'}</Text>
+                      <Text style={styles.tableAmount}>{item.credit || '-'}</Text>
+                    </View>
+                  )}
+                  ListEmptyComponent={<Text style={styles.modalMeta}>No lines found.</Text>}
+                />
+              )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -215,38 +215,38 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '600' },
-  card: { backgroundColor: 'white', padding: 12, borderRadius: 10, marginTop: 10 },
+  title: { fontSize: 20, fontWeight: '700' },
+  card: { backgroundColor: 'white', padding: 14, borderRadius: 12, marginTop: 12 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  cardAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  amountPositive: { fontSize: 14, fontWeight: '700', color: '#16a34a' },
-  amountNegative: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
-  cardMeta: { fontSize: 12, color: '#64748b' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  cardAmount: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  amountPositive: { fontSize: 15, fontWeight: '800', color: '#16a34a' },
+  amountNegative: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
+  cardMeta: { fontSize: 13, color: '#64748b' },
   modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
-  modalCard: { margin: 20, backgroundColor: 'white', borderRadius: 12, padding: 16, maxHeight: '80%' },
+  modalCard: { margin: 20, backgroundColor: 'white', borderRadius: 14, padding: 18, maxHeight: '82%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  modalTitle: { fontSize: 16, fontWeight: '700' },
-  modalClose: { color: '#2563eb', fontSize: 13, fontWeight: '600' },
-  modalMeta: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  modalNote: { marginTop: 6, fontSize: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '700' },
+  modalClose: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
+  modalMeta: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  modalNote: { marginTop: 8, fontSize: 13 },
   tableHeader: {
-    marginTop: 14,
+    marginTop: 16,
     flexDirection: 'row',
     gap: 8,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  tableHeaderAccount: { flex: 1.4, fontSize: 12, fontWeight: '600', color: '#64748b' },
-  tableHeaderAmount: { flex: 1, fontSize: 12, fontWeight: '600', color: '#64748b', textAlign: 'right' },
+  tableHeaderAccount: { flex: 1.4, fontSize: 13, fontWeight: '700', color: '#64748b' },
+  tableHeaderAmount: { flex: 1, fontSize: 13, fontWeight: '700', color: '#64748b', textAlign: 'right' },
   tableRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  tableAccount: { flex: 1.4, fontSize: 13, fontWeight: '600', color: '#0f172a' },
-  tableAmount: { flex: 1, fontSize: 13, color: '#0f172a', textAlign: 'right' },
+  tableAccount: { flex: 1.4, fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  tableAmount: { flex: 1, fontSize: 14, color: '#0f172a', textAlign: 'right' },
 });

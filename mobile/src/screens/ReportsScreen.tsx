@@ -48,15 +48,15 @@ export default function ReportsScreen({ companyId }: { companyId: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: '700', marginBottom: 10 },
   row: {
     backgroundColor: 'white',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  account: { fontSize: 14 },
-  balance: { fontSize: 14, fontWeight: '600' },
+  account: { fontSize: 15 },
+  balance: { fontSize: 15, fontWeight: '700' },
 });

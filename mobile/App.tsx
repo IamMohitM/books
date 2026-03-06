@@ -73,6 +73,7 @@ export default function App() {
     }
 
     let mounted = true;
+    let cleanup: (() => void) | null = null;
     const setupProfile = async () => {
       const client = await setActiveMobileProfile(selectedProfileId);
       if (!mounted) return;
@@ -101,16 +102,18 @@ export default function App() {
         }
       }, 500);
 
-      return () => {
+      const localCleanup = () => {
         listener.subscription?.unsubscribe();
         clearInterval(checkSessionInterval);
       };
+      cleanup = localCleanup;
+      return localCleanup;
     };
 
-    const subscriptionPromise = setupProfile();
+    void setupProfile();
     return () => {
       mounted = false;
-      subscriptionPromise.then((sub) => sub?.unsubscribe());
+      cleanup?.();
     };
   }, [profilesReady, selectedProfileId]);
 
@@ -352,30 +355,30 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   keyboard: { flex: 1 },
-  screen: { flexGrow: 1, padding: 20, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 16 },
-  subtitle: { fontSize: 12, color: '#475569', marginBottom: 8 },
+  screen: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  title: { fontSize: 30, fontWeight: '700', marginBottom: 18 },
+  subtitle: { fontSize: 14, color: '#475569', marginBottom: 10 },
   profilePicker: { marginBottom: 12 },
   profileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   profileChip: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: '#fff',
   },
   profileChipActive: {
     backgroundColor: '#0f172a',
     borderColor: '#0f172a',
   },
-  profileChipText: { fontSize: 12, color: '#334155', fontWeight: '600' },
+  profileChipText: { fontSize: 13, color: '#334155', fontWeight: '600' },
   profileChipTextActive: { color: '#f8fafc' },
   addProjectCard: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 10,
+    padding: 14,
     backgroundColor: '#fff',
     marginBottom: 10,
     gap: 8,
@@ -383,26 +386,27 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     backgroundColor: '#fff',
+    fontSize: 15,
   },
   addProjectButton: {
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#0f172a',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   addProjectButtonDisabled: { opacity: 0.55 },
-  addProjectText: { color: '#f8fafc', fontWeight: '600', fontSize: 12 },
+  addProjectText: { color: '#f8fafc', fontWeight: '700', fontSize: 14 },
   resetProfilesButton: {
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#e2e8f0',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
-  resetProfilesText: { color: '#0f172a', fontWeight: '600', fontSize: 12 },
+  resetProfilesText: { color: '#0f172a', fontWeight: '700', fontSize: 14 },
   switcherOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -411,34 +415,34 @@ const styles = StyleSheet.create({
   },
   switcherCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 18,
     gap: 10,
   },
-  switcherTitle: { fontSize: 16, fontWeight: '700' },
-  switcherHint: { fontSize: 12, color: '#64748b' },
+  switcherTitle: { fontSize: 18, fontWeight: '700' },
+  switcherHint: { fontSize: 13, color: '#64748b' },
   switcherList: { gap: 8, marginTop: 6 },
   switcherRow: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     backgroundColor: '#f8fafc',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   switcherRowActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
-  switcherLabel: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  switcherLabel: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   switcherLabelActive: { color: '#f8fafc' },
-  switcherActive: { fontSize: 11, color: '#f8fafc' },
+  switcherActive: { fontSize: 12, color: '#f8fafc' },
   switcherClose: {
     marginTop: 4,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#e2e8f0',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
-  switcherCloseText: { fontSize: 12, fontWeight: '600', color: '#0f172a' },
+  switcherCloseText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
 });
