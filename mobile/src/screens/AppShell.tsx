@@ -150,9 +150,11 @@ export default function AppShell({
           isActive={activeTab === 'settings'}
           onPress={() => setActiveTab('settings')}
         />
-        <TouchableOpacity style={styles.quickAddButton} onPress={() => setShowQuickAdd(true)}>
-          <Text style={styles.quickAddText}>+</Text>
-        </TouchableOpacity>
+        <View style={styles.quickAddAnchor}>
+          <TouchableOpacity style={styles.quickAddButton} onPress={() => setShowQuickAdd(true)}>
+            <Text style={styles.quickAddText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {companyId && (
         <QuickAddModal
@@ -239,12 +241,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   refreshButtonText: { color: '#f8fafc', fontSize: 12, fontWeight: '600' },
-  centerSpacer: { width: 72 },
-  quickAddButton: {
+  centerSpacer: { width: 60 },
+  quickAddAnchor: {
     position: 'absolute',
     top: -24,
-    left: '50%',
-    marginLeft: -30,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  quickAddButton: {
     width: 60,
     height: 60,
     borderRadius: 30,

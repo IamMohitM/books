@@ -3,11 +3,15 @@ import {
   Button,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -209,240 +213,252 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.title}>Quick Add</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Amount"
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={setAmount}
-            testID="quickadd-amount"
-          />
-          <Text style={styles.label}>Debit Account</Text>
-          <View style={styles.accountBox}>
-            <View style={styles.searchRow}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.modal}>
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.title}>Quick Add</Text>
               <TextInput
-                style={styles.searchInput}
-                placeholder="Search accounts"
-                value={debitSearch}
-                onFocus={() => setDebitFocused(true)}
-                onBlur={() => setDebitFocused(false)}
-                onChangeText={(text) => {
-                  setDebitSearch(text);
-                  if (debitSelectedName && text.toLowerCase() !== debitSelectedName.toLowerCase()) {
-                    setDebitAccountId('');
-                  }
-                }}
-                testID="debit-search"
+                style={styles.input}
+                placeholder="Amount"
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+                testID="quickadd-amount"
               />
-              {debitFocused && !debitExactMatch && debitQuery.length > 0 && (
-                <TouchableOpacity
-                  style={[styles.createButton, (!debitParent || creatingAccount) && styles.createButtonDisabled]}
-                  onPress={() => createAccount('debit')}
-                  disabled={creatingAccount || !debitParent}
-                >
-                  <Text style={styles.createButtonText}>
-                    {creatingAccount ? 'Creating...' : 'Create'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {debitFocused && (
-              <>
-                {!debitExactMatch && debitQuery.length > 0 && (
-                  <View style={styles.parentRow}>
-                    <Text style={styles.parentLabel}>Parent account</Text>
-                    {!debitParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
+              <Text style={styles.label}>Debit Account</Text>
+              <View style={styles.accountBox}>
+                <View style={styles.searchRow}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search accounts"
+                    value={debitSearch}
+                    onFocus={() => setDebitFocused(true)}
+                    onBlur={() => setDebitFocused(false)}
+                    onChangeText={(text) => {
+                      setDebitSearch(text);
+                      if (debitSelectedName && text.toLowerCase() !== debitSelectedName.toLowerCase()) {
+                        setDebitAccountId('');
+                      }
+                    }}
+                    testID="debit-search"
+                  />
+                  {debitFocused && !debitExactMatch && debitQuery.length > 0 && (
                     <TouchableOpacity
-                      style={styles.parentSelect}
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setActiveParentPicker('debit');
-                      }}
+                      style={[styles.createButton, (!debitParent || creatingAccount) && styles.createButtonDisabled]}
+                      onPress={() => createAccount('debit')}
+                      disabled={creatingAccount || !debitParent}
                     >
-                      <Text style={styles.parentSelectText}>
-                        {debitParent?.name ?? 'Choose parent account'}
+                      <Text style={styles.createButtonText}>
+                        {creatingAccount ? 'Creating...' : 'Create'}
                       </Text>
                     </TouchableOpacity>
-                    {debitParent && (
-                      <Text style={styles.parentMeta}>Category: {debitParent.root_type ?? 'Unknown'}</Text>
-                    )}
-                  </View>
-                )}
-                {!!debitError && <Text style={styles.errorText}>{debitError}</Text>}
-                {!!debitSuccess && <Text style={styles.successText}>{debitSuccess}</Text>}
-                <FlatList
-                  data={debitFiltered}
-                  keyExtractor={(item) => item.id}
-                  style={styles.accountListInner}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  ListEmptyComponent={
-                    debitQuery.length > 0 ? (
-                      <Text style={styles.emptyText}>No matching accounts.</Text>
-                    ) : null
-                  }
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.accountItem, item.id === debitAccountId && styles.accountItemActive]}
-                      onPress={() => {
-                        setDebitAccountId(item.id);
-                        setDebitSearch(item.name);
-                        setDebitFocused(false);
-                        Keyboard.dismiss();
-                      }}
-                      testID={`debit-account-${item.id}`}
-                    >
-                      <Text style={styles.accountText}>{item.name}</Text>
-                    </TouchableOpacity>
                   )}
-                />
-              </>
-            )}
-          </View>
-          <Text style={styles.label}>Credit Account</Text>
-          <View style={styles.accountBox}>
-            <View style={styles.searchRow}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search accounts"
-                value={creditSearch}
-                onFocus={() => setCreditFocused(true)}
-                onBlur={() => setCreditFocused(false)}
-                onChangeText={(text) => {
-                  setCreditSearch(text);
-                  if (creditSelectedName && text.toLowerCase() !== creditSelectedName.toLowerCase()) {
-                    setCreditAccountId('');
-                  }
-                }}
-                testID="credit-search"
-              />
-              {creditFocused && !creditExactMatch && creditQuery.length > 0 && (
-                <TouchableOpacity
-                  style={[styles.createButton, (!creditParent || creatingAccount) && styles.createButtonDisabled]}
-                  onPress={() => createAccount('credit')}
-                  disabled={creatingAccount || !creditParent}
-                >
-                  <Text style={styles.createButtonText}>
-                    {creatingAccount ? 'Creating...' : 'Create'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {creditFocused && (
-              <>
-                {!creditExactMatch && creditQuery.length > 0 && (
-                  <View style={styles.parentRow}>
-                    <Text style={styles.parentLabel}>Parent account</Text>
-                    {!creditParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
-                    <TouchableOpacity
-                      style={styles.parentSelect}
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setActiveParentPicker('credit');
-                      }}
-                    >
-                      <Text style={styles.parentSelectText}>
-                        {creditParent?.name ?? 'Choose parent account'}
-                      </Text>
-                    </TouchableOpacity>
-                    {creditParent && (
-                      <Text style={styles.parentMeta}>Category: {creditParent.root_type ?? 'Unknown'}</Text>
-                    )}
-                  </View>
-                )}
-                {!!creditError && <Text style={styles.errorText}>{creditError}</Text>}
-                {!!creditSuccess && <Text style={styles.successText}>{creditSuccess}</Text>}
-                <FlatList
-                  data={creditFiltered}
-                  keyExtractor={(item) => item.id}
-                  style={styles.accountListInner}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  ListEmptyComponent={
-                    creditQuery.length > 0 ? (
-                      <Text style={styles.emptyText}>No matching accounts.</Text>
-                    ) : null
-                  }
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.accountItem, item.id === creditAccountId && styles.accountItemActive]}
-                      onPress={() => {
-                        setCreditAccountId(item.id);
-                        setCreditSearch(item.name);
-                        setCreditFocused(false);
-                        Keyboard.dismiss();
-                      }}
-                      testID={`credit-account-${item.id}`}
-                    >
-                      <Text style={styles.accountText}>{item.name}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </>
-            )}
-          </View>
-          <Modal visible={activeParentPicker !== null} animationType="slide" transparent>
-            <View style={styles.overlay}>
-              <View style={styles.parentModal}>
-                <View style={styles.parentHeader}>
-                  <Text style={styles.parentTitle}>Choose parent account</Text>
-                  <TouchableOpacity onPress={() => setActiveParentPicker(null)}>
-                    <Text style={styles.parentClose}>Done</Text>
-                  </TouchableOpacity>
                 </View>
-                <FlatList
-                  data={groupAccounts}
-                  keyExtractor={(item) => item.id}
-                  keyboardShouldPersistTaps="handled"
-                  renderItem={({ item }) => (
+                {debitFocused && (
+                  <>
+                    {!debitExactMatch && debitQuery.length > 0 && (
+                      <View style={styles.parentRow}>
+                        <Text style={styles.parentLabel}>Parent account</Text>
+                        {!debitParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
+                        <TouchableOpacity
+                          style={styles.parentSelect}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setActiveParentPicker('debit');
+                          }}
+                        >
+                          <Text style={styles.parentSelectText}>
+                            {debitParent?.name ?? 'Choose parent account'}
+                          </Text>
+                        </TouchableOpacity>
+                        {debitParent && (
+                          <Text style={styles.parentMeta}>Category: {debitParent.root_type ?? 'Unknown'}</Text>
+                        )}
+                      </View>
+                    )}
+                    {!!debitError && <Text style={styles.errorText}>{debitError}</Text>}
+                    {!!debitSuccess && <Text style={styles.successText}>{debitSuccess}</Text>}
+                    <FlatList
+                      data={debitFiltered}
+                      keyExtractor={(item) => item.id}
+                      style={styles.accountListInner}
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                      ListEmptyComponent={
+                        debitQuery.length > 0 ? (
+                          <Text style={styles.emptyText}>No matching accounts.</Text>
+                        ) : null
+                      }
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[styles.accountItem, item.id === debitAccountId && styles.accountItemActive]}
+                          onPress={() => {
+                            setDebitAccountId(item.id);
+                            setDebitSearch(item.name);
+                            setDebitFocused(false);
+                            Keyboard.dismiss();
+                          }}
+                          testID={`debit-account-${item.id}`}
+                        >
+                          <Text style={styles.accountText}>{item.name}</Text>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </>
+                )}
+              </View>
+              <Text style={styles.label}>Credit Account</Text>
+              <View style={styles.accountBox}>
+                <View style={styles.searchRow}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search accounts"
+                    value={creditSearch}
+                    onFocus={() => setCreditFocused(true)}
+                    onBlur={() => setCreditFocused(false)}
+                    onChangeText={(text) => {
+                      setCreditSearch(text);
+                      if (creditSelectedName && text.toLowerCase() !== creditSelectedName.toLowerCase()) {
+                        setCreditAccountId('');
+                      }
+                    }}
+                    testID="credit-search"
+                  />
+                  {creditFocused && !creditExactMatch && creditQuery.length > 0 && (
                     <TouchableOpacity
-                      style={[
-                        styles.parentItem,
-                        item.id === (activeParentPicker === 'debit' ? debitParentId : creditParentId) &&
-                          styles.parentItemActive,
-                      ]}
-                      onPress={() => {
-                        if (activeParentPicker === 'debit') {
-                          setDebitParentId(item.id);
-                          setDebitError(null);
-                        } else {
-                          setCreditParentId(item.id);
-                          setCreditError(null);
-                        }
-                      }}
+                      style={[styles.createButton, (!creditParent || creatingAccount) && styles.createButtonDisabled]}
+                      onPress={() => createAccount('credit')}
+                      disabled={creatingAccount || !creditParent}
                     >
-                      <Text style={styles.parentItemText}>{item.name}</Text>
+                      <Text style={styles.createButtonText}>
+                        {creatingAccount ? 'Creating...' : 'Create'}
+                      </Text>
                     </TouchableOpacity>
                   )}
-                />
+                </View>
+                {creditFocused && (
+                  <>
+                    {!creditExactMatch && creditQuery.length > 0 && (
+                      <View style={styles.parentRow}>
+                        <Text style={styles.parentLabel}>Parent account</Text>
+                        {!creditParent && <Text style={styles.parentHint}>Select a parent to enable Create.</Text>}
+                        <TouchableOpacity
+                          style={styles.parentSelect}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setActiveParentPicker('credit');
+                          }}
+                        >
+                          <Text style={styles.parentSelectText}>
+                            {creditParent?.name ?? 'Choose parent account'}
+                          </Text>
+                        </TouchableOpacity>
+                        {creditParent && (
+                          <Text style={styles.parentMeta}>Category: {creditParent.root_type ?? 'Unknown'}</Text>
+                        )}
+                      </View>
+                    )}
+                    {!!creditError && <Text style={styles.errorText}>{creditError}</Text>}
+                    {!!creditSuccess && <Text style={styles.successText}>{creditSuccess}</Text>}
+                    <FlatList
+                      data={creditFiltered}
+                      keyExtractor={(item) => item.id}
+                      style={styles.accountListInner}
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                      ListEmptyComponent={
+                        creditQuery.length > 0 ? (
+                          <Text style={styles.emptyText}>No matching accounts.</Text>
+                        ) : null
+                      }
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[styles.accountItem, item.id === creditAccountId && styles.accountItemActive]}
+                          onPress={() => {
+                            setCreditAccountId(item.id);
+                            setCreditSearch(item.name);
+                            setCreditFocused(false);
+                            Keyboard.dismiss();
+                          }}
+                          testID={`credit-account-${item.id}`}
+                        >
+                          <Text style={styles.accountText}>{item.name}</Text>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </>
+                )}
               </View>
-            </View>
-          </Modal>
-          <TextInput
-            style={styles.input}
-            placeholder="Notes"
-            value={note}
-            onChangeText={setNote}
-          />
-          <View style={styles.row}>
-            <Button title="Cancel" onPress={onClose} testID="quickadd-cancel" />
-            <Button title={loading ? 'Saving...' : 'Save'} onPress={submit} testID="quickadd-save" />
+              <Modal visible={activeParentPicker !== null} animationType="slide" transparent>
+                <View style={styles.overlay}>
+                  <View style={styles.parentModal}>
+                    <View style={styles.parentHeader}>
+                      <Text style={styles.parentTitle}>Choose parent account</Text>
+                      <TouchableOpacity onPress={() => setActiveParentPicker(null)}>
+                        <Text style={styles.parentClose}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <FlatList
+                      data={groupAccounts}
+                      keyExtractor={(item) => item.id}
+                      keyboardShouldPersistTaps="handled"
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[
+                            styles.parentItem,
+                            item.id === (activeParentPicker === 'debit' ? debitParentId : creditParentId) &&
+                              styles.parentItemActive,
+                          ]}
+                          onPress={() => {
+                            if (activeParentPicker === 'debit') {
+                              setDebitParentId(item.id);
+                              setDebitError(null);
+                            } else {
+                              setCreditParentId(item.id);
+                              setCreditError(null);
+                            }
+                          }}
+                        >
+                          <Text style={styles.parentItemText}>{item.name}</Text>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </View>
+                </View>
+              </Modal>
+              <TextInput
+                style={styles.input}
+                placeholder="Notes"
+                value={note}
+                onChangeText={setNote}
+              />
+              <View style={styles.row}>
+                <Button title="Cancel" onPress={onClose} testID="quickadd-cancel" />
+                <Button title={loading ? 'Saving...' : 'Save'} onPress={submit} testID="quickadd-save" />
+              </View>
+              {!!submitError && <Text style={styles.errorText}>{submitError}</Text>}
+            </ScrollView>
           </View>
-          {!!submitError && <Text style={styles.errorText}>{submitError}</Text>}
-        </View>
-      </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modal: { margin: 20, padding: 16, backgroundColor: 'white', borderRadius: 12, gap: 12 },
+  modal: { margin: 20, backgroundColor: 'white', borderRadius: 12, maxHeight: '90%' },
+  modalContent: { padding: 16, gap: 12 },
   title: { fontSize: 18, fontWeight: '600' },
   input: { borderWidth: 1, borderColor: '#e2e8f0', padding: 10, borderRadius: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },

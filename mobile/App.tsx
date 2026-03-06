@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import {
@@ -199,84 +204,95 @@ export default function App() {
           }
         />
       ) : (
-        <View style={styles.screen}>
-          <Text style={styles.title}>Cash Books</Text>
-          {hasMultipleProfiles && (
-            <View style={styles.profilePicker}>
-              <Text style={styles.subtitle}>Project</Text>
-              <View style={styles.profileRow}>
-                {mobileProjectProfiles.map((profile) => {
-                  const active = profile.id === selectedProfileId;
-                  return (
-                    <TouchableOpacity
-                      key={profile.id}
-                      style={[
-                        styles.profileChip,
-                        active && styles.profileChipActive,
-                      ]}
-                      onPress={() => {
-                        void setActiveMobileProfile(profile.id);
-                        setSelectedProfileId(profile.id);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.profileChipText,
-                          active && styles.profileChipTextActive,
-                        ]}
-                      >
-                        {profile.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+        <KeyboardAvoidingView
+          style={styles.keyboard}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <ScrollView
+              contentContainerStyle={styles.screen}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.title}>Cash Books</Text>
+              {hasMultipleProfiles && (
+                <View style={styles.profilePicker}>
+                  <Text style={styles.subtitle}>Project</Text>
+                  <View style={styles.profileRow}>
+                    {mobileProjectProfiles.map((profile) => {
+                      const active = profile.id === selectedProfileId;
+                      return (
+                        <TouchableOpacity
+                          key={profile.id}
+                          style={[
+                            styles.profileChip,
+                            active && styles.profileChipActive,
+                          ]}
+                          onPress={() => {
+                            void setActiveMobileProfile(profile.id);
+                            setSelectedProfileId(profile.id);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.profileChipText,
+                              active && styles.profileChipTextActive,
+                            ]}
+                          >
+                            {profile.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+              <View style={styles.addProjectCard}>
+                <Text style={styles.subtitle}>Add Project (one-time)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Project ref (abcd1234...)"
+                  autoCapitalize="none"
+                  value={newProjectRef}
+                  onChangeText={setNewProjectRef}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Legacy Anon Key (not Secret Key)"
+                  autoCapitalize="none"
+                  value={newProjectKey}
+                  onChangeText={setNewProjectKey}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Optional label"
+                  autoCapitalize="words"
+                  value={newProjectLabel}
+                  onChangeText={setNewProjectLabel}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.addProjectButton,
+                    validatingProject && styles.addProjectButtonDisabled,
+                  ]}
+                  onPress={addProjectProfile}
+                  disabled={validatingProject}
+                >
+                  <Text style={styles.addProjectText}>
+                    {validatingProject ? 'Validating...' : 'Add Project Profile'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.resetProfilesButton}
+                  onPress={resetProjectProfiles}
+                >
+                  <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          )}
-          <View style={styles.addProjectCard}>
-            <Text style={styles.subtitle}>Add Project (one-time)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Project ref (abcd1234...)"
-              autoCapitalize="none"
-              value={newProjectRef}
-              onChangeText={setNewProjectRef}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Legacy Anon Key (not Secret Key)"
-              autoCapitalize="none"
-              value={newProjectKey}
-              onChangeText={setNewProjectKey}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Optional label"
-              autoCapitalize="words"
-              value={newProjectLabel}
-              onChangeText={setNewProjectLabel}
-            />
-            <TouchableOpacity
-              style={[
-                styles.addProjectButton,
-                validatingProject && styles.addProjectButtonDisabled,
-              ]}
-              onPress={addProjectProfile}
-              disabled={validatingProject}
-            >
-              <Text style={styles.addProjectText}>
-                {validatingProject ? 'Validating...' : 'Add Project Profile'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.resetProfilesButton}
-              onPress={resetProjectProfiles}
-            >
-              <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
-            </TouchableOpacity>
-          </View>
-          <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
-        </View>
+              <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
@@ -284,7 +300,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  screen: { flex: 1, padding: 20, justifyContent: 'center' },
+  keyboard: { flex: 1 },
+  screen: { flexGrow: 1, padding: 20, justifyContent: 'center' },
   title: { fontSize: 28, fontWeight: '700', marginBottom: 16 },
   subtitle: { fontSize: 12, color: '#475569', marginBottom: 8 },
   profilePicker: { marginBottom: 12 },
