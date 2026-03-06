@@ -1,0 +1,111 @@
+{
+  "label": "Cash Count Record",
+  "name": "CashCountRecord",
+  "naming": "numberSeries",
+  "isSubmittable": true,
+  "fields": [
+    {
+      "label": "Record No",
+      "fieldname": "name",
+      "fieldtype": "Data",
+      "required": true,
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "numberSeries",
+      "label": "Number Series",
+      "fieldtype": "Link",
+      "target": "NumberSeries",
+      "create": true,
+      "required": true,
+      "default": "CCR-",
+      "section": "Default"
+    },
+    {
+      "fieldname": "period",
+      "label": "Period",
+      "fieldtype": "Data",
+      "required": true,
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "periodStart",
+      "label": "Period Start",
+      "fieldtype": "Date",
+      "required": true,
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "periodEnd",
+      "label": "Period End",
+      "fieldtype": "Date",
+      "required": true,
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "expectedBalance",
+      "label": "Expected Balance",
+      "fieldtype": "Currency",
+      "precision": 4,
+      "readOnly": true,
+      "section": "Reconciliation"
+    },
+    {
+      "fieldname": "physicalCount",
+      "label": "Physical Count",
+      "fieldtype": "Currency",
+      "precision": 4,
+      "required": true,
+      "section": "Reconciliation"
+    },
+    {
+      "fieldname": "variance",
+      "label": "Variance (Expected - Actual)",
+      "fieldtype": "Currency",
+      "precision": 4,
+      "readOnly": true,
+      "section": "Reconciliation"
+    },
+    {
+      "fieldname": "varianceAccount",
+      "label": "Variance Account",
+      "fieldtype": "Link",
+      "target": "Account",
+      "required": true,
+      "section": "Reconciliation"
+    },
+    {
+      "fieldname": "journalEntryName",
+      "label": "Journal Entry",
+      "fieldtype": "Link",
+      "target": "JournalEntry",
+      "readOnly": true,
+      "section": "References"
+    },
+    {
+      "fieldname": "notes",
+      "label": "Notes",
+      "fieldtype": "Text",
+      "section": "References"
+    },
+    {
+      "fieldname": "createdDate",
+      "label": "Created Date",
+      "fieldtype": "DateTime",
+      "readOnly": true,
+      "section": "Audit"
+    },
+    {
+      "fieldname": "submittedDate",
+      "label": "Submitted Date",
+      "fieldtype": "DateTime",
+      "readOnly": true,
+      "section": "Audit"
+    }
+  ],
+  "keywordFields": ["name", "period", "physicalCount"]
+}
