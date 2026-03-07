@@ -140,7 +140,6 @@ export type CashInHandSummaryRow = {
   period: string;
   periodStart: string;
   periodEnd: string;
-  openingBalance: number;
   debits: number;
   credits: number;
   closingBalance: number;

@@ -1,33 +1,21 @@
 {
-  "label": "Cash Count Record",
   "name": "CashCountRecord",
-  "naming": "numberSeries",
+  "label": "Cash Count Record",
+  "naming": "autoincrement",
   "isSubmittable": true,
   "fields": [
     {
-      "label": "Record No",
       "fieldname": "name",
+      "label": "Entry No.",
       "fieldtype": "Data",
       "required": true,
       "readOnly": true,
-      "section": "Default"
-    },
-    {
-      "fieldname": "numberSeries",
-      "label": "Number Series",
-      "fieldtype": "Link",
-      "target": "NumberSeries",
-      "create": true,
-      "required": true,
-      "default": "CCR-",
       "section": "Default"
     },
     {
       "fieldname": "period",
       "label": "Period",
       "fieldtype": "Data",
-      "required": true,
-      "readOnly": true,
       "section": "Default"
     },
     {
@@ -35,7 +23,6 @@
       "label": "Period Start",
       "fieldtype": "Date",
       "required": true,
-      "readOnly": true,
       "section": "Default"
     },
     {
@@ -43,40 +30,34 @@
       "label": "Period End",
       "fieldtype": "Date",
       "required": true,
-      "readOnly": true,
       "section": "Default"
     },
     {
       "fieldname": "expectedBalance",
       "label": "Expected Balance",
       "fieldtype": "Currency",
-      "precision": 4,
       "readOnly": true,
-      "section": "Reconciliation"
+      "section": "Counts"
     },
     {
       "fieldname": "physicalCount",
       "label": "Physical Count",
       "fieldtype": "Currency",
-      "precision": 4,
-      "required": true,
-      "section": "Reconciliation"
+      "section": "Counts"
     },
     {
       "fieldname": "variance",
-      "label": "Variance (Expected - Actual)",
+      "label": "Variance",
       "fieldtype": "Currency",
-      "precision": 4,
       "readOnly": true,
-      "section": "Reconciliation"
+      "section": "Counts"
     },
     {
       "fieldname": "varianceAccount",
       "label": "Variance Account",
       "fieldtype": "Link",
       "target": "Account",
-      "required": true,
-      "section": "Reconciliation"
+      "section": "Counts"
     },
     {
       "fieldname": "journalEntryName",
@@ -84,28 +65,46 @@
       "fieldtype": "Link",
       "target": "JournalEntry",
       "readOnly": true,
-      "section": "References"
+      "section": "Counts"
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "default": "Draft",
+      "options": [
+        {
+          "value": "Draft",
+          "label": "Draft"
+        },
+        {
+          "value": "Submitted",
+          "label": "Submitted"
+        }
+      ],
+      "required": true,
+      "section": "Default"
     },
     {
       "fieldname": "notes",
       "label": "Notes",
       "fieldtype": "Text",
-      "section": "References"
+      "section": "Notes"
     },
     {
       "fieldname": "createdDate",
       "label": "Created Date",
-      "fieldtype": "DateTime",
+      "fieldtype": "Datetime",
       "readOnly": true,
-      "section": "Audit"
+      "section": "System"
     },
     {
       "fieldname": "submittedDate",
       "label": "Submitted Date",
-      "fieldtype": "DateTime",
+      "fieldtype": "Datetime",
       "readOnly": true,
-      "section": "Audit"
+      "section": "System"
     }
   ],
-  "keywordFields": ["name", "period", "physicalCount"]
+  "keywordFields": ["name", "period"]
 }

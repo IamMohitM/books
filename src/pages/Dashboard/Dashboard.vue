@@ -29,19 +29,10 @@
     >
       <div style="min-width: var(--w-desk-fixed)" class="overflow-auto">
         <div class="flex gap-4 p-4">
-          <div class="flex-1 flex flex-col gap-4">
-            <CashInHand />
-            <CashInHandDetail
-              ref="cashInHandDetail"
-              :summary-data="summaryData"
-              :dark-mode="darkMode"
-            />
-          </div>
           <div class="flex-1">
             <CashInHandSummary
               ref="cashInHandSummary"
               :dark-mode="darkMode"
-              @data-updated="summaryData = $event"
             />
           </div>
         </div>
@@ -99,9 +90,7 @@
 <script>
 import PageHeader from 'src/components/PageHeader.vue';
 import UnpaidInvoices from './UnpaidInvoices.vue';
-import CashInHand from './CashInHand.vue';
 import CashInHandSummary from './CashInHandSummary.vue';
-import CashInHandDetail from './CashInHandDetail.vue';
 import Cashflow from './Cashflow.vue';
 import Expenses from './Expenses.vue';
 import LoanSummary from './LoanSummary.vue';
@@ -113,9 +102,7 @@ export default {
   name: 'Dashboard',
   components: {
     PageHeader,
-    CashInHand,
     CashInHandSummary,
-    CashInHandDetail,
     Cashflow,
     ProfitAndLoss,
     Expenses,
@@ -129,7 +116,6 @@ export default {
   data() {
     return {
       period: 'This Year',
-      summaryData: [],
     };
   },
   activated() {

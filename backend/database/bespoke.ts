@@ -17,6 +17,13 @@ import { safeParseFloat } from 'utils/index';
 export class BespokeQueries {
   [key: string]: BespokeFunction;
 
+  private static toISODate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   static async ensureLoanLedgerColumns(db: DatabaseCore): Promise<void> {
     const info = (await db.knex!.raw(
       `PRAGMA table_info(${ModelNameEnum.AccountingLedgerEntry})`
@@ -126,7 +133,10 @@ export class BespokeQueries {
         credit: 'AccountingLedgerEntry.credit',
       })
       .where('AccountingLedgerEntry.reverted', false)
-      .where('AccountingLedgerEntry.date', '<=', asOfDate)
+      .whereRaw(
+        "date(AccountingLedgerEntry.date) <= date(?)",
+        [asOfDate]
+      )
       .where('Account.accountType', 'Cash')
       .where('Account.isGroup', false)
       .first()) as { debit?: number; credit?: number } | undefined;
@@ -159,8 +169,8 @@ export class BespokeQueries {
       const start = new Date(current.getFullYear(), current.getMonth(), 1);
       const end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
 
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
+      const startStr = BespokeQueries.toISODate(start);
+      const endStr = BespokeQueries.toISODate(end);
       const period = start.toLocaleString('default', {
         month: 'short',
         year: 'numeric',
@@ -172,12 +182,8 @@ export class BespokeQueries {
     }
 
     const summary = [];
-    let previousClosingBalance = 0;
-
-    // For each month, calculate: Opening + Debits - Credits = Closing
+    // For each month, calculate: Debits - Credits = Closing
     for (const month of months) {
-      const openingBalance = previousClosingBalance;
-
       // Get all cash account debits and credits for this month
       const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
         .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
@@ -186,10 +192,10 @@ export class BespokeQueries {
           totalCredit: 'AccountingLedgerEntry.credit',
         })
         .where('AccountingLedgerEntry.reverted', false)
-        .whereBetween('AccountingLedgerEntry.date', [
-          month.periodStart,
-          month.periodEnd,
-        ])
+        .whereRaw(
+          "date(AccountingLedgerEntry.date) between date(?) and date(?)",
+          [month.periodStart, month.periodEnd]
+        )
         .where('Account.accountType', 'Cash')
         .where('Account.isGroup', false)
         .first()) as
@@ -201,20 +207,17 @@ export class BespokeQueries {
 
       const debits = monthlyFlow?.totalDebit ?? 0;
       const credits = monthlyFlow?.totalCredit ?? 0;
-      const closingBalance = openingBalance + Number(debits) - Number(credits);
+      const closingBalance = Number(debits) - Number(credits);
 
       summary.push({
         period: month.period,
         periodStart: month.periodStart,
         periodEnd: month.periodEnd,
-        openingBalance,
         debits: Number(debits),
         credits: Number(credits),
         closingBalance,
-        netChange: closingBalance - openingBalance,
+        netChange: closingBalance,
       });
-
-      previousClosingBalance = closingBalance;
     }
 
     return summary;
@@ -228,7 +231,7 @@ export class BespokeQueries {
     // Get cash balance as of the day before the month starts (opening for this month)
     const dayBefore = new Date(periodStart);
     dayBefore.setDate(dayBefore.getDate() - 1);
-    const dayBeforeStr = dayBefore.toISOString().split('T')[0];
+    const dayBeforeStr = BespokeQueries.toISODate(dayBefore);
 
     const openingResult = await BespokeQueries.getCashInHand(db, dayBeforeStr);
     const openingBalance = openingResult.cashInHand;
@@ -241,7 +244,10 @@ export class BespokeQueries {
         totalCredit: 'AccountingLedgerEntry.credit',
       })
       .where('AccountingLedgerEntry.reverted', false)
-      .whereBetween('AccountingLedgerEntry.date', [periodStart, periodEnd])
+      .whereRaw(
+        "date(AccountingLedgerEntry.date) between date(?) and date(?)",
+        [periodStart, periodEnd]
+      )
       .where('Account.accountType', 'Cash')
       .where('Account.isGroup', false)
       .first()) as
@@ -283,10 +289,10 @@ export class BespokeQueries {
 
     const current = new Date(from.getFullYear(), from.getMonth(), 1);
     while (current <= to) {
-      const monthStart = current.toISOString().split('T')[0];
-      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0)
-        .toISOString()
-        .split('T')[0];
+      const monthStart = BespokeQueries.toISODate(current);
+      const monthEnd = BespokeQueries.toISODate(
+        new Date(current.getFullYear(), current.getMonth() + 1, 0)
+      );
 
       const period = current.toLocaleString('default', {
         month: 'short',
