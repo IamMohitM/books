@@ -70,18 +70,6 @@
                 dark:text-gray-300
               "
             >
-              {{ t`Opening` }}
-            </th>
-            <th
-              class="
-                px-3
-                py-2
-                text-right
-                font-semibold
-                text-gray-700
-                dark:text-gray-300
-              "
-            >
               {{ t`Debits` }}
             </th>
             <th
@@ -125,9 +113,6 @@
           >
             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
               {{ row.period }}
-            </td>
-            <td class="px-3 py-2 text-right text-gray-900 dark:text-gray-100">
-              {{ fyo.format(row.openingBalance, 'Currency') }}
             </td>
             <td class="px-3 py-2 text-right text-green-600 dark:text-green-400">
               {{ fyo.format(row.debits, 'Currency') }}
@@ -217,7 +202,6 @@ export default defineComponent({
         this.dateRangeTo as string
       );
       this.summaryData = result;
-      this.$emit('data-updated', result);
     },
   },
 });

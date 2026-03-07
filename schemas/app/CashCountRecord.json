@@ -1,0 +1,110 @@
+{
+  "name": "CashCountRecord",
+  "label": "Cash Count Record",
+  "naming": "autoincrement",
+  "isSubmittable": true,
+  "fields": [
+    {
+      "fieldname": "name",
+      "label": "Entry No.",
+      "fieldtype": "Data",
+      "required": true,
+      "readOnly": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "period",
+      "label": "Period",
+      "fieldtype": "Data",
+      "section": "Default"
+    },
+    {
+      "fieldname": "periodStart",
+      "label": "Period Start",
+      "fieldtype": "Date",
+      "required": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "periodEnd",
+      "label": "Period End",
+      "fieldtype": "Date",
+      "required": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "expectedBalance",
+      "label": "Expected Balance",
+      "fieldtype": "Currency",
+      "readOnly": true,
+      "section": "Counts"
+    },
+    {
+      "fieldname": "physicalCount",
+      "label": "Physical Count",
+      "fieldtype": "Currency",
+      "section": "Counts"
+    },
+    {
+      "fieldname": "variance",
+      "label": "Variance",
+      "fieldtype": "Currency",
+      "readOnly": true,
+      "section": "Counts"
+    },
+    {
+      "fieldname": "varianceAccount",
+      "label": "Variance Account",
+      "fieldtype": "Link",
+      "target": "Account",
+      "section": "Counts"
+    },
+    {
+      "fieldname": "journalEntryName",
+      "label": "Journal Entry",
+      "fieldtype": "Link",
+      "target": "JournalEntry",
+      "readOnly": true,
+      "section": "Counts"
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "default": "Draft",
+      "options": [
+        {
+          "value": "Draft",
+          "label": "Draft"
+        },
+        {
+          "value": "Submitted",
+          "label": "Submitted"
+        }
+      ],
+      "required": true,
+      "section": "Default"
+    },
+    {
+      "fieldname": "notes",
+      "label": "Notes",
+      "fieldtype": "Text",
+      "section": "Notes"
+    },
+    {
+      "fieldname": "createdDate",
+      "label": "Created Date",
+      "fieldtype": "Datetime",
+      "readOnly": true,
+      "section": "System"
+    },
+    {
+      "fieldname": "submittedDate",
+      "label": "Submitted Date",
+      "fieldtype": "Datetime",
+      "readOnly": true,
+      "section": "System"
+    }
+  ],
+  "keywordFields": ["name", "period"]
+}
