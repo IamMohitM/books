@@ -5,8 +5,11 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "platforms": [
-      "ios"
+      "ios",
+      "android",
+      "web"
     ],
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.books.cashbooks",
@@ -16,6 +19,14 @@
     },
     "android": {
       "package": "com.anonymous.cashbooksmobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Cash Books",
+      "shortName": "CashBooks",
+      "description": "Cash Books web app",
+      "themeColor": "#141c2d",
+      "backgroundColor": "#141c2d"
     }
   }
 }

@@ -98,9 +98,7 @@ function parseProfilesFromEnv(): MobileProjectProfile[] {
   const supabaseUrl = getExpoEnv('EXPO_PUBLIC_SUPABASE_URL');
   const supabaseAnonKey = getExpoEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY'
-    );
+    return [];
   }
 
   const profile = normalizeProfile(
@@ -163,21 +161,25 @@ function generateLocalId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-let activeProfile = mobileProjectProfiles[0]!;
+let activeProfile: MobileProjectProfile | null = mobileProjectProfiles[0] ?? null;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-export let supabase: SupabaseClient = createSupabaseClient(
-  activeProfile.url,
-  activeProfile.anonKey
-);
+export let supabase: SupabaseClient | null =
+  activeProfile ? createSupabaseClient(activeProfile.url, activeProfile.anonKey) : null;
 
-export let supabasePublicAnonKey = activeProfile.anonKey;
-export let supabasePublicUrl = activeProfile.url;
+export let supabasePublicAnonKey = activeProfile?.anonKey ?? '';
+export let supabasePublicUrl = activeProfile?.url ?? '';
 
 export function getSupabaseClient(): SupabaseClient {
+  if (!supabase || !activeProfile) {
+    throw new Error('No active Supabase project configured.');
+  }
   return supabase;
 }
 
 export function getActiveMobileProfile(): MobileProjectProfile {
+  if (!activeProfile) {
+    throw new Error('No active Supabase project configured.');
+  }
   return activeProfile;
 }
 
@@ -225,9 +227,15 @@ export async function loadMobileProjectProfilesFromDisk() {
 
     mobileProjectProfiles = mergeProfiles(envProfiles, diskRows);
 
-    if (!mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
-      activeProfile = mobileProjectProfiles[0]!;
-      await setActiveMobileProfile(activeProfile.id);
+    if (activeProfile && !mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
+      activeProfile = mobileProjectProfiles[0] ?? null;
+      if (activeProfile) {
+        await setActiveMobileProfile(activeProfile.id);
+      } else {
+        supabase = null;
+        supabasePublicAnonKey = '';
+        supabasePublicUrl = '';
+      }
     }
 
     return mobileProjectProfiles;
@@ -249,13 +257,18 @@ export async function resetMobileProjectProfilesToDefault() {
   // Clear in-memory state FIRST
   mobileProjectProfiles =
     envProfiles.length > 0 ? [envProfiles[0]!] : [...envProfiles];
-  activeProfile = mobileProjectProfiles[0]!;
-  supabasePublicAnonKey = activeProfile.anonKey;
-  supabasePublicUrl = activeProfile.url;
+  activeProfile = mobileProjectProfiles[0] ?? null;
+  supabasePublicAnonKey = activeProfile?.anonKey ?? '';
+  supabasePublicUrl = activeProfile?.url ?? '';
+  supabase = activeProfile
+    ? createSupabaseClient(activeProfile.url, activeProfile.anonKey)
+    : null;
 
   // Sign out before resetting
   try {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
   } catch (error) {
     console.warn('Error signing out during reset:', error);
   }

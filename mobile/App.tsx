@@ -31,7 +31,7 @@ export default function App() {
   const [profilesReady, setProfilesReady] = useState(false);
   const [, setProfilesVersion] = useState(0);
   const [selectedProfileId, setSelectedProfileId] = useState(
-    mobileProjectProfiles[0]?.id ?? 'default'
+    mobileProjectProfiles[0]?.id ?? ''
   );
   const [newProjectRef, setNewProjectRef] = useState('');
   const [newProjectKey, setNewProjectKey] = useState('');
@@ -117,6 +117,7 @@ export default function App() {
     };
   }, [profilesReady, selectedProfileId]);
 
+  const hasProfiles = mobileProjectProfiles.length > 0;
   const hasMultipleProfiles = mobileProjectProfiles.length > 1;
   const selectedProfile =
     mobileProjectProfiles.find((p) => p.id === selectedProfileId) ??
@@ -218,6 +219,11 @@ export default function App() {
               showsVerticalScrollIndicator={false}
             >
               <Text style={styles.title}>Cash Books</Text>
+              {!hasProfiles && (
+                <Text style={styles.emptyHint}>
+                  No project configured yet. Add a project profile to continue.
+                </Text>
+              )}
               {hasMultipleProfiles && (
                 <View style={styles.profilePicker}>
                   <Text style={styles.subtitle}>Project</Text>
@@ -292,7 +298,9 @@ export default function App() {
                   <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
                 </TouchableOpacity>
               </View>
-              <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
+              {hasProfiles && (
+                <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
+              )}
             </ScrollView>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
@@ -357,6 +365,7 @@ const styles = StyleSheet.create({
   keyboard: { flex: 1 },
   screen: { flexGrow: 1, padding: 24, justifyContent: 'center' },
   title: { fontSize: 30, fontWeight: '700', marginBottom: 18 },
+  emptyHint: { fontSize: 14, color: '#64748b', marginBottom: 12 },
   subtitle: { fontSize: 14, color: '#475569', marginBottom: 10 },
   profilePicker: { marginBottom: 12 },
   profileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

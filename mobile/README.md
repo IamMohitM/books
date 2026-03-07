@@ -30,6 +30,34 @@ npm install
 npm run ios
 ```
 
+## Web/PWA (No Apple Developer Program)
+This app can be deployed as a web/PWA build and installed on iOS via Safari:
+
+### Local Web Run
+```bash
+npm run web
+```
+
+### Export Static Web Build
+```bash
+npm run export:web
+```
+
+Output is generated in `mobile/dist`.
+
+### Deploy to Netlify
+1. Create a new Netlify site.
+2. Connect the `mobile/` folder as the project root.
+3. Build command: `npm run export:web`
+4. Publish directory: `dist`
+
+### Install on iOS
+1. Open the deployed URL in Safari.
+2. Tap Share → Add to Home Screen.
+
+### Updates
+Redeploy the site to push updates. Users get the new version on next open/refresh.
+
 ## Features (MVP)
 - Login
 - Transactions list
