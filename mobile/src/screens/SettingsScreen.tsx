@@ -120,60 +120,65 @@ export default function SettingsScreen({
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Invite collaborator</Text>
-        <Text style={styles.sectionHint}>Owners can invite existing users by email.</Text>
-        <View style={styles.inviteRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="email@company.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TouchableOpacity style={styles.inviteButton} onPress={invite} disabled={inviting}>
-            <Text style={styles.inviteButtonText}>{inviting ? 'Inviting...' : 'Invite'}</Text>
-          </TouchableOpacity>
-        </View>
-        {!!status && <Text style={styles.status}>{status}</Text>}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Collaborators</Text>
-        <FlatList
-          data={collaborators}
-          keyExtractor={(item) => item.user_id}
-          renderItem={({ item }) => (
-            <View style={styles.collabRow}>
-              <View>
-                <Text style={styles.collabName}>{item.full_name || item.email || 'Unknown user'}</Text>
-                <Text style={styles.collabEmail}>{item.email ?? 'No email'}</Text>
-              </View>
-              <Text style={styles.collabRole}>{item.role}</Text>
+    <FlatList
+      data={collaborators}
+      keyExtractor={(item) => item.user_id}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={styles.container}
+      ListHeaderComponent={
+        <View>
+          <Text style={styles.title}>Settings</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Invite collaborator</Text>
+            <Text style={styles.sectionHint}>Owners can invite existing users by email.</Text>
+            <View style={styles.inviteRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="email@company.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TouchableOpacity style={styles.inviteButton} onPress={invite} disabled={inviting}>
+                <Text style={styles.inviteButtonText}>{inviting ? 'Inviting...' : 'Invite'}</Text>
+              </TouchableOpacity>
             </View>
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>No collaborators yet.</Text>}
-        />
-      </View>
-
-      <TouchableOpacity style={styles.signOutButton} onPress={onSignOut}>
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
-      {!!onSwitchProject && (
-        <TouchableOpacity style={styles.switchButton} onPress={onSwitchProject}>
-          <Text style={styles.switchText}>Switch Project</Text>
-        </TouchableOpacity>
+            {!!status && <Text style={styles.status}>{status}</Text>}
+          </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Collaborators</Text>
+          </View>
+        </View>
+      }
+      renderItem={({ item }) => (
+        <View style={styles.collabRow}>
+          <View>
+            <Text style={styles.collabName}>{item.full_name || item.email || 'Unknown user'}</Text>
+            <Text style={styles.collabEmail}>{item.email ?? 'No email'}</Text>
+          </View>
+          <Text style={styles.collabRole}>{item.role}</Text>
+        </View>
       )}
-    </View>
+      ListEmptyComponent={<Text style={styles.empty}>No collaborators yet.</Text>}
+      ListFooterComponent={
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.signOutButton} onPress={onSignOut}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+          {!!onSwitchProject && (
+            <TouchableOpacity style={styles.switchButton} onPress={onSwitchProject}>
+              <Text style={styles.switchText}>Switch Project</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { paddingBottom: 120 },
   title: { fontSize: 20, fontWeight: '700', marginBottom: 14 },
   section: { marginBottom: 22 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
@@ -209,8 +214,8 @@ const styles = StyleSheet.create({
   collabEmail: { fontSize: 13, color: '#64748b' },
   collabRole: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
   empty: { fontSize: 13, color: '#64748b' },
+  footer: { marginTop: 12, gap: 10 },
   signOutButton: {
-    marginTop: 'auto',
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: '#e2e8f0',
