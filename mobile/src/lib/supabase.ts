@@ -20,6 +20,7 @@ export type MobileProjectValidationResult = {
 const PROFILE_STORE_FILE = `${
   FileSystem.documentDirectory ?? 'file:///tmp/'
 }sync-project-profiles.json`;
+const WEB_PROFILE_STORE_KEY = 'sync-project-profiles';
 const PROFILE_VALIDATION_TIMEOUT_MS = 6_000;
 
 function getExpoEnv(name: string): string {
@@ -213,6 +214,46 @@ export async function setActiveMobileProfile(profileId: string): Promise<Supabas
 export async function loadMobileProjectProfilesFromDisk() {
   const startEpoch = profilesEpoch;
   try {
+    if (Platform.OS === 'web') {
+      const raw =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem(WEB_PROFILE_STORE_KEY)
+          : null;
+      if (startEpoch !== profilesEpoch) {
+        return mobileProjectProfiles;
+      }
+      if (!raw) {
+        return mobileProjectProfiles;
+      }
+      const parsed = JSON.parse(raw) as Array<Partial<MobileProjectProfile>>;
+      const diskRows: MobileProjectProfile[] = Array.isArray(parsed)
+        ? parsed
+            .map((row, index) =>
+              normalizeProfile(row, `disk-${index + 1}`, `Project ${index + 1}`)
+            )
+            .filter((row): row is MobileProjectProfile => Boolean(row))
+        : [];
+
+      if (!diskRows.length) {
+        return mobileProjectProfiles;
+      }
+
+      mobileProjectProfiles = mergeProfiles(envProfiles, diskRows);
+
+      if (activeProfile && !mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
+        activeProfile = mobileProjectProfiles[0] ?? null;
+        if (activeProfile) {
+          await setActiveMobileProfile(activeProfile.id);
+        } else {
+          supabase = null;
+          supabasePublicAnonKey = '';
+          supabasePublicUrl = '';
+        }
+      }
+
+      return mobileProjectProfiles;
+    }
+
     const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
     if (startEpoch !== profilesEpoch) {
       return mobileProjectProfiles;
@@ -259,6 +300,12 @@ export async function loadMobileProjectProfilesFromDisk() {
 
 export async function persistMobileProjectProfilesToDisk() {
   const json = JSON.stringify(mobileProjectProfiles, null, 2);
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(WEB_PROFILE_STORE_KEY, json);
+    }
+    return;
+  }
   await FileSystem.writeAsStringAsync(PROFILE_STORE_FILE, json, {
     encoding: FileSystem.EncodingType.UTF8,
   });
@@ -277,29 +324,35 @@ export async function resetMobileProjectProfilesToDefault() {
     ? createSupabaseClient(activeProfile.url, activeProfile.anonKey)
     : null;
 
-  // Sign out before resetting
-  try {
-    if (supabase) {
-      await supabase.auth.signOut();
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(WEB_PROFILE_STORE_KEY);
     }
-  } catch (error) {
-    console.warn('Error signing out during reset:', error);
-  }
-
-  await setActiveMobileProfile(activeProfile.id);
-
-  // Delete file and VERIFY deletion succeeded
-  try {
-    await FileSystem.deleteAsync(PROFILE_STORE_FILE, { idempotent: true });
-
-    // Verify file was actually deleted
-    const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
-    if (info.exists) {
-      throw new Error('File still exists after deletion');
+  } else {
+    // Sign out before resetting
+    try {
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.warn('Error signing out during reset:', error);
     }
-  } catch (error) {
-    console.error('Failed to delete profile store:', error);
-    throw new Error(`Reset failed: ${(error as Error).message}`);
+
+    await setActiveMobileProfile(activeProfile.id);
+
+    // Delete file and VERIFY deletion succeeded
+    try {
+      await FileSystem.deleteAsync(PROFILE_STORE_FILE, { idempotent: true });
+
+      // Verify file was actually deleted
+      const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
+      if (info.exists) {
+        throw new Error('File still exists after deletion');
+      }
+    } catch (error) {
+      console.error('Failed to delete profile store:', error);
+      throw new Error(`Reset failed: ${(error as Error).message}`);
+    }
   }
 
   await persistMobileProjectProfilesToDisk();
