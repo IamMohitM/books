@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export type MobileProjectProfile = {
   id: string;
@@ -138,14 +139,26 @@ const envProfiles = parseProfilesFromEnv();
 export let mobileProjectProfiles: MobileProjectProfile[] = [...envProfiles];
 let profilesEpoch = 0;
 
+function getStorageKeyForUrl(url: string) {
+  try {
+    const hostname = new URL(url).hostname;
+    const projectRef = hostname.split('.')[0];
+    return `sb-${projectRef}-auth-token`;
+  } catch {
+    return undefined;
+  }
+}
+
 function createSupabaseClient(url: string, key: string): SupabaseClient {
+  const storageKey = getStorageKeyForUrl(url);
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   return createClient(url, key, {
     auth: {
-      storage: AsyncStorage,
+      storage: Platform.OS === 'web' ? undefined : AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      storageKey,
     },
   }) as unknown as SupabaseClient;
 }

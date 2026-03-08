@@ -38,6 +38,17 @@ export default function App() {
   const [newProjectLabel, setNewProjectLabel] = useState('');
   const [validatingProject, setValidatingProject] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
+  const [projectStatus, setProjectStatus] = useState<string | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+      setProjectStatus(message);
+      return;
+    }
+
+    Alert.alert(title, message);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -126,12 +137,13 @@ export default function App() {
   const addProjectProfile = async () => {
     try {
       setValidatingProject(true);
+      setProjectStatus(null);
       const validation = await validateMobileProjectCredentials({
         projectRef: newProjectRef,
         anonKey: newProjectKey,
       });
       if (!validation.ok) {
-        Alert.alert(
+        showAlert(
           'Unable to add project',
           validation.message ?? 'Project ref/key validation failed.'
         );
@@ -150,9 +162,9 @@ export default function App() {
       setNewProjectRef('');
       setNewProjectKey('');
       setNewProjectLabel('');
-      Alert.alert('Project added', `Added ${profile.label}`);
+      showAlert('Project added', `Added ${profile.label}`);
     } catch (error) {
-      Alert.alert('Unable to add project', (error as Error).message);
+      showAlert('Unable to add project', (error as Error).message);
     } finally {
       setValidatingProject(false);
     }
@@ -179,12 +191,12 @@ export default function App() {
               setSession(null);
               setProfilesVersion((v) => v + 1);
 
-              Alert.alert(
+              showAlert(
                 'Profiles Reset',
                 'All saved profiles cleared. App has been refreshed to default profile.'
               );
             } catch (error) {
-              Alert.alert(
+              showAlert(
                 'Reset Failed',
                 `Could not complete reset: ${(error as Error).message}`
               );
@@ -297,6 +309,9 @@ export default function App() {
                 >
                   <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
                 </TouchableOpacity>
+                {!!projectStatus && (
+                  <Text style={styles.projectStatus}>{projectStatus}</Text>
+                )}
               </View>
               {hasProfiles && (
                 <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
@@ -508,6 +523,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   resetProfilesText: { color: '#0f172a', fontWeight: '700', fontSize: 14 },
+  projectStatus: { fontSize: 13, color: '#0f172a' },
   switcherOverlay: {
     flex: 1,
     justifyContent: 'center',
