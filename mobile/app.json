@@ -27,6 +27,7 @@
       "description": "Cash Books web app",
       "themeColor": "#141c2d",
       "backgroundColor": "#141c2d",
+      "display": "standalone",
       "meta": {
         "viewport": "width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
       }

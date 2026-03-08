@@ -205,6 +205,7 @@ function Tab({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
     padding: 20,
     paddingTop: Platform.OS === 'web' ? 44 : 20,
     paddingBottom: Platform.OS === 'web' ? 24 : 12,
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#f8fafc' },
   content: {
     flex: 1,
-    paddingBottom: Platform.OS === 'web' ? 96 : 72,
+    paddingBottom: Platform.OS === 'web' ? 128 : 96,
   },
   loading: { marginTop: 40, textAlign: 'center', fontSize: 15 },
   emptyState: {

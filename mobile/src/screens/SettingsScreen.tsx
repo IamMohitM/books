@@ -178,7 +178,7 @@ export default function SettingsScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { paddingBottom: 120 },
+  container: { paddingBottom: 180 },
   title: { fontSize: 20, fontWeight: '700', marginBottom: 14 },
   section: { marginBottom: 22 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   collabEmail: { fontSize: 13, color: '#64748b' },
   collabRole: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
   empty: { fontSize: 13, color: '#64748b' },
-  footer: { marginTop: 12, gap: 10 },
+  footer: { marginTop: 12, gap: 10, marginBottom: 12 },
   signOutButton: {
     paddingVertical: 14,
     borderRadius: 12,
