@@ -23,6 +23,7 @@ const frappeBooksConfig = {
     { from: 'log_creds.txt', to: '../creds/log_creds.txt' },
     { from: 'translations', to: '../translations' },
     { from: 'templates', to: '../templates' },
+    { from: 'supabase', to: 'supabase' },
   ],
   files: '**',
   extends: null,

@@ -144,6 +144,14 @@ export default function registerIpcMainActionListeners(main: Main) {
   });
 
   ipcMain.handle(IPC_ACTIONS.GET_SYNC_INIT_SCRIPTS, () => {
+    const resolveSyncScriptPath = (relativePath: string) => {
+      const normalized = relativePath.replace(/^supabase[\\/]/, '');
+      if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'supabase', normalized);
+      }
+      return path.resolve(process.cwd(), relativePath);
+    };
+
     const scriptSpecs: Array<{ name: string; relativePath: string }> = [
       { name: 'base_schema', relativePath: 'supabase/schema.sql' },
       { name: 'base_policies', relativePath: 'supabase/policies.sql' },
@@ -193,9 +201,11 @@ export default function registerIpcMainActionListeners(main: Main) {
     ];
 
     const scripts = scriptSpecs.map((spec) => {
-      const absolutePath = path.resolve(process.cwd(), spec.relativePath);
+      const absolutePath = resolveSyncScriptPath(spec.relativePath);
       if (!fs.existsSync(absolutePath)) {
-        throw new Error(`Missing SQL script: ${spec.relativePath}`);
+        throw new Error(
+          `Missing SQL script: ${spec.relativePath} (resolved: ${absolutePath})`
+        );
       }
 
       return {

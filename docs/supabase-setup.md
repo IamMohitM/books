@@ -20,9 +20,9 @@ Supabase Dashboard → **SQL Editor** → run in order:
    - If any are OFF, enable RLS for them.
 
 ## 3) Deploy the Invite Edge Function
-From repo root:
+From repo root (be explicit about the project):
 ```bash
-supabase functions deploy invite-user
+supabase functions deploy invite-user --project-ref YOUR_PROJECT_REF
 ```
 Then set the secret:
 ```bash
