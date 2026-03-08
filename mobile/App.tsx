@@ -213,11 +213,7 @@ export default function App() {
         <AppShell
           session={session}
           activeProfileLabel={selectedProfile?.label ?? 'Project'}
-          onSwitchProject={
-            hasMultipleProfiles
-              ? () => setShowProjectSwitcher(true)
-              : undefined
-          }
+          onSwitchProject={() => setShowProjectSwitcher(true)}
         />
       ) : (
         <KeyboardAvoidingView

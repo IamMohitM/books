@@ -128,6 +128,11 @@ export default function SettingsScreen({
       ListHeaderComponent={
         <View>
           <Text style={styles.title}>Settings</Text>
+          {!!onSwitchProject && (
+            <TouchableOpacity style={styles.switchTopButton} onPress={onSwitchProject}>
+              <Text style={styles.switchTopText}>Switch Project</Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Invite collaborator</Text>
             <Text style={styles.sectionHint}>Owners can invite existing users by email.</Text>
@@ -166,11 +171,6 @@ export default function SettingsScreen({
           <TouchableOpacity style={styles.signOutButton} onPress={onSignOut}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
-          {!!onSwitchProject && (
-            <TouchableOpacity style={styles.switchButton} onPress={onSwitchProject}>
-              <Text style={styles.switchText}>Switch Project</Text>
-            </TouchableOpacity>
-          )}
         </View>
       }
     />
@@ -180,6 +180,15 @@ export default function SettingsScreen({
 const styles = StyleSheet.create({
   container: { paddingBottom: 180 },
   title: { fontSize: 20, fontWeight: '700', marginBottom: 14 },
+  switchTopButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+    marginBottom: 18,
+  },
+  switchTopText: { fontSize: 13, fontWeight: '700', color: '#f8fafc' },
   section: { marginBottom: 22 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
   sectionHint: { fontSize: 13, color: '#64748b', marginBottom: 10 },
@@ -222,12 +231,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signOutText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  switchButton: {
-    marginTop: 10,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#0f172a',
-    alignItems: 'center',
-  },
-  switchText: { fontSize: 14, fontWeight: '700', color: '#f8fafc' },
 });

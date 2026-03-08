@@ -206,9 +206,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-    padding: 20,
-    paddingTop: Platform.OS === 'web' ? 44 : 20,
-    paddingBottom: Platform.OS === 'web' ? 24 : 12,
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'web' ? 24 : 20,
+    paddingBottom: Platform.OS === 'web' ? 16 : 12,
     backgroundColor: '#f8fafc',
   },
   header: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#f8fafc' },
   content: {
     flex: 1,
-    paddingBottom: Platform.OS === 'web' ? 128 : 96,
+    paddingBottom: Platform.OS === 'web' ? 120 : 96,
   },
   loading: { marginTop: 40, textAlign: 'center', fontSize: 15 },
   emptyState: {
