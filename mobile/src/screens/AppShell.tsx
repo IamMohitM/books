@@ -16,10 +16,12 @@ export default function AppShell({
   session,
   activeProfileLabel,
   onSwitchProject,
+  onAddProject,
 }: {
   session: any;
   activeProfileLabel: string;
   onSwitchProject?: () => void;
+  onAddProject?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<TabKey>('transactions');
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -111,6 +113,11 @@ export default function AppShell({
               <Text style={styles.emptySwitchText}>Switch Project</Text>
             </TouchableOpacity>
           )}
+          {!!onAddProject && (
+            <TouchableOpacity style={styles.emptyAddProjectButton} onPress={onAddProject}>
+              <Text style={styles.emptyAddProjectText}>Add Project</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -123,9 +130,10 @@ export default function AppShell({
         companyId={companyId}
         onSignOut={() => getSupabaseClient().auth.signOut()}
         onSwitchProject={onSwitchProject}
+        onAddProject={onAddProject}
       />
     );
-  }, [activeTab, companyId, refreshKey, onSwitchProject]);
+  }, [activeTab, companyId, refreshKey, onSwitchProject, onAddProject]);
 
   return (
     <View style={styles.container}>
@@ -278,6 +286,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   emptySwitchText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
+  emptyAddProjectButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  emptyAddProjectText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
   centerSpacer: { width: 60 },
   quickAddAnchor: {
     position: 'absolute',

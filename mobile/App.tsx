@@ -38,6 +38,7 @@ export default function App() {
   const [newProjectLabel, setNewProjectLabel] = useState('');
   const [validatingProject, setValidatingProject] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
+  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [projectStatus, setProjectStatus] = useState<string | null>(null);
 
   const showAlert = (title: string, message: string) => {
@@ -162,6 +163,8 @@ export default function App() {
       setNewProjectRef('');
       setNewProjectKey('');
       setNewProjectLabel('');
+      setShowAddProjectModal(false);
+      setShowProjectSwitcher(false);
       showAlert('Project added', `Added ${profile.label}`);
     } catch (error) {
       showAlert('Unable to add project', (error as Error).message);
@@ -207,6 +210,58 @@ export default function App() {
     );
   };
 
+  const openAddProjectModal = () => {
+    setShowProjectSwitcher(false);
+    setProjectStatus(null);
+    setShowAddProjectModal(true);
+  };
+
+  const addProjectForm = (
+    <View style={styles.addProjectCard}>
+      <Text style={styles.subtitle}>Add Project (one-time)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Project ref (abcd1234...)"
+        autoCapitalize="none"
+        value={newProjectRef}
+        onChangeText={setNewProjectRef}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Legacy Anon Key (not Secret Key)"
+        autoCapitalize="none"
+        value={newProjectKey}
+        onChangeText={setNewProjectKey}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Optional label"
+        autoCapitalize="words"
+        value={newProjectLabel}
+        onChangeText={setNewProjectLabel}
+      />
+      <TouchableOpacity
+        style={[
+          styles.addProjectButton,
+          validatingProject && styles.addProjectButtonDisabled,
+        ]}
+        onPress={addProjectProfile}
+        disabled={validatingProject}
+      >
+        <Text style={styles.addProjectText}>
+          {validatingProject ? 'Validating...' : 'Add Project Profile'}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.resetProfilesButton}
+        onPress={resetProjectProfiles}
+      >
+        <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
+      </TouchableOpacity>
+      {!!projectStatus && <Text style={styles.projectStatus}>{projectStatus}</Text>}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {session ? (
@@ -214,6 +269,7 @@ export default function App() {
           session={session}
           activeProfileLabel={selectedProfile?.label ?? 'Project'}
           onSwitchProject={() => setShowProjectSwitcher(true)}
+          onAddProject={openAddProjectModal}
         />
       ) : (
         <KeyboardAvoidingView
@@ -358,48 +414,7 @@ export default function App() {
                     </View>
                   </View>
                 )}
-                <View style={styles.addProjectCard}>
-                  <Text style={styles.subtitle}>Add Project (one-time)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Project ref (abcd1234...)"
-                    autoCapitalize="none"
-                    value={newProjectRef}
-                    onChangeText={setNewProjectRef}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Legacy Anon Key (not Secret Key)"
-                    autoCapitalize="none"
-                    value={newProjectKey}
-                    onChangeText={setNewProjectKey}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Optional label"
-                    autoCapitalize="words"
-                    value={newProjectLabel}
-                    onChangeText={setNewProjectLabel}
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.addProjectButton,
-                      validatingProject && styles.addProjectButtonDisabled,
-                    ]}
-                    onPress={addProjectProfile}
-                    disabled={validatingProject}
-                  >
-                    <Text style={styles.addProjectText}>
-                      {validatingProject ? 'Validating...' : 'Add Project Profile'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.resetProfilesButton}
-                    onPress={resetProjectProfiles}
-                  >
-                    <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
-                  </TouchableOpacity>
-                </View>
+                {addProjectForm}
                 {hasProfiles && (
                   <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
                 )}
@@ -451,6 +466,12 @@ export default function App() {
               })}
             </View>
             <TouchableOpacity
+              style={styles.switcherAdd}
+              onPress={openAddProjectModal}
+            >
+              <Text style={styles.switcherAddText}>Add Project</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.switcherClose}
               onPress={() => setShowProjectSwitcher(false)}
             >
@@ -458,6 +479,26 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+      <Modal visible={showAddProjectModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          style={styles.switcherOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.switcherCard}>
+            <Text style={styles.switcherTitle}>Add Project</Text>
+            <Text style={styles.switcherHint}>
+              Add a new project without signing out.
+            </Text>
+            {addProjectForm}
+            <TouchableOpacity
+              style={styles.switcherClose}
+              onPress={() => setShowAddProjectModal(false)}
+            >
+              <Text style={styles.switcherCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -550,6 +591,14 @@ const styles = StyleSheet.create({
   switcherLabel: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   switcherLabelActive: { color: '#f8fafc' },
   switcherActive: { fontSize: 12, color: '#f8fafc' },
+  switcherAdd: {
+    marginTop: 4,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  switcherAddText: { fontSize: 14, fontWeight: '700', color: '#f8fafc' },
   switcherClose: {
     marginTop: 4,
     borderRadius: 10,

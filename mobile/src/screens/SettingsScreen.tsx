@@ -14,12 +14,14 @@ type Props = {
   companyId: string;
   onSignOut: () => void;
   onSwitchProject?: () => void;
+  onAddProject?: () => void;
 };
 
 export default function SettingsScreen({
   companyId,
   onSignOut,
   onSwitchProject,
+  onAddProject,
 }: Props) {
   const [email, setEmail] = useState('');
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -128,11 +130,18 @@ export default function SettingsScreen({
       ListHeaderComponent={
         <View>
           <Text style={styles.title}>Settings</Text>
-          {!!onSwitchProject && (
-            <TouchableOpacity style={styles.switchTopButton} onPress={onSwitchProject}>
-              <Text style={styles.switchTopText}>Switch Project</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerActions}>
+            {!!onSwitchProject && (
+              <TouchableOpacity style={styles.switchTopButton} onPress={onSwitchProject}>
+                <Text style={styles.switchTopText}>Switch Project</Text>
+              </TouchableOpacity>
+            )}
+            {!!onAddProject && (
+              <TouchableOpacity style={styles.addProjectButton} onPress={onAddProject}>
+                <Text style={styles.addProjectText}>Add Project</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Invite collaborator</Text>
             <Text style={styles.sectionHint}>Owners can invite existing users by email.</Text>
@@ -180,6 +189,12 @@ export default function SettingsScreen({
 const styles = StyleSheet.create({
   container: { paddingBottom: 180 },
   title: { fontSize: 20, fontWeight: '700', marginBottom: 14 },
+  headerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
   switchTopButton: {
     alignSelf: 'flex-start',
     paddingVertical: 10,
@@ -189,6 +204,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   switchTopText: { fontSize: 13, fontWeight: '700', color: '#f8fafc' },
+  addProjectButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#e2e8f0',
+  },
+  addProjectText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   section: { marginBottom: 22 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
   sectionHint: { fontSize: 13, color: '#64748b', marginBottom: 10 },

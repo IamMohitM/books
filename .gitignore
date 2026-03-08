@@ -48,3 +48,6 @@ supabase/.temp
 .cline/
 .agents/
 .agent/
+
+# Local Netlify folder
+.netlify
