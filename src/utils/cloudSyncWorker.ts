@@ -736,6 +736,8 @@ export async function bootstrapCloudSyncFromLocal(
         'referenceNumber',
         'referenceDate',
         'userRemark',
+        'submitted',
+        'cancelled',
       ],
       orderBy: 'name',
     });
@@ -914,6 +916,8 @@ export async function bootstrapCloudSyncFromLocal(
                 referenceNumber: String(je.referenceNumber ?? ''),
                 referenceDate: String(je.referenceDate ?? ''),
                 userRemark: String(je.userRemark ?? ''),
+                submitted: !!(je as { submitted?: boolean }).submitted,
+                cancelled: !!(je as { cancelled?: boolean }).cancelled,
                 accounts: lines,
               },
             }),

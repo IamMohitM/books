@@ -64,6 +64,8 @@ create table if not exists public.journal_entries (
   reference_number text,
   reference_date date,
   user_remark text,
+  submitted boolean not null default false,
+  cancelled boolean not null default false,
   created_at timestamptz not null default now(),
   created_by uuid default auth.uid()
 );
@@ -87,6 +89,8 @@ select
   je.entry_type,
   je.reference_number,
   je.user_remark,
+  je.submitted,
+  je.cancelled,
   jel.account_id,
   a.name as account_name,
   jel.debit,
@@ -108,6 +112,10 @@ select
   coalesce(sum(jel.debit - jel.credit), 0) as balance
 from public.accounts a
 left join public.journal_entry_lines jel on jel.account_id = a.id
+left join public.journal_entries je
+  on je.id = jel.journal_entry_id
+  and je.submitted = true
+  and je.cancelled = false
 group by a.company_id, a.id, a.name;
 
 drop view if exists public.journal_entries_with_user;
