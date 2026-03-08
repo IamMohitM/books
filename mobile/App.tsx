@@ -212,7 +212,7 @@ export default function App() {
           style={styles.keyboard}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          {Platform.OS === 'web' ? (
             <ScrollView
               contentContainerStyle={styles.screen}
               keyboardShouldPersistTaps="handled"
@@ -302,7 +302,99 @@ export default function App() {
                 <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
               )}
             </ScrollView>
-          </TouchableWithoutFeedback>
+          ) : (
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <ScrollView
+                contentContainerStyle={styles.screen}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.title}>Cash Books</Text>
+                {!hasProfiles && (
+                  <Text style={styles.emptyHint}>
+                    No project configured yet. Add a project profile to continue.
+                  </Text>
+                )}
+                {hasMultipleProfiles && (
+                  <View style={styles.profilePicker}>
+                    <Text style={styles.subtitle}>Project</Text>
+                    <View style={styles.profileRow}>
+                      {mobileProjectProfiles.map((profile) => {
+                        const active = profile.id === selectedProfileId;
+                        return (
+                          <TouchableOpacity
+                            key={profile.id}
+                            style={[
+                              styles.profileChip,
+                              active && styles.profileChipActive,
+                            ]}
+                            onPress={() => {
+                              void setActiveMobileProfile(profile.id);
+                              setSelectedProfileId(profile.id);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.profileChipText,
+                                active && styles.profileChipTextActive,
+                              ]}
+                            >
+                              {profile.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+                <View style={styles.addProjectCard}>
+                  <Text style={styles.subtitle}>Add Project (one-time)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Project ref (abcd1234...)"
+                    autoCapitalize="none"
+                    value={newProjectRef}
+                    onChangeText={setNewProjectRef}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Legacy Anon Key (not Secret Key)"
+                    autoCapitalize="none"
+                    value={newProjectKey}
+                    onChangeText={setNewProjectKey}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Optional label"
+                    autoCapitalize="words"
+                    value={newProjectLabel}
+                    onChangeText={setNewProjectLabel}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.addProjectButton,
+                      validatingProject && styles.addProjectButtonDisabled,
+                    ]}
+                    onPress={addProjectProfile}
+                    disabled={validatingProject}
+                  >
+                    <Text style={styles.addProjectText}>
+                      {validatingProject ? 'Validating...' : 'Add Project Profile'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.resetProfilesButton}
+                    onPress={resetProjectProfiles}
+                  >
+                    <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
+                  </TouchableOpacity>
+                </View>
+                {hasProfiles && (
+                  <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
+                )}
+              </ScrollView>
+            </TouchableWithoutFeedback>
+          )}
         </KeyboardAvoidingView>
       )}
       <Modal visible={showProjectSwitcher} animationType="slide" transparent>
