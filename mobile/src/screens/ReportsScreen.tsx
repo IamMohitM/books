@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 
 type BalanceRow = {
@@ -12,9 +12,11 @@ type BalanceRow = {
 
 export default function ReportsScreen({ companyId }: { companyId: string }) {
   const [rows, setRows] = useState<BalanceRow[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadBalances = async () => {
+      setLoading(true);
       const { data } = await supabase
         .from('account_balances')
         .select('account_id,account_name,total_debit,total_credit,balance')
@@ -24,6 +26,7 @@ export default function ReportsScreen({ companyId }: { companyId: string }) {
       if (data) {
         setRows(data as BalanceRow[]);
       }
+      setLoading(false);
     };
 
     loadBalances();
@@ -35,12 +38,23 @@ export default function ReportsScreen({ companyId }: { companyId: string }) {
       <FlatList
         data={rows}
         keyExtractor={(item) => item.account_id}
+        contentContainerStyle={rows.length === 0 ? styles.emptyState : undefined}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <Text style={styles.account}>{item.account_name}</Text>
             <Text style={styles.balance}>{item.balance}</Text>
           </View>
         )}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="small" color="#0f172a" />
+              <Text style={styles.loadingText}>Loading reports...</Text>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>No submitted balances yet.</Text>
+          )
+        }
       />
     </View>
   );
@@ -59,4 +73,8 @@ const styles = StyleSheet.create({
   },
   account: { fontSize: 15 },
   balance: { fontSize: 15, fontWeight: '700' },
+  emptyState: { flexGrow: 1, justifyContent: 'center' },
+  loadingWrap: { alignItems: 'center', gap: 8, marginTop: 16 },
+  loadingText: { fontSize: 13, color: '#64748b' },
+  emptyText: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 16 },
 });

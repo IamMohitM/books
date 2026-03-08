@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   RefreshControl,
@@ -9,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { formatDateDMY } from '../utils/date';
 
 type JournalEntry = {
   id: string;
@@ -42,6 +44,8 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       .from('journal_entries_with_user')
       .select('id,date,entry_type,user_remark,created_by_email')
       .eq('company_id', companyId)
+      .eq('submitted', true)
+      .eq('cancelled', false)
       .order('date', { ascending: false })
       .limit(100);
 
@@ -130,6 +134,8 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       .from('ledger_entries')
       .select('line_id,account_name,debit,credit')
       .eq('journal_entry_id', entryId)
+      .eq('submitted', true)
+      .eq('cancelled', false)
       .order('account_name', { ascending: true });
 
     setLines((data ?? []) as EntryLine[]);
@@ -157,6 +163,7 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
         data={entries}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadEntries} />}
+        contentContainerStyle={entries.length === 0 ? styles.emptyState : undefined}
         renderItem={({ item }) => (
           (() => {
             const isCashAccount =
@@ -180,11 +187,21 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
               </Text>
               <Text style={amountColor}>{item.amount ?? '-'}</Text>
             </View>
-            <Text style={styles.cardMeta}>{item.date}</Text>
+            <Text style={styles.cardMeta}>{formatDateDMY(item.date)}</Text>
           </TouchableOpacity>
             );
           })()
         )}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="small" color="#0f172a" />
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>No submitted transactions yet.</Text>
+          )
+        }
       />
       <Modal visible={!!selectedEntry} animationType="slide" transparent>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedEntry(null)}>
@@ -198,7 +215,7 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
             {selectedEntry && (
               <>
                 <Text style={styles.modalMeta}>{selectedEntry.entry_type}</Text>
-                <Text style={styles.modalMeta}>{selectedEntry.date}</Text>
+                <Text style={styles.modalMeta}>{formatDateDMY(selectedEntry.date)}</Text>
                 <Text style={styles.modalMeta}>
                   {selectedEntry.created_by_email ?? 'Unknown'}
                 </Text>
@@ -272,4 +289,8 @@ const styles = StyleSheet.create({
   },
   tableAccount: { flex: 1.4, fontSize: 14, fontWeight: '700', color: '#0f172a' },
   tableAmount: { flex: 1, fontSize: 14, color: '#0f172a', textAlign: 'right' },
+  emptyState: { flexGrow: 1, justifyContent: 'center' },
+  loadingWrap: { alignItems: 'center', gap: 8, marginTop: 16 },
+  loadingText: { fontSize: 13, color: '#64748b' },
+  emptyText: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 16 },
 });

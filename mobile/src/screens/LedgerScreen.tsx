@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { formatDateDMY } from '../utils/date';
 
 type LedgerEntry = {
   line_id: string;
@@ -13,13 +14,17 @@ type LedgerEntry = {
 
 export default function LedgerScreen({ companyId }: { companyId: string }) {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadLedger = async () => {
+      setLoading(true);
       const { data } = await supabase
         .from('ledger_entries')
         .select('line_id,date,account_name,debit,credit,entry_type')
         .eq('company_id', companyId)
+        .eq('submitted', true)
+        .eq('cancelled', false)
         .order('account_name', { ascending: true })
         .order('date', { ascending: true })
         .limit(500);
@@ -27,6 +32,7 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
       if (data) {
         setEntries(data as LedgerEntry[]);
       }
+      setLoading(false);
     };
 
     loadLedger();
@@ -80,6 +86,7 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
       <FlatList
         data={displayRows}
         keyExtractor={(item) => item.key}
+        contentContainerStyle={displayRows.length === 0 ? styles.emptyState : undefined}
         renderItem={({ item }) => {
           if (item.type === 'header') {
             return (
@@ -91,7 +98,7 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
           return (
             <View style={styles.row}>
               <View style={styles.meta}>
-                <Text style={styles.date}>{item.date}</Text>
+                <Text style={styles.date}>{formatDateDMY(item.date)}</Text>
                 <Text style={styles.entryType}>{item.entryType}</Text>
               </View>
               <View style={styles.amounts}>
@@ -102,6 +109,16 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
             </View>
           );
         }}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="small" color="#0f172a" />
+              <Text style={styles.loadingText}>Loading ledger...</Text>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>No submitted entries yet.</Text>
+          )
+        }
       />
     </View>
   );
@@ -131,4 +148,8 @@ const styles = StyleSheet.create({
   debit: { fontSize: 13, color: '#16a34a' },
   credit: { fontSize: 13, color: '#dc2626' },
   balance: { fontSize: 13, color: '#334155' },
+  emptyState: { flexGrow: 1, justifyContent: 'center' },
+  loadingWrap: { alignItems: 'center', gap: 8, marginTop: 16 },
+  loadingText: { fontSize: 13, color: '#64748b' },
+  emptyText: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 16 },
 });
