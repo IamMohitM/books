@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { getSupabaseClient, classifyAuthError, testSupabaseConnection, getActiveMobileProfile } from '../lib/supabase';
 
 export default function AuthScreen({
@@ -10,6 +10,17 @@ export default function AuthScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+      setStatus(message);
+      return;
+    }
+
+    Alert.alert(title, message);
+  };
 
   const normalizeEmail = (value: string) =>
     String(value ?? '')
@@ -36,56 +47,65 @@ export default function AuthScreen({
   const signIn = async () => {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !password) {
-      Alert.alert('Sign in failed', 'Email and password are required.');
+      showAlert('Sign in failed', 'Email and password are required.');
       return;
     }
 
     setLoading(true);
+    setStatus(null);
 
     // Test connection first
-    const profile = getActiveMobileProfile();
-    const connectionTest = await testSupabaseConnection(profile.url, profile.anonKey);
+    try {
+      const profile = getActiveMobileProfile();
+      const connectionTest = await testSupabaseConnection(profile.url, profile.anonKey);
 
-    if (!connectionTest.ok) {
+      if (!connectionTest.ok) {
+        showAlert('Connection error', connectionTest.message);
+        return;
+      }
+
+      const { error } = await getSupabaseClient().auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        const classified = classifyAuthError(error);
+        showAlert('Sign in failed', classified.userMessage);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      showAlert('Sign in failed', message);
+    } finally {
       setLoading(false);
-      Alert.alert('Connection error', connectionTest.message);
-      return;
-    }
-
-    const { error } = await getSupabaseClient().auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
-    setLoading(false);
-
-    if (error) {
-      const classified = classifyAuthError(error);
-      Alert.alert('Sign in failed', classified.userMessage);
     }
   };
 
   const signUp = async () => {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !password) {
-      Alert.alert('Sign up failed', 'Email and password are required.');
+      showAlert('Sign up failed', 'Email and password are required.');
       return;
     }
 
     setLoading(true);
-    const client = getSupabaseClient();
-    const { data, error } = await client.auth.signUp({
-      email: normalizedEmail,
-      password,
-    });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Sign up failed', error.message);
-    } else {
+    setStatus(null);
+    try {
+      const client = getSupabaseClient();
+      const { data, error } = await client.auth.signUp({
+        email: normalizedEmail,
+        password,
+      });
+      if (error) {
+        showAlert('Sign up failed', error.message);
+        return;
+      }
+
       const identities = data?.user?.identities;
       const existingUserReturned =
         Array.isArray(identities) && identities.length === 0;
       if (existingUserReturned) {
-        Alert.alert(
+        showAlert(
           'Account already exists',
           'This email already exists in the selected project. Use Sign In or Reset Password.'
         );
@@ -93,12 +113,17 @@ export default function AuthScreen({
       }
 
       const hasSession = Boolean(data?.session);
-      Alert.alert(
+      showAlert(
         hasSession ? 'Signed up' : 'Check your email for confirmation',
         hasSession
           ? 'Account created. If you do not see company data yet, ask an owner to invite your email to this company.'
           : 'Account created. After confirming email, sign in and ask an owner to invite your email to this company.'
       );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      showAlert('Sign up failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -119,6 +144,7 @@ export default function AuthScreen({
         onChangeText={setPassword}
         value={password}
       />
+      {!!status && <Text style={styles.status}>{status}</Text>}
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.primaryButton} onPress={signIn} disabled={loading}>
           <Text style={styles.primaryButtonText}>{loading ? '...' : 'Sign In'}</Text>
@@ -144,6 +170,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   buttonRow: { flexDirection: 'row', gap: 10 },
+  status: { fontSize: 13, color: '#0f172a' },
   primaryButton: {
     flex: 1,
     backgroundColor: '#0f172a',

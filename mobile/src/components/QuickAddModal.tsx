@@ -216,15 +216,9 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.modal}>
-            <View style={styles.modalContent}>
+  const modalBody = (
+    <View style={styles.modal}>
+      <View style={styles.modalContent}>
               <Text style={styles.title}>Quick Add</Text>
               <TextInput
                 style={styles.input}
@@ -242,9 +236,20 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                     placeholder="Search accounts"
                     value={debitSearch}
                     onFocus={() => setDebitFocused(true)}
-                    onBlur={() => setDebitFocused(false)}
+                    onBlur={() => {
+                      if (Platform.OS !== 'web') {
+                        setDebitFocused(false);
+                      }
+                    }}
                     onChangeText={(text) => {
                       setDebitSearch(text);
+                      if (Platform.OS === 'web') {
+                        if (!text.trim()) {
+                          setDebitFocused(false);
+                        } else {
+                          setDebitFocused(true);
+                        }
+                      }
                       const match = accounts.find(
                         (acc) => acc.name.toLowerCase() === text.trim().toLowerCase()
                       );
@@ -326,9 +331,20 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                     placeholder="Search accounts"
                     value={creditSearch}
                     onFocus={() => setCreditFocused(true)}
-                    onBlur={() => setCreditFocused(false)}
+                    onBlur={() => {
+                      if (Platform.OS !== 'web') {
+                        setCreditFocused(false);
+                      }
+                    }}
                     onChangeText={(text) => {
                       setCreditSearch(text);
+                      if (Platform.OS === 'web') {
+                        if (!text.trim()) {
+                          setCreditFocused(false);
+                        } else {
+                          setCreditFocused(true);
+                        }
+                      }
                       const match = accounts.find(
                         (acc) => acc.name.toLowerCase() === text.trim().toLowerCase()
                       );
@@ -497,9 +513,23 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 </TouchableOpacity>
               </View>
               {!!submitError && <Text style={styles.errorText}>{submitError}</Text>}
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
+      </View>
+    </View>
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {Platform.OS === 'web' ? (
+          modalBody
+        ) : (
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            {modalBody}
+          </TouchableWithoutFeedback>
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );
