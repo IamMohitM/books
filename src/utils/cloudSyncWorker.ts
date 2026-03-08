@@ -1194,6 +1194,47 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
   }
 }
 
+export async function resetCloudSyncOutbox(
+  fyo: Fyo
+): Promise<{ cleared: number }> {
+  const config = getWorkerConfig(fyo);
+  if (!config.enabled) {
+    throw new Error('Cloud sync is not fully configured');
+  }
+
+  const [failed, processing] = await Promise.all([
+    fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'failed' },
+      fields: ['name'],
+    }),
+    fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
+      filters: { status: 'processing' },
+      fields: ['name'],
+    }),
+  ]);
+
+  const targets = [...failed, ...processing].filter((row) => row.name);
+  for (const row of targets) {
+    const name = row.name as string;
+    try {
+      const doc = (await fyo.doc.getDoc(
+        ModelNameEnum.CloudSyncOutbox,
+        name
+      )) as CloudSyncOutbox;
+      await doc.delete().catch(() => undefined);
+    } catch {
+      await fyo.db.delete(ModelNameEnum.CloudSyncOutbox, name).catch(() => undefined);
+    }
+  }
+
+  await updateCloudSyncState(fyo, {
+    lastError: '',
+    enrollmentStatus: 'active',
+  });
+
+  return { cleared: targets.length };
+}
+
 async function reclaimStaleProcessingOutboxRows(fyo: Fyo) {
   const processing = await fyo.db.getAll(ModelNameEnum.CloudSyncOutbox, {
     fields: ['name', 'modified'],

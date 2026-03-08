@@ -191,24 +191,29 @@
               </Button>
             </div>
           </div>
+          <div class="mb-3 flex flex-wrap gap-2">
+            <Button class="text-xs" @click="runBootstrapDryRunNow">
+              {{ t`Run Dry Run` }}
+            </Button>
+            <Button class="text-xs" @click="runReconciliationNow">
+              {{ t`Run Reconciliation` }}
+            </Button>
+            <Button class="text-xs" @click="bootstrapCloudNow">
+              {{ t`Bootstrap To Cloud` }}
+            </Button>
+            <Button class="text-xs" @click="exportDiagnosticsNow">
+              {{ t`Export Diagnostics` }}
+            </Button>
+            <Button class="text-xs" @click="resetSyncQueueNow">
+              {{ t`Reset Sync Queue` }}
+            </Button>
+          </div>
           <div
             v-if="showDevClearRemoteButton"
             class="mb-3 flex flex-wrap gap-2"
           >
             <Button class="text-xs" @click="flushCloudSyncNow">
               {{ t`Flush Sync Now` }}
-            </Button>
-            <Button class="text-xs" @click="runBootstrapDryRunNow">
-              {{ t`Run Dry Run` }}
-            </Button>
-            <Button class="text-xs" @click="bootstrapCloudNow">
-              {{ t`Bootstrap To Cloud` }}
-            </Button>
-            <Button class="text-xs" @click="runReconciliationNow">
-              {{ t`Run Reconciliation` }}
-            </Button>
-            <Button class="text-xs" @click="exportDiagnosticsNow">
-              {{ t`Export Diagnostics` }}
             </Button>
             <Button class="text-xs" @click="clearRemoteDataNow">
               {{ t`Clear Remote Data (Dev)` }}
@@ -565,6 +570,7 @@ import {
   clearCloudSyncRemoteCompanyData,
   exportCloudSyncDiagnostics,
   flushCloudSyncOutbox,
+  resetCloudSyncOutbox,
   inviteCloudSyncCollaborator,
   initializeCloudSyncRemoteSchema,
   listCloudSyncCollaborators,
@@ -1761,6 +1767,11 @@ export default defineComponent({
           this.cloudSyncStatus.enrollmentStatus === 'error'
         ) {
           await this.autoEnrollForSyncNow();
+        } else {
+          const didBootstrap = await this.maybeBootstrapForEmptyRemote();
+          if (didBootstrap) {
+            return;
+          }
         }
 
         await runCloudSyncCycle(this.fyo);
@@ -1776,6 +1787,60 @@ export default defineComponent({
           message: this.getFriendlySyncError(error as Error),
         });
       }
+    },
+    async maybeBootstrapForEmptyRemote(): Promise<boolean> {
+      const dryRunResult = await runCloudSyncBootstrapDryRun(this.fyo);
+      this.dryRun = {
+        checkedAt: new Date().toLocaleString(),
+        canProceed: dryRunResult.canProceed,
+        summary: dryRunResult.canProceed
+          ? this.t`Dry run passed.`
+          : dryRunResult.errors.join(' | '),
+      };
+
+      if (!dryRunResult.localBalanced) {
+        return false;
+      }
+
+      if (dryRunResult.remoteHasData) {
+        return false;
+      }
+
+      const localHasData =
+        (dryRunResult.local.accounts ?? 0) > 0 ||
+        (dryRunResult.local.parties ?? 0) > 0 ||
+        (dryRunResult.local.journal_entries ?? 0) > 0 ||
+        (dryRunResult.local.journal_entry_lines ?? 0) > 0;
+
+      if (!localHasData) {
+        return false;
+      }
+
+      const shouldBootstrap = (await showDialog({
+        title: this.t`Remote is empty`,
+        detail: this
+          .t`We can upload your local data now (one-time bootstrap). Continue?`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Upload`,
+            isPrimary: true,
+            action: () => true,
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => false,
+          },
+        ],
+      })) as boolean;
+
+      if (!shouldBootstrap) {
+        return false;
+      }
+
+      await this.bootstrapCloudNow();
+      return true;
     },
     getFriendlySyncError(error: Error): string {
       const message = getErrorMessage(error);
@@ -1897,6 +1962,46 @@ export default defineComponent({
       showToast({
         type: 'success',
         message: this.t`Cloud sync flush finished.`,
+      });
+    },
+    async resetSyncQueueNow(): Promise<void> {
+      if (this.syncSetupMissing.length) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Cloud sync setup is incomplete. Fill required fields and save settings first.`,
+        });
+        return;
+      }
+
+      const shouldReset = (await showDialog({
+        title: this.t`Reset sync queue?`,
+        detail: this
+          .t`This clears failed/processing sync items so sync can retry cleanly. It does not remove queued changes.`,
+        type: 'warning',
+        buttons: [
+          {
+            label: this.t`Reset`,
+            isPrimary: true,
+            action: () => true,
+          },
+          {
+            label: this.t`Cancel`,
+            isEscape: true,
+            action: () => false,
+          },
+        ],
+      })) as boolean;
+
+      if (!shouldReset) {
+        return;
+      }
+
+      const result = await resetCloudSyncOutbox(this.fyo);
+      await this.refreshCloudSyncStatus();
+      showToast({
+        type: 'success',
+        message: this.t`Cleared ${result.cleared} failed sync items.`,
       });
     },
     async pauseSyncNow(): Promise<void> {
