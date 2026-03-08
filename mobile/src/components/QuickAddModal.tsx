@@ -178,6 +178,9 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
     }
 
     setLoading(true);
+    if (Platform.OS === 'web') {
+      onClose();
+    }
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       setLoading(false);
@@ -210,7 +213,9 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
       setDebitParentId('');
       setCreditParentId('');
       onCreated();
-      onClose();
+      if (Platform.OS !== 'web') {
+        onClose();
+      }
     } else {
       setSubmitError(error.message || 'Unable to save. Please try again.');
     }

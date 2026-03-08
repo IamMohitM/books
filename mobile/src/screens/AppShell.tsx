@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getSupabaseClient } from '../lib/supabase';
 import QuickAddModal from '../components/QuickAddModal';
@@ -203,7 +203,13 @@ function Tab({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingBottom: 12, backgroundColor: '#f8fafc' },
+  container: {
+    flex: 1,
+    padding: 20,
+    paddingTop: Platform.OS === 'web' ? 32 : 20,
+    paddingBottom: Platform.OS === 'web' ? 24 : 12,
+    backgroundColor: '#f8fafc',
+  },
   header: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
   profileHint: { fontSize: 13, color: '#64748b', marginTop: -6, marginBottom: 8 },
   tabs: {
@@ -232,7 +238,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: { backgroundColor: '#f8fafc' },
-  content: { flex: 1 },
+  content: {
+    flex: 1,
+    paddingBottom: Platform.OS === 'web' ? 96 : 72,
+  },
   loading: { marginTop: 40, textAlign: 'center', fontSize: 15 },
   emptyState: {
     marginTop: 32,
