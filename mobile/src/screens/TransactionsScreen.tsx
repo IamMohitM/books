@@ -45,7 +45,6 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       .select('id,date,entry_type,user_remark,created_by_email')
       .eq('company_id', companyId)
       .eq('submitted', true)
-      .eq('cancelled', false)
       .order('date', { ascending: false })
       .limit(100);
 
@@ -135,7 +134,6 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       .select('line_id,account_name,debit,credit')
       .eq('journal_entry_id', entryId)
       .eq('submitted', true)
-      .eq('cancelled', false)
       .order('account_name', { ascending: true });
 
     setLines((data ?? []) as EntryLine[]);
@@ -255,14 +253,14 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '700' },
+  title: { fontSize: 22, fontWeight: '700' },
   card: { backgroundColor: 'white', padding: 14, borderRadius: 12, marginTop: 12 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  cardAmount: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
-  amountPositive: { fontSize: 15, fontWeight: '800', color: '#16a34a' },
-  amountNegative: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
-  cardMeta: { fontSize: 13, color: '#64748b' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  cardAmount: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  amountPositive: { fontSize: 16, fontWeight: '800', color: '#16a34a' },
+  amountNegative: { fontSize: 16, fontWeight: '800', color: '#dc2626' },
+  cardMeta: { fontSize: 14, color: '#64748b' },
   modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
   modalCard: { margin: 20, backgroundColor: 'white', borderRadius: 14, padding: 18, maxHeight: '82%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

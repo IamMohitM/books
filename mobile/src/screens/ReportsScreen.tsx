@@ -62,7 +62,7 @@ export default function ReportsScreen({ companyId }: { companyId: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 10 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
   row: {
     backgroundColor: 'white',
     padding: 14,
@@ -71,8 +71,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  account: { fontSize: 15 },
-  balance: { fontSize: 15, fontWeight: '700' },
+  account: { fontSize: 16 },
+  balance: { fontSize: 16, fontWeight: '700' },
   emptyState: { flexGrow: 1, justifyContent: 'center' },
   loadingWrap: { alignItems: 'center', gap: 8, marginTop: 16 },
   loadingText: { fontSize: 13, color: '#64748b' },

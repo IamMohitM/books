@@ -69,7 +69,7 @@ describe('TransactionsScreen', () => {
     );
 
     await waitFor(() => expect(getByText('Cash • Sales')).toBeTruthy());
-    await waitFor(() => expect(getByText('2026-02-23')).toBeTruthy());
+    await waitFor(() => expect(getByText('23-02-2026')).toBeTruthy());
 
     fireEvent.press(getByTestId('transaction-entry-1'));
 
