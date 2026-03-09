@@ -107,14 +107,20 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
       const merged = (data as JournalEntry[]).map((entry) => {
         const summary = cashMap.get(entry.id) ?? lineMap.get(entry.id);
         const lines = lineGroups.get(entry.id) ?? [];
-        const topAccounts = lines
+        const mainAccountName = summary?.account_name ?? null;
+        const secondary = lines
+          .filter(
+            (line) =>
+              !!line.account_name &&
+              line.account_name !== mainAccountName
+          )
           .sort((a, b) => b.amount - a.amount)
           .map((line) => line.account_name)
-          .filter((name): name is string => !!name);
+          .find((name): name is string => !!name);
         return {
           ...entry,
-          main_account_name: summary?.account_name ?? null,
-          secondary_account_name: topAccounts[1] ?? null,
+          main_account_name: mainAccountName,
+          secondary_account_name: secondary ?? null,
           amount: summary?.amount ?? null,
           main_is_debit: summary?.isDebit ?? undefined,
         };
