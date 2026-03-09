@@ -170,3 +170,14 @@ export type CashReconciliationRow = {
 };
 
 export type CashReconciliationSummary = CashReconciliationRow[];
+
+export type MonthlyAccountSummaryRow = {
+  period: string;
+  periodStart: string;
+  periodEnd: string;
+  debits: number;
+  credits: number;
+  balance: number;
+};
+
+export type MonthlyAccountSummary = MonthlyAccountSummaryRow[];

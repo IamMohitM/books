@@ -4,6 +4,7 @@ import {
   IncomeExpense,
   LoanLedgerRow,
   LoanSnapshot,
+  MonthlyAccountSummary,
   TopExpenses,
   TotalCreditAndDebit,
   TotalOutstanding,
@@ -221,6 +222,66 @@ export class BespokeQueries {
     }
 
     return summary;
+  }
+
+  static async getMonthlyAccountSummary(
+    db: DatabaseCore,
+    accountName: string,
+    fromDate: string,
+    toDate: string
+  ): Promise<MonthlyAccountSummary> {
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+    const endOfRange = new Date(to.getFullYear(), to.getMonth() + 1, 0);
+
+    const months: {
+      period: string;
+      periodStart: string;
+      periodEnd: string;
+    }[] = [];
+
+    let current = new Date(from.getFullYear(), from.getMonth(), 1);
+    while (current <= endOfRange) {
+      const periodStart = new Date(current.getFullYear(), current.getMonth(), 1);
+      const periodEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+      months.push({
+        period: periodStart.toLocaleString('default', {
+          month: 'short',
+          year: 'numeric',
+        }),
+        periodStart: BespokeQueries.toISODate(periodStart),
+        periodEnd: BespokeQueries.toISODate(periodEnd),
+      });
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    }
+
+    const grouped = (await db.knex!('AccountingLedgerEntry')
+      .select(db.knex!.raw("strftime('%Y-%m', date(date)) as periodKey"))
+      .sum({ debits: 'debit' })
+      .sum({ credits: 'credit' })
+      .where('reverted', false)
+      .where('account', accountName)
+      .whereRaw('date(date) between date(?) and date(?)', [fromDate, toDate])
+      .groupBy('periodKey')
+      .orderBy('periodKey', 'asc')) as Array<{
+      periodKey: string;
+      debits?: number;
+      credits?: number;
+    }>;
+
+    const groupedMap = new Map(grouped.map((row) => [row.periodKey, row]));
+    return months.map((month) => {
+      const periodKey = month.periodStart.slice(0, 7);
+      const row = groupedMap.get(periodKey);
+      const debits = Number(row?.debits ?? 0);
+      const credits = Number(row?.credits ?? 0);
+      return {
+        ...month,
+        debits,
+        credits,
+        balance: debits - credits,
+      };
+    });
   }
 
   static async getCashInHandMonthDetail(

@@ -24,16 +24,19 @@
     </PageHeader>
 
     <div
-      class="no-scrollbar overflow-auto dark:bg-gray-875"
+      class="no-scrollbar overflow-y-auto overflow-x-hidden dark:bg-gray-875"
       style="height: calc(100vh - var(--h-row-largest) - 1px)"
     >
-      <div style="min-width: var(--w-desk-fixed)" class="overflow-auto">
-        <div class="flex gap-4 p-4">
-          <div class="flex-1">
+      <div class="w-full">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 p-4">
+          <div class="min-w-0">
             <CashInHandSummary
               ref="cashInHandSummary"
               :dark-mode="darkMode"
             />
+          </div>
+          <div class="min-w-0">
+            <CashOverShortSummary :dark-mode="darkMode" />
           </div>
         </div>
         <hr class="dark:border-gray-800" />
@@ -91,6 +94,7 @@
 import PageHeader from 'src/components/PageHeader.vue';
 import UnpaidInvoices from './UnpaidInvoices.vue';
 import CashInHandSummary from './CashInHandSummary.vue';
+import CashOverShortSummary from './CashOverShortSummary.vue';
 import Cashflow from './Cashflow.vue';
 import Expenses from './Expenses.vue';
 import LoanSummary from './LoanSummary.vue';
@@ -103,6 +107,7 @@ export default {
   components: {
     PageHeader,
     CashInHandSummary,
+    CashOverShortSummary,
     Cashflow,
     ProfitAndLoss,
     Expenses,

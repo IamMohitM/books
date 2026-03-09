@@ -18,6 +18,7 @@ import {
   IncomeExpense,
   LoanLedgerRow,
   LoanSnapshot,
+  MonthlyAccountSummary,
   QueryFilter,
   TopExpenses,
   TotalCreditAndDebit,
@@ -340,6 +341,19 @@ export class DatabaseHandler extends DatabaseBase {
       fromDate,
       toDate
     )) as CashReconciliationSummary;
+  }
+
+  async getMonthlyAccountSummary(
+    accountName: string,
+    fromDate: string,
+    toDate: string
+  ): Promise<MonthlyAccountSummary> {
+    return (await this.#demux.callBespoke(
+      'getMonthlyAccountSummary',
+      accountName,
+      fromDate,
+      toDate
+    )) as MonthlyAccountSummary;
   }
 
   async getIncomeAndExpenses(
