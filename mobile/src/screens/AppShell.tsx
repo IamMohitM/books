@@ -4,11 +4,11 @@ import { Feather } from '@expo/vector-icons';
 import { getSupabaseClient } from '../lib/supabase';
 import QuickAddModal from '../components/QuickAddModal';
 import LedgerScreen from './LedgerScreen';
-import ReportsScreen from './ReportsScreen';
 import SettingsScreen from './SettingsScreen';
 import TransactionsScreen from './TransactionsScreen';
+import CashSummaryScreen from './CashSummaryScreen';
 
-type TabKey = 'transactions' | 'ledger' | 'reports' | 'settings';
+type TabKey = 'transactions' | 'ledger' | 'cash' | 'settings';
 
 type CompanyUser = { company_id: string };
 
@@ -124,7 +124,7 @@ export default function AppShell({
 
     if (activeTab === 'transactions') return <TransactionsScreen companyId={companyId} refreshKey={refreshKey} />;
     if (activeTab === 'ledger') return <LedgerScreen companyId={companyId} />;
-    if (activeTab === 'reports') return <ReportsScreen companyId={companyId} />;
+    if (activeTab === 'cash') return <CashSummaryScreen companyId={companyId} />;
     return (
       <SettingsScreen
         companyId={companyId}
@@ -158,10 +158,10 @@ export default function AppShell({
         />
         <View style={styles.centerSpacer} />
         <Tab
-          label="Reports"
-          icon="bar-chart-2"
-          isActive={activeTab === 'reports'}
-          onPress={() => setActiveTab('reports')}
+          label="Cash"
+          icon="dollar-sign"
+          isActive={activeTab === 'cash'}
+          onPress={() => setActiveTab('cash')}
         />
         <Tab
           label="Settings"
@@ -220,17 +220,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  profileHint: { fontSize: 13, color: '#64748b', marginTop: -6, marginBottom: 8 },
+  profileHint: { fontSize: 14, color: '#64748b', marginTop: -6, marginBottom: 8 },
   tabs: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     backgroundColor: '#0f172a',
-    borderRadius: 18,
-    marginTop: 8,
+    borderRadius: 22,
+    marginTop: 2,
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.18,
@@ -239,8 +238,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tab: {
-    flex: 1,
-    minHeight: 48,
+    width: 52,
+    minHeight: 50,
     paddingVertical: 12,
     backgroundColor: 'rgba(248,250,252,0.08)',
     borderRadius: 14,
@@ -249,7 +248,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#f8fafc' },
   content: {
     flex: 1,
-    paddingBottom: Platform.OS === 'web' ? 120 : 96,
+    paddingBottom: Platform.OS === 'web' ? 14 : 8,
   },
   loading: { marginTop: 40, textAlign: 'center', fontSize: 15 },
   emptyState: {
@@ -294,18 +293,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   emptyAddProjectText: { color: '#f8fafc', fontSize: 14, fontWeight: '700' },
-  centerSpacer: { width: 60 },
+  centerSpacer: { width: 84 },
   quickAddAnchor: {
     position: 'absolute',
-    top: -24,
+    top: -26,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
   quickAddButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: '#38bdf8',
     justifyContent: 'center',
     alignItems: 'center',
