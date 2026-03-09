@@ -31,11 +31,30 @@ type Props = {
   onCreated: () => void;
 };
 
+const toISODate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseISODate = (value: string) => {
+  const [year, month, day] = String(value ?? '')
+    .split('-')
+    .map((part) => Number(part));
+  if (!year || !month || !day) {
+    return new Date();
+  }
+
+  return new Date(year, month - 1, day);
+};
+
 export default function QuickAddModal({ companyId, visible, onClose, onCreated }: Props) {
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = toISODate(new Date());
   const [amount, setAmount] = useState('');
   const [entryDate, setEntryDate] = useState(todayIso);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(parseISODate(todayIso));
   const [debitAccountId, setDebitAccountId] = useState<string>('');
   const [creditAccountId, setCreditAccountId] = useState<string>('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -86,14 +105,9 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
       setCreditFocused(false);
       setEntryDate(todayIso);
       setShowDatePicker(false);
+      setCalendarMonth(parseISODate(todayIso));
     }
   }, [companyId, visible, todayIso]);
-
-  const dateOptions = Array.from({ length: 180 }).map((_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - index);
-    return date.toISOString().slice(0, 10);
-  });
 
   const groupAccounts = accounts.filter((acc) => acc.is_group);
   const debitQuery = debitSearch.trim();
@@ -118,6 +132,14 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
   const creditMatches = creditFiltered.length;
   const debitShowScrollHint = debitMatches > 4;
   const creditShowScrollHint = creditMatches > 4;
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const monthStart = new Date(calendarYear, calendarMonthIndex, 1);
+  const monthEnd = new Date(calendarYear, calendarMonthIndex + 1, 0);
+  const monthDays = monthEnd.getDate();
+  const startWeekday = monthStart.getDay();
+  const leadingBlanks = Array.from({ length: startWeekday }, (_, i) => `blank-${i}`);
+  const dayCells = Array.from({ length: monthDays }, (_, i) => i + 1);
 
   const createAccount = async (kind: 'debit' | 'credit') => {
     const query = kind === 'debit' ? debitQuery : creditQuery;
@@ -250,7 +272,10 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
               <Text style={styles.label}>Date</Text>
               <TouchableOpacity
                 style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
+                onPress={() => {
+                  setCalendarMonth(parseISODate(entryDate));
+                  setShowDatePicker(true);
+                }}
                 testID="quickadd-date-picker-open"
               >
                 <Text style={styles.dateButtonText}>{formatDateDMY(entryDate)}</Text>
@@ -530,29 +555,88 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                         <Text style={styles.parentClose}>Done</Text>
                       </TouchableOpacity>
                     </View>
-                    <FlatList
-                      data={dateOptions}
-                      keyExtractor={(item) => item}
-                      keyboardShouldPersistTaps="handled"
-                      style={styles.parentList}
-                      contentContainerStyle={styles.parentListContent}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[
-                            styles.parentItem,
-                            item === entryDate && styles.parentItemActive,
-                          ]}
-                          onPress={() => {
-                            setEntryDate(item);
-                            setShowDatePicker(false);
-                          }}
-                          testID={`quickadd-date-${item}`}
-                        >
-                          <Text style={styles.parentItemText}>{formatDateDMY(item)}</Text>
-                          <Text style={styles.parentMeta}>{item}</Text>
-                        </TouchableOpacity>
-                      )}
-                    />
+                    <View style={styles.calendarHeader}>
+                      <TouchableOpacity
+                        style={styles.calendarNav}
+                        onPress={() =>
+                          setCalendarMonth(
+                            new Date(calendarYear, calendarMonthIndex - 1, 1)
+                          )
+                        }
+                      >
+                        <Text style={styles.calendarNavText}>{'<'}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.calendarMonthLabel}>
+                        {calendarMonth.toLocaleString('default', {
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.calendarNav}
+                        onPress={() =>
+                          setCalendarMonth(
+                            new Date(calendarYear, calendarMonthIndex + 1, 1)
+                          )
+                        }
+                      >
+                        <Text style={styles.calendarNavText}>{'>'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.calendarWeekdays}>
+                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                        <Text key={`${day}-${index}`} style={styles.calendarWeekday}>
+                          {day}
+                        </Text>
+                      ))}
+                    </View>
+                    <View style={styles.calendarGrid}>
+                      {leadingBlanks.map((key) => (
+                        <View key={key} style={styles.calendarCell} />
+                      ))}
+                      {dayCells.map((day) => {
+                        const iso = toISODate(
+                          new Date(calendarYear, calendarMonthIndex, day)
+                        );
+                        const selected = iso === entryDate;
+                        return (
+                          <TouchableOpacity
+                            key={iso}
+                            style={[
+                              styles.calendarCell,
+                              selected && styles.calendarCellActive,
+                            ]}
+                            onPress={() => {
+                              setEntryDate(iso);
+                              setShowDatePicker(false);
+                            }}
+                            testID={`quickadd-date-${iso}`}
+                          >
+                            <Text
+                              style={[
+                                styles.calendarCellText,
+                                selected && styles.calendarCellTextActive,
+                              ]}
+                            >
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.calendarFooter}>
+                      <TouchableOpacity
+                        style={styles.todayButton}
+                        onPress={() => {
+                          const today = toISODate(new Date());
+                          setEntryDate(today);
+                          setCalendarMonth(parseISODate(today));
+                          setShowDatePicker(false);
+                        }}
+                      >
+                        <Text style={styles.todayButtonText}>Today</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               </Modal>
@@ -615,6 +699,65 @@ const styles = StyleSheet.create({
   },
   dateButtonText: { fontSize: 15, color: '#0f172a', fontWeight: '700' },
   dateButtonHint: { fontSize: 12, color: '#64748b' },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  calendarNav: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e2e8f0',
+  },
+  calendarNavText: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  calendarMonthLabel: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  calendarWeekdays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  calendarWeekday: {
+    width: 34,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  calendarCell: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarCellActive: { backgroundColor: '#0f172a' },
+  calendarCellText: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  calendarCellTextActive: { color: '#f8fafc' },
+  calendarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 10,
+    alignItems: 'flex-end',
+  },
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#e2e8f0',
+  },
+  todayButtonText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   label: { fontSize: 14, color: '#64748b' },
   accountBox: {
