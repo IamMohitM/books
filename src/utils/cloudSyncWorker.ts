@@ -413,7 +413,11 @@ function normalizeDateForSync(value: unknown) {
     return '';
   }
 
-  return parsed.toISOString().slice(0, 10);
+  // Keep the local calendar date to avoid timezone day rollback.
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 async function withTimeout<T>(
@@ -642,14 +646,31 @@ function normalizeJournalEntryEventPayload(payload: Record<string, unknown>) {
   const normalizedReferenceDate = normalizeDateForSync(
     data.referenceDate ?? data.reference_date
   );
+  const hasCancelled =
+    payload.cancelled !== undefined || data.cancelled !== undefined;
+  const cancelled =
+    payload.cancelled === true ||
+    payload.cancelled === 1 ||
+    data.cancelled === true ||
+    data.cancelled === 1;
+  const submitted =
+    payload.submitted === true ||
+    payload.submitted === 1 ||
+    data.submitted === true ||
+    data.submitted === 1;
+  const normalizedSubmitted = hasCancelled
+    ? submitted && !cancelled
+    : submitted;
 
   return {
     ...payload,
+    submitted: normalizedSubmitted,
     data: {
       ...data,
       date: normalizedDate || null,
       referenceDate: normalizedReferenceDate || null,
       reference_date: normalizedReferenceDate || null,
+      submitted: normalizedSubmitted,
     },
   };
 }
@@ -916,8 +937,9 @@ export async function bootstrapCloudSyncFromLocal(
                 referenceNumber: String(je.referenceNumber ?? ''),
                 referenceDate: String(je.referenceDate ?? ''),
                 userRemark: String(je.userRemark ?? ''),
-                submitted: !!(je as { submitted?: boolean }).submitted,
-                cancelled: !!(je as { cancelled?: boolean }).cancelled,
+                submitted:
+                  !!(je as { submitted?: boolean }).submitted &&
+                  !(je as { cancelled?: boolean }).cancelled,
                 accounts: lines,
               },
             }),
