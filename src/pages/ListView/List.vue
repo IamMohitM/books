@@ -283,6 +283,45 @@ export default defineComponent({
         orderBy,
       });
 
+      if (this.schemaName === 'JournalEntry' && tableData.length) {
+        const journalEntryNames = tableData
+          .map((row) => String(row.name ?? '').trim())
+          .filter(Boolean);
+
+        if (journalEntryNames.length) {
+          const accountRows = await fyo.db.getAll('JournalEntryAccount', {
+            fields: ['parent', 'debit'],
+            filters: { parent: ['in', journalEntryNames] },
+          });
+
+          const amountByParent = new Map<string, number>();
+          for (const row of accountRows) {
+            const parent = String(row.parent ?? '').trim();
+            if (!parent) {
+              continue;
+            }
+
+            const debitRaw = row.debit as unknown;
+            const debit =
+              typeof debitRaw === 'number'
+                ? debitRaw
+                : typeof debitRaw === 'string'
+                ? Number(debitRaw)
+                : typeof debitRaw === 'object' &&
+                  debitRaw !== null &&
+                  'float' in debitRaw
+                ? Number((debitRaw as { float: number }).float)
+                : 0;
+            amountByParent.set(parent, (amountByParent.get(parent) ?? 0) + debit);
+          }
+
+          for (const row of tableData) {
+            const parent = String(row.name ?? '').trim();
+            row.amount = amountByParent.get(parent) ?? 0;
+          }
+        }
+      }
+
       let filteredData = tableData;
 
       if (isStatusFilter && statusFilter?.[1]) {

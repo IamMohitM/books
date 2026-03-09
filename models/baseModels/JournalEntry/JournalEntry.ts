@@ -162,6 +162,14 @@ export class JournalEntry extends Transactional {
           },
         },
         'date',
+        {
+          label: t`Amount`,
+          fieldname: 'amount',
+          fieldtype: 'Currency',
+          display(value, fyo) {
+            return fyo.format(value ?? 0, 'Currency');
+          },
+        },
         'entryType',
         'userRemark',
         'referenceNumber',
