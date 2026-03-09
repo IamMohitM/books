@@ -592,6 +592,7 @@ import { computed, defineComponent, inject } from 'vue';
 import CommonFormSection from '../CommonForm/CommonFormSection.vue';
 
 const COMPONENT_NAME = 'Settings';
+const SYNC_TAB_KEY = '__cloud_sync__';
 
 export default defineComponent({
   components: { FormContainer, Button, FormHeader, CommonFormSection },
@@ -763,7 +764,11 @@ export default defineComponent({
       ].some((s) => this.fyo.singles[s]?.canSave);
     },
     doc(): Doc | null {
-      const doc = this.fyo.singles[this.activeTab];
+      const tabName =
+        this.activeTab === SYNC_TAB_KEY
+          ? ModelNameEnum.SystemSettings
+          : this.activeTab;
+      const doc = this.fyo.singles[tabName];
       if (!doc) {
         return null;
       }
@@ -779,6 +784,7 @@ export default defineComponent({
         [ModelNameEnum.POSSettings]: this.t`POS Settings`,
         [ModelNameEnum.ERPNextSyncSettings]: this.t`ERPNext Sync`,
         [ModelNameEnum.SystemSettings]: this.t`System`,
+        [SYNC_TAB_KEY]: this.t`Sync`,
       };
     },
     schemas(): Schema[] {
@@ -829,7 +835,7 @@ export default defineComponent({
       return group;
     },
     showCloudSyncPanel(): boolean {
-      return this.activeTab === ModelNameEnum.SystemSettings;
+      return this.activeTab === SYNC_TAB_KEY;
     },
     showDevClearRemoteButton(): boolean {
       return this.showCloudSyncPanel && !!this.fyo.store.isDevelopment;
@@ -1010,7 +1016,9 @@ export default defineComponent({
       this.update();
     },
     getFieldActionsForSection(): Record<string, string> {
-      if (this.activeTab !== ModelNameEnum.SystemSettings) {
+      if (
+        ![ModelNameEnum.SystemSettings, SYNC_TAB_KEY].includes(this.activeTab)
+      ) {
         return {};
       }
 
@@ -1020,7 +1028,7 @@ export default defineComponent({
     },
     async onSectionFieldAction(fieldname: string): Promise<void> {
       if (
-        this.activeTab === ModelNameEnum.SystemSettings &&
+        [ModelNameEnum.SystemSettings, SYNC_TAB_KEY].includes(this.activeTab) &&
         fieldname === 'syncCompanyId'
       ) {
         await this.generateCompanyIdNow();
@@ -2400,6 +2408,21 @@ export default defineComponent({
         }
 
         tabbed.get(section)!.push(field);
+      }
+
+      const systemFields = grouped.get(ModelNameEnum.SystemSettings);
+      if (systemFields) {
+        const syncSectionName = 'Sync';
+        const syncFields = [...(systemFields.get(syncSectionName) ?? [])];
+        systemFields.delete(syncSectionName);
+
+        const syncGrouped = new Map<string, Field[]>();
+        if (syncFields.length) {
+          syncGrouped.set(syncSectionName, syncFields);
+        } else {
+          syncGrouped.set(this.t`Sync`, []);
+        }
+        grouped.set(SYNC_TAB_KEY, syncGrouped);
       }
 
       this.groupedFields = grouped;
