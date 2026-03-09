@@ -148,6 +148,33 @@ as $$
   );
 $$;
 
+create or replace function public.ensure_external_key()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.external_key is null or btrim(new.external_key) = '' then
+    new.external_key := new.id::text;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_accounts_ensure_external_key on public.accounts;
+create trigger trg_accounts_ensure_external_key
+before insert or update on public.accounts
+for each row execute function public.ensure_external_key();
+
+drop trigger if exists trg_parties_ensure_external_key on public.parties;
+create trigger trg_parties_ensure_external_key
+before insert or update on public.parties
+for each row execute function public.ensure_external_key();
+
+drop trigger if exists trg_journal_entries_ensure_external_key on public.journal_entries;
+create trigger trg_journal_entries_ensure_external_key
+before insert or update on public.journal_entries
+for each row execute function public.ensure_external_key();
+
 create or replace function public.create_journal_entry(
   target_company uuid,
   entry_type text,
@@ -185,6 +212,7 @@ begin
     reference_number,
     reference_date,
     user_remark,
+    submitted,
     created_by
   ) values (
     target_company,
@@ -193,6 +221,7 @@ begin
     reference_number,
     reference_date,
     user_remark,
+    true,
     auth.uid()
   ) returning id into new_entry_id;
 

@@ -5,10 +5,14 @@ update public.journal_entries
 set submitted = false
 where cancelled = true;
 
+drop view if exists public.ledger_entries;
+drop view if exists public.account_balances;
+drop view if exists public.journal_entries_with_user;
+drop function if exists public.build_journal_entry_payload(uuid);
+
 alter table public.journal_entries
   drop column if exists cancelled;
 
-drop view if exists public.ledger_entries;
 create view public.ledger_entries as
 select
   jel.id as line_id,
@@ -29,7 +33,6 @@ from public.journal_entry_lines jel
 join public.journal_entries je on je.id = jel.journal_entry_id
 join public.accounts a on a.id = jel.account_id;
 
-drop view if exists public.account_balances;
 create view public.account_balances as
 select
   a.company_id,
