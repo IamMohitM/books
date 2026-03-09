@@ -49,6 +49,7 @@ supabase/.temp
 .agents/
 .agent/
 .codex/
+CLAUDE.md
 
 # Local Netlify folder
 .netlify
