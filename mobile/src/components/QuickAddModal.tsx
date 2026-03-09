@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { formatDateDMY } from '../utils/date';
 
 type Account = {
   id: string;
@@ -30,7 +32,10 @@ type Props = {
 };
 
 export default function QuickAddModal({ companyId, visible, onClose, onCreated }: Props) {
+  const todayIso = new Date().toISOString().slice(0, 10);
   const [amount, setAmount] = useState('');
+  const [entryDate, setEntryDate] = useState(todayIso);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [debitAccountId, setDebitAccountId] = useState<string>('');
   const [creditAccountId, setCreditAccountId] = useState<string>('');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -79,8 +84,16 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
       setSubmitError(null);
       setDebitFocused(false);
       setCreditFocused(false);
+      setEntryDate(todayIso);
+      setShowDatePicker(false);
     }
-  }, [companyId, visible]);
+  }, [companyId, visible, todayIso]);
+
+  const dateOptions = Array.from({ length: 180 }).map((_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - index);
+    return date.toISOString().slice(0, 10);
+  });
 
   const groupAccounts = accounts.filter((acc) => acc.is_group);
   const debitQuery = debitSearch.trim();
@@ -190,7 +203,7 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
     const { error } = await supabase.rpc('create_journal_entry', {
       target_company: companyId,
       entry_type: 'Journal Entry',
-      entry_date: new Date().toISOString().slice(0, 10),
+      entry_date: entryDate,
       reference_number: null,
       reference_date: null,
       user_remark: note,
@@ -213,6 +226,7 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
       setDebitParentId('');
       setCreditParentId('');
       onCreated();
+      Alert.alert('Saved', 'Transaction saved successfully.');
       if (Platform.OS !== 'web') {
         onClose();
       }
@@ -233,6 +247,15 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                 onChangeText={setAmount}
                 testID="quickadd-amount"
               />
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+                testID="quickadd-date-picker-open"
+              >
+                <Text style={styles.dateButtonText}>{formatDateDMY(entryDate)}</Text>
+                <Text style={styles.dateButtonHint}>{entryDate}</Text>
+              </TouchableOpacity>
               <Text style={styles.label}>Debit Account</Text>
               <View style={styles.accountBox}>
                 <View style={styles.searchRow}>
@@ -498,6 +521,41 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
                   </View>
                 </View>
               </Modal>
+              <Modal visible={showDatePicker} animationType="slide" transparent>
+                <View style={styles.overlay}>
+                  <View style={styles.parentModal}>
+                    <View style={styles.parentHeader}>
+                      <Text style={styles.parentTitle}>Select transaction date</Text>
+                      <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                        <Text style={styles.parentClose}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <FlatList
+                      data={dateOptions}
+                      keyExtractor={(item) => item}
+                      keyboardShouldPersistTaps="handled"
+                      style={styles.parentList}
+                      contentContainerStyle={styles.parentListContent}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[
+                            styles.parentItem,
+                            item === entryDate && styles.parentItemActive,
+                          ]}
+                          onPress={() => {
+                            setEntryDate(item);
+                            setShowDatePicker(false);
+                          }}
+                          testID={`quickadd-date-${item}`}
+                        >
+                          <Text style={styles.parentItemText}>{formatDateDMY(item)}</Text>
+                          <Text style={styles.parentMeta}>{item}</Text>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </View>
+                </View>
+              </Modal>
               <TextInput
                 style={styles.input}
                 placeholder="Notes"
@@ -546,6 +604,17 @@ const styles = StyleSheet.create({
   modalContent: { gap: 14 },
   title: { fontSize: 20, fontWeight: '700' },
   input: { borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, fontSize: 15 },
+  dateButton: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    gap: 2,
+  },
+  dateButtonText: { fontSize: 15, color: '#0f172a', fontWeight: '700' },
+  dateButtonHint: { fontSize: 12, color: '#64748b' },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   label: { fontSize: 14, color: '#64748b' },
   accountBox: {

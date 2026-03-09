@@ -43,7 +43,7 @@ const toLocalISODate = (value: Date) => {
 
 const getDefaultFromDate = () => {
   const today = new Date();
-  const fromDate = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const fromDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
   return toLocalISODate(fromDate);
 };
 
@@ -83,7 +83,6 @@ const formatAmount = (value: number) => value.toFixed(2);
 
 export default function CashSummaryScreen({ companyId }: { companyId: string }) {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
-  const [cashLedgerRows, setCashLedgerRows] = useState<LedgerRow[]>([]);
   const [summaryRows, setSummaryRows] = useState<CashSummaryRow[]>([]);
   const [loadingCash, setLoadingCash] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
@@ -135,7 +134,6 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
         .map((row) => row.id);
 
       if (cashAccountIds.length === 0) {
-        setCashLedgerRows([]);
         setSummaryRows([]);
         setLoadingCash(false);
         return;
@@ -151,7 +149,6 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
         .order('date', { ascending: true });
 
       const allRows = (data ?? []) as LedgerRow[];
-      setCashLedgerRows(allRows);
 
       const monthlyBuckets = buildMonthlyBuckets(dateFrom, dateTo);
       const bucketMap = new Map(monthlyBuckets.map((row) => [row.periodStart, row]));
@@ -179,7 +176,6 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
     if (accounts.length > 0) {
       void loadCashSummary();
     } else {
-      setCashLedgerRows([]);
       setSummaryRows([]);
     }
   }, [companyId, accounts, dateFrom, dateTo]);
@@ -233,20 +229,9 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
     return accounts.filter((row) => row.name.toLowerCase().includes(query));
   }, [accountSearch, accounts]);
 
-  const totalBalance = useMemo(() => {
-    return cashLedgerRows.reduce(
-      (sum, row) => sum + Number(row.debit ?? 0) - Number(row.credit ?? 0),
-      0
-    );
-  }, [cashLedgerRows]);
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Cash In Hand Summary</Text>
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Cash In Hand (As of {formatDateDMY(dateTo)})</Text>
-        <Text style={styles.summaryValue}>{formatAmount(totalBalance)}</Text>
-      </View>
 
       <View style={styles.rangeCard}>
         <View style={styles.rangeField}>
@@ -382,14 +367,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
   sectionHeader: { marginTop: 14, marginBottom: 8 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
-  summaryCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-  },
-  summaryLabel: { fontSize: 15, color: '#64748b' },
-  summaryValue: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginTop: 6 },
   rangeCard: {
     backgroundColor: 'white',
     padding: 14,

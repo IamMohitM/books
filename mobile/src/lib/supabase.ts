@@ -505,6 +505,41 @@ export function addOrUpdateMobileProjectProfile(input: {
   return profile;
 }
 
+export function removeMobileProjectProfile(profileId: string) {
+  const target = mobileProjectProfiles.find((profile) => profile.id === profileId);
+  if (!target) {
+    throw new Error('Profile not found');
+  }
+
+  const isEnvProfile = envProfiles.some(
+    (profile) => profile.projectRef === target.projectRef
+  );
+  if (isEnvProfile) {
+    throw new Error('Default environment project cannot be removed.');
+  }
+
+  mobileProjectProfiles = mobileProjectProfiles.filter(
+    (profile) => profile.id !== profileId
+  );
+
+  if (!mobileProjectProfiles.length) {
+    activeProfile = null;
+    supabase = null;
+    supabasePublicAnonKey = '';
+    supabasePublicUrl = '';
+    return null;
+  }
+
+  if (activeProfile?.id === profileId) {
+    activeProfile = mobileProjectProfiles[0];
+    supabase = createSupabaseClient(activeProfile.url, activeProfile.anonKey);
+    supabasePublicAnonKey = activeProfile.anonKey;
+    supabasePublicUrl = activeProfile.url;
+  }
+
+  return activeProfile?.id ?? mobileProjectProfiles[0]?.id ?? null;
+}
+
 export type NetworkDiagnostics = {
   ok: boolean;
   type: 'success' | 'network_timeout' | 'network_error' | 'isp_blocked';

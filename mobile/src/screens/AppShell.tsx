@@ -159,7 +159,7 @@ export default function AppShell({
         <View style={styles.centerSpacer} />
         <Tab
           label="Cash"
-          icon="dollar-sign"
+          symbol="₹"
           isActive={activeTab === 'cash'}
           onPress={() => setActiveTab('cash')}
         />
@@ -190,11 +190,13 @@ export default function AppShell({
 function Tab({
   label,
   icon,
+  symbol,
   isActive,
   onPress,
 }: {
   label: string;
-  icon: keyof typeof Feather.glyphMap;
+  icon?: keyof typeof Feather.glyphMap;
+  symbol?: string;
   isActive: boolean;
   onPress: () => void;
 }) {
@@ -205,7 +207,11 @@ function Tab({
       style={[styles.tab, isActive && styles.tabActive]}
       accessibilityLabel={label}
     >
-      <Feather name={icon} size={22} color={iconColor} />
+      {symbol ? (
+        <Text style={[styles.tabSymbol, { color: iconColor }]}>{symbol}</Text>
+      ) : (
+        <Feather name={icon!} size={22} color={iconColor} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -246,6 +252,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: { backgroundColor: '#f8fafc' },
+  tabSymbol: { fontSize: 24, fontWeight: '700', lineHeight: 24 },
   content: {
     flex: 1,
     paddingBottom: Platform.OS === 'web' ? 14 : 8,

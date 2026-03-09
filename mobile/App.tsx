@@ -19,6 +19,7 @@ import {
   loadMobileProjectProfilesFromDisk,
   mobileProjectProfiles,
   persistMobileProjectProfilesToDisk,
+  removeMobileProjectProfile,
   resetMobileProjectProfilesToDefault,
   setActiveMobileProfile,
   validateMobileProjectCredentials,
@@ -214,6 +215,48 @@ export default function App() {
     setShowProjectSwitcher(false);
     setProjectStatus(null);
     setShowAddProjectModal(true);
+  };
+
+  const removeProjectProfile = (profileId: string) => {
+    const target = mobileProjectProfiles.find((profile) => profile.id === profileId);
+    if (!target) {
+      return;
+    }
+
+    if (mobileProjectProfiles.length <= 1) {
+      showAlert('Cannot remove profile', 'At least one project profile is required.');
+      return;
+    }
+
+    if (profileId === selectedProfileId) {
+      showAlert(
+        'Switch project first',
+        'Switch to another project before removing the active one.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      `Remove ${target.label}?`,
+      'This removes only the saved profile from this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              removeMobileProjectProfile(profileId);
+              await persistMobileProjectProfilesToDisk();
+              setProfilesVersion((v) => v + 1);
+              showAlert('Profile removed', `${target.label} was removed.`);
+            } catch (error) {
+              showAlert('Unable to remove profile', (error as Error).message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const addProjectForm = (
@@ -434,34 +477,41 @@ export default function App() {
               {mobileProjectProfiles.map((profile) => {
                 const active = profile.id === selectedProfileId;
                 return (
-                  <TouchableOpacity
-                    key={profile.id}
-                    style={[
-                      styles.switcherRow,
-                      active && styles.switcherRowActive,
-                    ]}
-                    onPress={async () => {
-                      try {
-                        const client = await setActiveMobileProfile(profile.id);
-                        setSelectedProfileId(profile.id);
-                        const { data } = await client.auth.getSession();
-                        setSession(data.session);
-                        setShowProjectSwitcher(false);
-                      } catch (error) {
-                        Alert.alert('Switch failed', (error as Error).message);
-                      }
-                    }}
-                  >
-                    <Text
+                  <View key={profile.id} style={styles.switcherRowWrap}>
+                    <TouchableOpacity
                       style={[
-                        styles.switcherLabel,
-                        active && styles.switcherLabelActive,
+                        styles.switcherRow,
+                        active && styles.switcherRowActive,
                       ]}
+                      onPress={async () => {
+                        try {
+                          const client = await setActiveMobileProfile(profile.id);
+                          setSelectedProfileId(profile.id);
+                          const { data } = await client.auth.getSession();
+                          setSession(data.session);
+                          setShowProjectSwitcher(false);
+                        } catch (error) {
+                          Alert.alert('Switch failed', (error as Error).message);
+                        }
+                      }}
                     >
-                      {profile.label}
-                    </Text>
-                    {active && <Text style={styles.switcherActive}>Active</Text>}
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.switcherLabel,
+                          active && styles.switcherLabelActive,
+                        ]}
+                      >
+                        {profile.label}
+                      </Text>
+                      {active && <Text style={styles.switcherActive}>Active</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.switcherRemove}
+                      onPress={() => removeProjectProfile(profile.id)}
+                    >
+                      <Text style={styles.switcherRemoveText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
                 );
               })}
             </View>
@@ -576,6 +626,7 @@ const styles = StyleSheet.create({
   switcherTitle: { fontSize: 18, fontWeight: '700' },
   switcherHint: { fontSize: 13, color: '#64748b' },
   switcherList: { gap: 8, marginTop: 6 },
+  switcherRowWrap: { gap: 6 },
   switcherRow: {
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -591,6 +642,14 @@ const styles = StyleSheet.create({
   switcherLabel: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   switcherLabelActive: { color: '#f8fafc' },
   switcherActive: { fontSize: 12, color: '#f8fafc' },
+  switcherRemove: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
+  },
+  switcherRemoveText: { fontSize: 12, fontWeight: '700', color: '#b91c1c' },
   switcherAdd: {
     marginTop: 4,
     borderRadius: 10,
