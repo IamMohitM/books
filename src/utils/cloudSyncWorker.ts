@@ -1901,8 +1901,9 @@ async function applyRemoteAccountChange(
   const existing = await getExistingDocByName(fyo, ModelNameEnum.Account, name);
   if (operation === 'delete') {
     if (existing) {
-      existing._addDocToSyncQueue = false;
-      await existing.delete().catch(() => undefined);
+      await withSyncQueueSuppressed(existing, async () => {
+        await existing.delete().catch(() => undefined);
+      });
     }
     return;
   }
@@ -1922,8 +1923,9 @@ async function applyRemoteAccountChange(
   }
 
   const doc = fyo.doc.getNewDoc(ModelNameEnum.Account, valueMap);
-  doc._addDocToSyncQueue = false;
-  await doc.sync().catch(() => undefined);
+  await withSyncQueueSuppressed(doc, async () => {
+    await doc.sync().catch(() => undefined);
+  });
 }
 
 async function applyRemotePartyChange(
@@ -1944,8 +1946,9 @@ async function applyRemotePartyChange(
   const existing = await getExistingDocByName(fyo, ModelNameEnum.Party, name);
   if (operation === 'delete') {
     if (existing) {
-      existing._addDocToSyncQueue = false;
-      await existing.delete().catch(() => undefined);
+      await withSyncQueueSuppressed(existing, async () => {
+        await existing.delete().catch(() => undefined);
+      });
     }
     return;
   }
@@ -1963,14 +1966,29 @@ async function applyRemotePartyChange(
   }
 
   const doc = fyo.doc.getNewDoc(ModelNameEnum.Party, valueMap);
-  doc._addDocToSyncQueue = false;
-  await doc.sync().catch(() => undefined);
+  await withSyncQueueSuppressed(doc, async () => {
+    await doc.sync().catch(() => undefined);
+  });
 }
 
 async function applyDocUpdate(doc: Doc, valueMap: DocValueMap) {
+  await withSyncQueueSuppressed(doc, async () => {
+    await doc.setMultiple(valueMap);
+    await doc.sync().catch(() => undefined);
+  });
+}
+
+async function withSyncQueueSuppressed(
+  doc: Doc,
+  callback: () => Promise<void>
+) {
+  const previousFlag = doc._addDocToSyncQueue;
   doc._addDocToSyncQueue = false;
-  await doc.setMultiple(valueMap);
-  await doc.sync().catch(() => undefined);
+  try {
+    await callback();
+  } finally {
+    doc._addDocToSyncQueue = previousFlag ?? true;
+  }
 }
 
 async function getExistingDocByName(
@@ -2014,15 +2032,16 @@ async function applyRemoteJournalEntryChange(
       return;
     }
 
-    existing._addDocToSyncQueue = false;
-    if (existing.canDelete) {
-      await existing.delete().catch(() => undefined);
-      return;
-    }
+    await withSyncQueueSuppressed(existing, async () => {
+      if (existing.canDelete) {
+        await existing.delete().catch(() => undefined);
+        return;
+      }
 
-    if (existing.canCancel) {
-      await existing.cancel().catch(() => undefined);
-    }
+      if (existing.canCancel) {
+        await existing.cancel().catch(() => undefined);
+      }
+    });
     return;
   }
 
@@ -2062,16 +2081,17 @@ async function applyRemoteJournalEntryChange(
 
   if (!existing) {
     const doc = fyo.doc.getNewDoc(ModelNameEnum.JournalEntry, jeValues);
-    doc._addDocToSyncQueue = false;
-    doc.skipAutoName = true;
-    for (const row of mappedLines) {
-      await doc.append('accounts', row);
-    }
+    await withSyncQueueSuppressed(doc, async () => {
+      doc.skipAutoName = true;
+      for (const row of mappedLines) {
+        await doc.append('accounts', row);
+      }
 
-    await doc.sync().catch(() => undefined);
-    if (doc.canSubmit) {
-      await doc.submit().catch(() => undefined);
-    }
+      await doc.sync().catch(() => undefined);
+      if (doc.canSubmit) {
+        await doc.submit().catch(() => undefined);
+      }
+    });
     return;
   }
 
@@ -2079,17 +2099,18 @@ async function applyRemoteJournalEntryChange(
     return;
   }
 
-  existing._addDocToSyncQueue = false;
-  await existing.setMultiple(jeValues);
-  await existing.set('accounts', []);
-  for (const row of mappedLines) {
-    await existing.append('accounts', row);
-  }
+  await withSyncQueueSuppressed(existing, async () => {
+    await existing.setMultiple(jeValues);
+    await existing.set('accounts', []);
+    for (const row of mappedLines) {
+      await existing.append('accounts', row);
+    }
 
-  await existing.sync().catch(() => undefined);
-  if (existing.canSubmit) {
-    await existing.submit().catch(() => undefined);
-  }
+    await existing.sync().catch(() => undefined);
+    if (existing.canSubmit) {
+      await existing.submit().catch(() => undefined);
+    }
+  });
 }
 
 async function resolveAccountName(fyo: Fyo, accountRef: string) {
