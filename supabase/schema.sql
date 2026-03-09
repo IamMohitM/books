@@ -189,6 +189,8 @@ security definer
 as $$
 declare
   new_entry_id uuid;
+  new_external_key text;
+  next_mob_seq integer;
   line jsonb;
   account_id uuid;
   debit numeric;
@@ -205,25 +207,48 @@ begin
     raise exception 'Journal entry lines are required';
   end if;
 
-  insert into public.journal_entries (
-    company_id,
-    entry_type,
-    date,
-    reference_number,
-    reference_date,
-    user_remark,
-    submitted,
-    created_by
-  ) values (
-    target_company,
-    entry_type,
-    entry_date,
-    reference_number,
-    reference_date,
-    user_remark,
-    true,
-    auth.uid()
-  ) returning id into new_entry_id;
+  loop
+    select coalesce(
+      max((regexp_match(external_key, '^MOB-([0-9]+)$'))[1]::integer),
+      0
+    ) + 1
+    into next_mob_seq
+    from public.journal_entries
+    where company_id = target_company
+      and external_key ~ '^MOB-[0-9]+$';
+
+    new_external_key := 'MOB-' || lpad(next_mob_seq::text, 4, '0');
+
+    begin
+      insert into public.journal_entries (
+        company_id,
+        entry_type,
+        date,
+        reference_number,
+        reference_date,
+        user_remark,
+        external_key,
+        submitted,
+        created_by
+      ) values (
+        target_company,
+        entry_type,
+        entry_date,
+        reference_number,
+        reference_date,
+        user_remark,
+        new_external_key,
+        true,
+        auth.uid()
+      ) returning id into new_entry_id;
+
+      exit;
+    exception
+      when unique_violation then
+        -- Retry once more with a fresh sequence value if parallel inserts collide.
+        null;
+    end;
+  end loop;
 
   for line in select * from jsonb_array_elements(lines)
   loop
