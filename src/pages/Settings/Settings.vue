@@ -134,93 +134,44 @@
             <Button class="text-xs" @click="syncNow">
               {{ t`Sync Now` }}
             </Button>
-            <Button class="text-xs" @click="initializeRemoteNow">
-              {{ t`Initialize Remote (Admin)` }}
-            </Button>
-            <Button
-              v-if="cloudSyncStatus.enrollmentStatus !== 'paused'"
-              class="text-xs"
-              @click="pauseSyncNow"
-            >
-              {{ t`Pause Sync` }}
-            </Button>
-            <Button
-              v-if="cloudSyncStatus.enrollmentStatus === 'paused'"
-              class="text-xs"
-              @click="resumeSyncNow"
-            >
-              {{ t`Resume Sync` }}
-            </Button>
-            <Button class="text-xs" @click="refreshCloudSyncStatus">
-              {{ t`Refresh Sync Status` }}
-            </Button>
-          </div>
-          <div
-            v-if="remoteInit.open"
-            class="mb-3 p-2 rounded border dark:border-gray-800 text-xs"
-          >
-            <div class="mb-2 text-gray-700 dark:text-gray-200">
-              {{
-                t`Enter one-time Supabase Admin Access Token to initialize remote schema. This token is not saved.`
-              }}
-            </div>
-            <div class="flex flex-wrap gap-2 items-center">
-              <input
-                v-model="remoteInit.token"
-                type="password"
-                class="
-                  px-2
-                  py-1
-                  border
-                  rounded
-                  text-sm
-                  bg-white
-                  dark:bg-gray-890 dark:border-gray-700
-                "
-                :placeholder="t`Admin Access Token`"
-              />
-              <Button
-                class="text-xs"
-                :disabled="remoteInit.running"
-                @click="executeRemoteInitNow"
-              >
-                {{ remoteInit.running ? t`Initializing...` : t`Initialize` }}
-              </Button>
-              <Button class="text-xs" @click="cancelRemoteInitNow">
-                {{ t`Cancel` }}
-              </Button>
-            </div>
-          </div>
-          <div class="mb-3 flex flex-wrap gap-2">
-            <Button class="text-xs" @click="runBootstrapDryRunNow">
-              {{ t`Run Dry Run` }}
-            </Button>
-            <Button class="text-xs" @click="runReconciliationNow">
-              {{ t`Run Reconciliation` }}
-            </Button>
-            <Button class="text-xs" @click="bootstrapCloudNow">
-              {{ t`Bootstrap To Cloud` }}
-            </Button>
-            <Button class="text-xs" @click="exportDiagnosticsNow">
-              {{ t`Export Diagnostics` }}
-            </Button>
             <Button class="text-xs" @click="resetSyncQueueNow">
-              {{ t`Reset Sync Queue` }}
+              {{ t`Repair Queue` }}
             </Button>
           </div>
-          <div
-            v-if="showDevClearRemoteButton"
-            class="mb-3 flex flex-wrap gap-2"
-          >
-            <Button class="text-xs" @click="flushCloudSyncNow">
-              {{ t`Flush Sync Now` }}
-            </Button>
-            <Button class="text-xs" @click="clearRemoteDataNow">
-              {{ t`Clear Remote Data (Dev)` }}
-            </Button>
-            <Button class="text-xs" @click="repullAllNow">
-              {{ t`Re-pull All (Dev)` }}
-            </Button>
+          <div class="mb-3 p-2 rounded border dark:border-gray-800 text-xs">
+            <div class="font-semibold mb-1">{{ t`Status` }}</div>
+            <div class="text-gray-700 dark:text-gray-200">
+              <span class="font-semibold">{{ t`Health` }}:</span>
+              <span
+                :class="
+                  syncHealth.level === 'healthy'
+                    ? 'text-green-700 dark:text-green-300'
+                    : syncHealth.level === 'disabled'
+                    ? 'text-gray-700 dark:text-gray-200'
+                    : 'text-yellow-700 dark:text-yellow-300'
+                "
+              >
+                {{ syncHealth.label }}
+              </span>
+            </div>
+            <div class="text-gray-700 dark:text-gray-200">
+              {{ t`Enrollment` }}: {{ cloudSyncStatus.enrollmentStatus }}
+            </div>
+            <div class="text-gray-700 dark:text-gray-200">
+              {{ t`Failed` }}: {{ cloudSyncStatus.failed }}
+            </div>
+            <div v-if="cloudSyncStatus.lastPushAt" class="text-gray-700 dark:text-gray-200">
+              {{ t`Last Push` }}: {{ cloudSyncStatus.lastPushAt }}
+            </div>
+            <div v-if="cloudSyncStatus.lastPullAt" class="text-gray-700 dark:text-gray-200">
+              {{ t`Last Pull` }}: {{ cloudSyncStatus.lastPullAt }}
+            </div>
+            <div
+              v-if="cloudSyncStatus.lastError"
+              class="mt-1 text-red-600 dark:text-red-300 break-all"
+            >
+              {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
+            </div>
           </div>
           <div
             v-if="syncSetupMissing.length"
@@ -239,250 +190,398 @@
             <div class="font-semibold">{{ t`Sync setup incomplete` }}</div>
             <div v-for="item in syncSetupMissing" :key="item">- {{ item }}</div>
           </div>
-          <div class="flex flex-wrap gap-4 text-gray-700 dark:text-gray-200">
-            <div>
-              {{ t`Enrollment` }}: {{ cloudSyncStatus.enrollmentStatus }}
-            </div>
-            <div>{{ t`Queued` }}: {{ cloudSyncStatus.queued }}</div>
-            <div>{{ t`Processing` }}: {{ cloudSyncStatus.processing }}</div>
-            <div>{{ t`Failed` }}: {{ cloudSyncStatus.failed }}</div>
-            <div>{{ t`Sent` }}: {{ cloudSyncStatus.sent }}</div>
-          </div>
-          <div class="mt-2 text-xs text-gray-600 dark:text-gray-300">
-            <div v-if="cloudSyncStatus.lastPushAt">
-              {{ t`Last Push` }}: {{ cloudSyncStatus.lastPushAt }}
-            </div>
-            <div v-if="cloudSyncStatus.lastPullAt">
-              {{ t`Last Pull` }}: {{ cloudSyncStatus.lastPullAt }}
-            </div>
-          </div>
-          <div
-            v-if="cloudSyncStatus.lastError"
-            class="mt-2 text-xs text-red-600 dark:text-red-300 break-all"
-          >
-            {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
-          </div>
-          <div
-            v-if="canManageCollaborators"
-            class="mt-3 pt-3 border-t dark:border-gray-800 text-xs"
-          >
-            <div class="font-semibold mb-2">{{ t`Collaborators` }}</div>
-            <div class="flex flex-wrap gap-2 items-center mb-2">
-              <input
-                v-model="collaborators.email"
-                type="email"
-                class="
-                  px-2
-                  py-1
-                  border
-                  rounded
-                  text-sm
-                  bg-white
-                  dark:bg-gray-890 dark:border-gray-700
-                "
-                :placeholder="t`user@email.com`"
-                :disabled="collaborators.inviting"
-              />
-              <select
-                v-model="collaborators.role"
-                class="
-                  px-2
-                  py-1
-                  border
-                  rounded
-                  text-sm
-                  bg-white
-                  dark:bg-gray-890 dark:border-gray-700
-                "
-                :disabled="collaborators.inviting"
-              >
-                <option value="editor">{{ t`Editor` }}</option>
-                <option value="owner">{{ t`Owner` }}</option>
-              </select>
-              <Button
-                class="text-xs"
-                :disabled="collaborators.inviting"
-                @click="inviteCollaboratorNow"
-              >
-                {{
-                  collaborators.inviting
-                    ? t`Inviting...`
-                    : t`Invite Collaborator`
-                }}
-              </Button>
-              <Button
-                class="text-xs"
-                :disabled="
-                  collaborators.loading ||
-                  collaborators.inviting ||
-                  !!collaborators.removingUserId
-                "
-                @click="loadCollaborators"
-              >
-                {{ collaborators.loading ? t`Loading...` : t`Refresh` }}
-              </Button>
-            </div>
-            <div
-              v-if="!collaborators.rows.length"
-              class="text-gray-600 dark:text-gray-300"
+          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+            <button
+              type="button"
+              class="font-semibold mb-2 text-left w-full"
+              @click="advancedSyncOpen = !advancedSyncOpen"
             >
-              {{ t`No collaborators yet.` }}
-            </div>
-            <div v-else class="space-y-1">
-              <div
-                v-for="row in collaborators.rows"
-                :key="`${row.user_id}-${row.role}`"
-                class="text-gray-700 dark:text-gray-200 flex items-center gap-2"
-              >
-                <span class="flex-1 break-all"
-                  >{{ row.full_name || row.email || row.user_id }} ({{
-                    row.role
-                  }})</span
-                >
-                <span
-                  v-if="row.status === 'invited'"
-                  class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"
-                >
-                  {{ t`Invited` }}
-                </span>
-                <span
-                  v-else
-                  class="text-[10px] uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800"
-                >
-                  {{ t`Active` }}
-                </span>
-                <Button
-                  class="text-xs"
-                  :disabled="
-                    collaborators.inviting ||
-                    collaborators.loading ||
-                    collaborators.removingUserId === row.user_id
-                  "
-                  @click="removeCollaboratorNow(row)"
-                >
-                  {{
-                    collaborators.removingUserId === row.user_id
-                      ? t`Removing...`
-                      : t`Remove Access`
-                  }}
+              {{
+                advancedSyncOpen
+                  ? t`Advanced Diagnostics (Hide)`
+                  : t`Advanced Diagnostics (Show)`
+              }}
+            </button>
+            <div v-if="advancedSyncOpen">
+              <div class="mb-2 text-gray-600 dark:text-gray-300">
+                {{
+                  t`Use advanced actions only for troubleshooting or support workflows.`
+                }}
+              </div>
+              <div class="mb-3 flex flex-wrap gap-2">
+                <Button class="text-xs" @click="refreshCloudSyncStatus">
+                  {{ t`Refresh Sync Status` }}
+                </Button>
+                <Button class="text-xs" @click="runBootstrapDryRunNow">
+                  {{ t`Preflight Check` }}
+                </Button>
+                <Button class="text-xs" @click="runReconciliationNow">
+                  {{ t`Compare Local vs Cloud Snapshot` }}
+                </Button>
+                <Button class="text-xs" @click="exportDiagnosticsNow">
+                  {{ t`Export Diagnostics` }}
                 </Button>
               </div>
-            </div>
-          </div>
-          <div
-            v-if="showDevClearRemoteButton"
-            class="mt-3 pt-3 border-t dark:border-gray-800 text-xs"
-          >
-            <div class="font-semibold mb-1">{{ t`Dry Run` }}</div>
-            <div v-if="dryRun.checkedAt">
-              <div>{{ t`Last Checked` }}: {{ dryRun.checkedAt }}</div>
-              <div
-                :class="
-                  dryRun.canProceed
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-red-700 dark:text-red-300'
-                "
-              >
-                {{ dryRun.summary }}
-              </div>
-            </div>
-            <div v-else class="text-gray-700 dark:text-gray-200">
-              {{
-                t`Run before bootstrap to verify local balances and remote bootstrap preconditions.`
-              }}
-            </div>
-          </div>
-          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
-            <div class="font-semibold mb-1">{{ t`Bootstrap` }}</div>
-            <div v-if="bootstrap.running">
-              <div class="mb-2">
-                {{ t`Uploading local baseline to cloud...` }}
+              <div class="mb-3 flex flex-wrap gap-2">
+                <Button class="text-xs" @click="initializeRemoteNow">
+                  {{ t`Initialize Remote (Admin)` }}
+                </Button>
+                <Button class="text-xs" @click="bootstrapCloudNow">
+                  {{ t`Bootstrap To Cloud` }}
+                </Button>
+                <Button class="text-xs" @click="flushCloudSyncNow">
+                  {{ t`Flush Sync Now` }}
+                </Button>
+                <Button class="text-xs" @click="repullAllNow">
+                  {{ t`Re-pull All` }}
+                </Button>
+                <Button class="text-xs" @click="clearRemoteDataNow">
+                  {{ t`Clear Remote Data` }}
+                </Button>
               </div>
               <div
-                class="
-                  h-2
-                  w-full
-                  rounded-full
-                  bg-gray-200
-                  dark:bg-gray-800
-                  overflow-hidden
-                "
+                v-if="remoteInit.open"
+                class="mb-3 p-2 rounded border dark:border-gray-800 text-xs"
               >
-                <div
-                  class="h-full bg-blue-600 transition-all duration-200"
-                  :style="{ width: `${bootstrapProgressPercent}%` }"
-                />
-              </div>
-              <div class="mt-1 text-gray-700 dark:text-gray-200">
-                {{ bootstrapProgressPercent }}%
-                <span v-if="bootstrap.total > 0">
-                  ({{ bootstrap.processed }}/{{ bootstrap.total }})
-                </span>
-              </div>
-              <div
-                v-if="bootstrap.summary"
-                class="text-gray-700 dark:text-gray-200 break-all mt-1"
-              >
-                {{ bootstrap.summary }}
-              </div>
-            </div>
-            <div v-else-if="bootstrap.checkedAt">
-              <div>{{ t`Last Bootstrap` }}: {{ bootstrap.checkedAt }}</div>
-              <div class="text-gray-700 dark:text-gray-200">
-                {{ bootstrap.summary }}
-              </div>
-            </div>
-          </div>
-          <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
-            <div class="font-semibold mb-1">{{ t`Reconciliation` }}</div>
-            <div v-if="reconciliation.running">
-              {{ t`Checking local vs remote snapshot...` }}
-            </div>
-            <div v-else-if="reconciliation.checkedAt">
-              <div>{{ t`Last Checked` }}: {{ reconciliation.checkedAt }}</div>
-              <div
-                :class="
-                  reconciliation.ok
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-yellow-700 dark:text-yellow-300'
-                "
-              >
-                {{
-                  reconciliation.ok
-                    ? t`Snapshot matches.`
-                    : t`Snapshot mismatch found.`
-                }}
-              </div>
-              <div
-                v-if="reconciliation.mismatches.length"
-                class="mt-1 text-yellow-700 dark:text-yellow-300"
-              >
-                <div
-                  v-for="item in reconciliation.mismatches"
-                  :key="item"
-                  class="break-all"
-                >
-                  - {{ item }}
+                <div class="mb-2 text-gray-700 dark:text-gray-200">
+                  {{
+                    t`Enter one-time Supabase Admin Access Token to initialize remote schema. This token is not saved.`
+                  }}
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                  <input
+                    v-model="remoteInit.token"
+                    type="password"
+                    class="
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :placeholder="t`Admin Access Token`"
+                  />
+                  <Button
+                    class="text-xs"
+                    :disabled="remoteInit.running"
+                    @click="executeRemoteInitNow"
+                  >
+                    {{ remoteInit.running ? t`Initializing...` : t`Initialize` }}
+                  </Button>
+                  <Button class="text-xs" @click="cancelRemoteInitNow">
+                    {{ t`Cancel` }}
+                  </Button>
                 </div>
               </div>
-            </div>
-            <div
-              v-else-if="cloudSyncStatus.lastReconciliationAt"
-              class="text-gray-700 dark:text-gray-200"
-            >
-              <div>
-                {{ t`Last Checked` }}:
-                {{ cloudSyncStatus.lastReconciliationAt }}
+              <div
+                v-if="clearRemote.open"
+                class="mb-3 p-2 rounded border border-red-200 dark:border-red-800 text-xs"
+              >
+                <div class="mb-2 text-red-700 dark:text-red-300">
+                  {{
+                    t`Danger: this permanently deletes remote synced data for this company.`
+                  }}
+                </div>
+                <div class="mb-2 text-gray-700 dark:text-gray-200">
+                  {{
+                    t`Type confirmation text and re-enter Sync Auth Token to continue.`
+                  }}
+                </div>
+                <div class="mb-2">
+                  <input
+                    v-model="clearRemote.confirmText"
+                    type="text"
+                    class="
+                      w-full
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :placeholder="clearRemotePlaceholder"
+                  />
+                </div>
+                <div class="mb-2">
+                  <input
+                    v-model="clearRemote.token"
+                    type="password"
+                    class="
+                      w-full
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :placeholder="t`Sync Auth Token`"
+                  />
+                </div>
+                <div class="flex gap-2">
+                  <Button
+                    class="text-xs"
+                    :disabled="clearRemote.running"
+                    @click="executeClearRemoteDataNow"
+                  >
+                    {{
+                      clearRemote.running
+                        ? t`Clearing...`
+                        : t`Confirm Clear Remote Data`
+                    }}
+                  </Button>
+                  <Button class="text-xs" @click="cancelClearRemoteDataNow">
+                    {{ t`Cancel` }}
+                  </Button>
+                </div>
               </div>
-              <div>
-                {{ t`Last Status` }}:
-                {{ cloudSyncStatus.lastReconciliationStatus }}
+              <div class="mb-2 text-gray-700 dark:text-gray-200">
+                {{ t`Queued` }}: {{ cloudSyncStatus.queued }}
+              </div>
+              <div class="mb-2 text-gray-700 dark:text-gray-200">
+                {{ t`Processing` }}: {{ cloudSyncStatus.processing }}
+              </div>
+              <div class="mb-2 text-gray-700 dark:text-gray-200">
+                {{ t`Sent` }}: {{ cloudSyncStatus.sent }}
               </div>
               <div
-                v-if="cloudSyncStatus.lastReconciliationSummary"
-                class="break-all"
+                v-if="canManageCollaborators"
+                class="mt-3 pt-3 border-t dark:border-gray-800 text-xs"
               >
-                {{ cloudSyncStatus.lastReconciliationSummary }}
+                <div class="font-semibold mb-2">{{ t`Collaborators` }}</div>
+                <div class="flex flex-wrap gap-2 items-center mb-2">
+                  <input
+                    v-model="collaborators.email"
+                    type="email"
+                    class="
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :placeholder="t`user@email.com`"
+                    :disabled="collaborators.inviting"
+                  />
+                  <select
+                    v-model="collaborators.role"
+                    class="
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :disabled="collaborators.inviting"
+                  >
+                    <option value="editor">{{ t`Editor` }}</option>
+                    <option value="owner">{{ t`Owner` }}</option>
+                  </select>
+                  <Button
+                    class="text-xs"
+                    :disabled="collaborators.inviting"
+                    @click="inviteCollaboratorNow"
+                  >
+                    {{
+                      collaborators.inviting
+                        ? t`Inviting...`
+                        : t`Invite Collaborator`
+                    }}
+                  </Button>
+                  <Button
+                    class="text-xs"
+                    :disabled="
+                      collaborators.loading ||
+                      collaborators.inviting ||
+                      !!collaborators.removingUserId
+                    "
+                    @click="loadCollaborators"
+                  >
+                    {{ collaborators.loading ? t`Loading...` : t`Refresh` }}
+                  </Button>
+                </div>
+                <div
+                  v-if="!collaborators.rows.length"
+                  class="text-gray-600 dark:text-gray-300"
+                >
+                  {{ t`No collaborators yet.` }}
+                </div>
+                <div v-else class="space-y-1">
+                  <div
+                    v-for="row in collaborators.rows"
+                    :key="`${row.user_id}-${row.role}`"
+                    class="text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                  >
+                    <span class="flex-1 break-all"
+                      >{{ row.full_name || row.email || row.user_id }} ({{
+                        row.role
+                      }})</span
+                    >
+                    <span
+                      v-if="row.status === 'invited'"
+                      class="
+                        text-[10px]
+                        uppercase
+                        px-2
+                        py-0.5
+                        rounded-full
+                        bg-yellow-100
+                        text-yellow-800
+                      "
+                    >
+                      {{ t`Invited` }}
+                    </span>
+                    <span
+                      v-else
+                      class="
+                        text-[10px]
+                        uppercase
+                        px-2
+                        py-0.5
+                        rounded-full
+                        bg-emerald-100
+                        text-emerald-800
+                      "
+                    >
+                      {{ t`Active` }}
+                    </span>
+                    <Button
+                      class="text-xs"
+                      :disabled="
+                        collaborators.inviting ||
+                        collaborators.loading ||
+                        collaborators.removingUserId === row.user_id
+                      "
+                      @click="removeCollaboratorNow(row)"
+                    >
+                      {{
+                        collaborators.removingUserId === row.user_id
+                          ? t`Removing...`
+                          : t`Remove Access`
+                      }}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+                <div class="font-semibold mb-1">{{ t`Preflight` }}</div>
+                <div v-if="dryRun.checkedAt">
+                  <div>{{ t`Last Checked` }}: {{ dryRun.checkedAt }}</div>
+                  <div
+                    :class="
+                      dryRun.canProceed
+                        ? 'text-green-700 dark:text-green-300'
+                        : 'text-red-700 dark:text-red-300'
+                    "
+                  >
+                    {{ dryRun.summary }}
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+                <div class="font-semibold mb-1">{{ t`Bootstrap` }}</div>
+                <div v-if="bootstrap.running">
+                  <div class="mb-2">
+                    {{ t`Uploading local baseline to cloud...` }}
+                  </div>
+                  <div
+                    class="
+                      h-2
+                      w-full
+                      rounded-full
+                      bg-gray-200
+                      dark:bg-gray-800
+                      overflow-hidden
+                    "
+                  >
+                    <div
+                      class="h-full bg-blue-600 transition-all duration-200"
+                      :style="{ width: `${bootstrapProgressPercent}%` }"
+                    />
+                  </div>
+                  <div class="mt-1 text-gray-700 dark:text-gray-200">
+                    {{ bootstrapProgressPercent }}%
+                    <span v-if="bootstrap.total > 0">
+                      ({{ bootstrap.processed }}/{{ bootstrap.total }})
+                    </span>
+                  </div>
+                  <div
+                    v-if="bootstrap.summary"
+                    class="text-gray-700 dark:text-gray-200 break-all mt-1"
+                  >
+                    {{ bootstrap.summary }}
+                  </div>
+                </div>
+                <div v-else-if="bootstrap.checkedAt">
+                  <div>{{ t`Last Bootstrap` }}: {{ bootstrap.checkedAt }}</div>
+                  <div class="text-gray-700 dark:text-gray-200">
+                    {{ bootstrap.summary }}
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
+                <div class="font-semibold mb-1">
+                  {{ t`Reconciliation` }}
+                </div>
+                <div v-if="reconciliation.running">
+                  {{ t`Checking local vs remote snapshot...` }}
+                </div>
+                <div v-else-if="reconciliation.checkedAt">
+                  <div>{{ t`Last Checked` }}: {{ reconciliation.checkedAt }}</div>
+                  <div
+                    :class="
+                      reconciliation.ok
+                        ? 'text-green-700 dark:text-green-300'
+                        : 'text-yellow-700 dark:text-yellow-300'
+                    "
+                  >
+                    {{
+                      reconciliation.ok
+                        ? t`Snapshot matches.`
+                        : t`Snapshot mismatch found.`
+                    }}
+                  </div>
+                  <div
+                    v-if="reconciliation.mismatches.length"
+                    class="mt-1 text-yellow-700 dark:text-yellow-300"
+                  >
+                    <div
+                      v-for="item in reconciliation.mismatches"
+                      :key="item"
+                      class="break-all"
+                    >
+                      - {{ item }}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else-if="cloudSyncStatus.lastReconciliationAt"
+                  class="text-gray-700 dark:text-gray-200"
+                >
+                  <div>
+                    {{ t`Last Checked` }}:
+                    {{ cloudSyncStatus.lastReconciliationAt }}
+                  </div>
+                  <div>
+                    {{ t`Last Status` }}:
+                    {{ cloudSyncStatus.lastReconciliationStatus }}
+                  </div>
+                  <div
+                    v-if="cloudSyncStatus.lastReconciliationSummary"
+                    class="break-all"
+                  >
+                    {{ cloudSyncStatus.lastReconciliationSummary }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -677,6 +776,13 @@ export default defineComponent({
         activeId: '',
         labelInput: '',
       },
+      advancedSyncOpen: false,
+      clearRemote: {
+        open: false,
+        token: '',
+        confirmText: '',
+        running: false,
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -748,6 +854,13 @@ export default defineComponent({
         }>;
         activeId: string;
         labelInput: string;
+      };
+      advancedSyncOpen: boolean;
+      clearRemote: {
+        open: boolean;
+        token: string;
+        confirmText: string;
+        running: boolean;
       };
     };
   },
@@ -837,9 +950,6 @@ export default defineComponent({
     showCloudSyncPanel(): boolean {
       return this.activeTab === SYNC_TAB_KEY;
     },
-    showDevClearRemoteButton(): boolean {
-      return this.showCloudSyncPanel && !!this.fyo.store.isDevelopment;
-    },
     showAdvancedSyncFields(): boolean {
       return !!this.fyo.store.isDevelopment;
     },
@@ -859,6 +969,38 @@ export default defineComponent({
         (this.bootstrap.processed / this.bootstrap.total) * 100
       );
       return Math.min(Math.max(pct, 0), 100);
+    },
+    clearRemotePlaceholder(): string {
+      const companyId = String(
+        (
+          this.fyo.singles.SystemSettings as
+            | { syncCompanyId?: string }
+            | undefined
+        )?.syncCompanyId ?? ''
+      ).trim();
+      return this.t`Type: CLEAR ${companyId}`;
+    },
+    syncHealth(): { level: 'healthy' | 'attention' | 'disabled'; label: string } {
+      const ss = this.fyo.singles.SystemSettings as
+        | {
+            syncEnabled?: boolean;
+            syncMode?: string;
+          }
+        | undefined;
+      if (!ss?.syncEnabled || ss.syncMode === 'off') {
+        return { level: 'disabled', label: this.t`Sync Disabled` };
+      }
+
+      if (
+        this.syncSetupMissing.length > 0 ||
+        this.cloudSyncStatus.failed > 0 ||
+        !!this.cloudSyncStatus.lastError ||
+        this.cloudSyncStatus.enrollmentStatus === 'error'
+      ) {
+        return { level: 'attention', label: this.t`Attention Needed` };
+      }
+
+      return { level: 'healthy', label: this.t`Healthy` };
     },
     syncSetupMissing(): string[] {
       const ss = this.fyo.singles.SystemSettings;
@@ -1752,14 +1894,6 @@ export default defineComponent({
       });
     },
     async syncNow(): Promise<void> {
-      if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
-        showToast({
-          type: 'warning',
-          message: this.t`Sync is paused. Resume sync to run sync now.`,
-        });
-        return;
-      }
-
       if (this.syncSetupMissing.length) {
         showToast({
           type: 'error',
@@ -1770,6 +1904,10 @@ export default defineComponent({
       }
 
       try {
+        if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
+          await setCloudSyncEnrollmentStatus(this.fyo, 'active', '');
+        }
+
         if (
           this.cloudSyncStatus.enrollmentStatus === 'not_enrolled' ||
           this.cloudSyncStatus.enrollmentStatus === 'error'
@@ -1983,13 +2121,13 @@ export default defineComponent({
       }
 
       const shouldReset = (await showDialog({
-        title: this.t`Reset sync queue?`,
+        title: this.t`Repair sync queue?`,
         detail: this
           .t`This clears failed/processing sync items so sync can retry cleanly. It does not remove queued changes.`,
         type: 'warning',
         buttons: [
           {
-            label: this.t`Reset`,
+            label: this.t`Repair`,
             isPrimary: true,
             action: () => true,
           },
@@ -2006,10 +2144,12 @@ export default defineComponent({
       }
 
       const result = await resetCloudSyncOutbox(this.fyo);
+      await runCloudSyncCycle(this.fyo);
       await this.refreshCloudSyncStatus();
       showToast({
         type: 'success',
-        message: this.t`Cleared ${result.cleared} failed sync items.`,
+        message: this
+          .t`Repaired queue: cleared ${result.cleared} blocked items and ran sync now.`,
       });
     },
     async pauseSyncNow(): Promise<void> {
@@ -2209,7 +2349,7 @@ export default defineComponent({
 
       return await ipc.createDbBackup(dbPath);
     },
-    async clearRemoteDataNow(): Promise<void> {
+    clearRemoteDataNow(): void {
       if (this.syncSetupMissing.length) {
         showToast({
           type: 'error',
@@ -2219,44 +2359,74 @@ export default defineComponent({
         return;
       }
 
-      await showDialog({
-        title: this.t`Clear Remote Company Data?`,
-        detail: this
-          .t`Development action: this will delete all synced Accounts, Parties, Journal Entries, Change Log, and sync state for the selected Sync Company ID on remote.`,
-        type: 'warning',
-        buttons: [
-          {
-            label: this.t`Delete Remote Data`,
-            isPrimary: true,
-            action: async () => {
-              const response = await clearCloudSyncRemoteCompanyData(this.fyo);
-              const deleted = response.deleted ?? {};
-              await this.refreshCloudSyncStatus();
-              this.bootstrap = {
-                running: false,
-                checkedAt: new Date().toLocaleString(),
-                summary: this.t`Remote cleared. Accounts=${
-                  deleted.accounts ?? 0
-                }, Parties=${deleted.parties ?? 0}, JournalEntries=${
-                  deleted.journal_entries ?? 0
-                }.`,
-                stage: 'completed',
-                processed: 0,
-                total: 0,
-              };
-              showToast({
-                type: 'success',
-                message: this.t`Remote company data cleared.`,
-              });
-            },
-          },
-          {
-            label: this.t`Cancel`,
-            isEscape: true,
-            action: () => null,
-          },
-        ],
-      });
+      this.clearRemote.open = true;
+      this.clearRemote.confirmText = '';
+      this.clearRemote.token = '';
+      this.clearRemote.running = false;
+    },
+    cancelClearRemoteDataNow(): void {
+      this.clearRemote.open = false;
+      this.clearRemote.confirmText = '';
+      this.clearRemote.token = '';
+      this.clearRemote.running = false;
+    },
+    async executeClearRemoteDataNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncCompanyId?: string;
+            syncAuthToken?: string;
+          }
+        | undefined;
+      const companyId = String(systemSettings?.syncCompanyId ?? '').trim();
+      const expectedConfirm = `CLEAR ${companyId}`;
+
+      if (String(this.clearRemote.confirmText ?? '').trim() !== expectedConfirm) {
+        showToast({
+          type: 'error',
+          message: this.t`Confirmation text does not match. Use: ${expectedConfirm}`,
+        });
+        return;
+      }
+
+      const token = String(this.clearRemote.token ?? '').trim();
+      const savedToken = String(systemSettings?.syncAuthToken ?? '').trim();
+      if (!token || token !== savedToken) {
+        showToast({
+          type: 'error',
+          message: this.t`Token mismatch. Enter the exact Sync Auth Token.`,
+        });
+        return;
+      }
+
+      this.clearRemote.running = true;
+      try {
+        const response = await clearCloudSyncRemoteCompanyData(this.fyo);
+        const deleted = response.deleted ?? {};
+        await this.refreshCloudSyncStatus();
+        this.bootstrap = {
+          running: false,
+          checkedAt: new Date().toLocaleString(),
+          summary: this.t`Remote cleared. Accounts=${
+            deleted.accounts ?? 0
+          }, Parties=${deleted.parties ?? 0}, JournalEntries=${
+            deleted.journal_entries ?? 0
+          }.`,
+          stage: 'completed',
+          processed: 0,
+          total: 0,
+        };
+        this.cancelClearRemoteDataNow();
+        showToast({
+          type: 'success',
+          message: this.t`Remote company data cleared.`,
+        });
+      } catch (error) {
+        this.clearRemote.running = false;
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      }
     },
     async repullAllNow(): Promise<void> {
       if (this.cloudSyncStatus.enrollmentStatus === 'paused') {
