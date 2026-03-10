@@ -1,6 +1,8 @@
 -- Core schema for mobile + collaboration MVP
 -- Run in Supabase SQL editor
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.companies (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -68,6 +70,9 @@ create table if not exists public.journal_entries (
   created_at timestamptz not null default now(),
   created_by uuid default auth.uid()
 );
+
+alter table public.journal_entries
+  add column if not exists submitted boolean not null default false;
 
 create table if not exists public.journal_entry_lines (
   id uuid primary key default gen_random_uuid(),

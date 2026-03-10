@@ -198,6 +198,60 @@ export default function registerIpcMainActionListeners(main: Main) {
         relativePath:
           'supabase/migrations/20260226110000_add_admin_invite_company_user.sql',
       },
+      {
+        name: 'migration_add_companies_insert_policy',
+        relativePath:
+          'supabase/migrations/20260303000100_add_companies_insert_policy.sql',
+      },
+      {
+        name: 'migration_disable_companies_rls',
+        relativePath:
+          'supabase/migrations/20260303000200_disable_companies_rls.sql',
+      },
+      {
+        name: 'migration_add_company_users_delete_policy',
+        relativePath:
+          'supabase/migrations/20260303000300_add_company_users_delete_policy.sql',
+      },
+      {
+        name: 'migration_add_journal_entry_status',
+        relativePath:
+          'supabase/migrations/20260309000400_add_journal_entry_status.sql',
+      },
+      {
+        name: 'migration_submitted_only_journal_entries',
+        relativePath:
+          'supabase/migrations/20260309113000_submitted_only_journal_entries.sql',
+      },
+      {
+        name: 'migration_submit_mobile_journal_entries',
+        relativePath:
+          'supabase/migrations/20260309154500_submit_mobile_journal_entries.sql',
+      },
+      {
+        name: 'migration_backfill_external_keys_and_enforce',
+        relativePath:
+          'supabase/migrations/20260309173000_backfill_external_keys_and_enforce.sql',
+      },
+      {
+        name: 'migration_harden_clear_sync_company_data',
+        relativePath:
+          'supabase/migrations/20260309174500_harden_clear_sync_company_data.sql',
+      },
+      {
+        name: 'migration_mobile_journal_entry_mob_prefix',
+        relativePath:
+          'supabase/migrations/20260309190000_mobile_journal_entry_mob_prefix.sql',
+      },
+      {
+        name: 'migration_sync_key_auth',
+        relativePath: 'supabase/migrations/20260310000000_sync_key_auth.sql',
+      },
+      {
+        name: 'migration_restore_journal_entries_with_user',
+        relativePath:
+          'supabase/migrations/20260310001000_restore_journal_entries_with_user.sql',
+      },
     ];
 
     const scripts = scriptSpecs.map((spec) => {
