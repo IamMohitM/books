@@ -65,16 +65,24 @@
               </div>
               <div class="mt-1">
                 3.
-                <span class="font-semibold">{{ t`Sync Auth Token` }}</span
+                <span class="font-semibold">{{ t`Anon Key` }}</span
                 >:
                 {{
-                  t`Supabase Dashboard → Settings → API → Copy the "service_role key" (starts with eyJ...).`
+                  t`Paste your Supabase anon key (Settings -> API -> Project API keys).`
+                }}
+              </div>
+              <div class="mt-1">
+                4.
+                <span class="font-semibold">{{ t`Service Role Key` }}</span
+                >:
+                {{
+                  t`Paste your Supabase service_role key (Settings -> API -> Project API keys). This is used as the sync key for desktop sync.`
                 }}
               </div>
             </div>
             <div class="mt-2 text-gray-600 dark:text-gray-300">
               {{
-                t`Desktop: Use the service_role key (full access for initialization). Mobile: Use publishable/anon key instead.`
+                t`Desktop: Use Anon Key for API access and Service Role Key as the sync key. Mobile: Use publishable/anon key.`
               }}
             </div>
           </div>
@@ -172,6 +180,12 @@
             >
               {{ t`Last Error` }}: {{ cloudSyncStatus.lastError }}
             </div>
+            <div
+              v-if="cloudSyncStatus.lastWarning"
+              class="mt-1 text-yellow-700 dark:text-yellow-300 break-all"
+            >
+              {{ t`Last Warning` }}: {{ cloudSyncStatus.lastWarning }}
+            </div>
           </div>
           <div
             v-if="syncSetupMissing.length"
@@ -189,6 +203,23 @@
           >
             <div class="font-semibold">{{ t`Sync setup incomplete` }}</div>
             <div v-for="item in syncSetupMissing" :key="item">- {{ item }}</div>
+          </div>
+          <div
+            v-if="syncPilotBlocked"
+            class="
+              mb-3
+              p-2
+              rounded
+              border border-yellow-200
+              dark:border-yellow-800
+              bg-yellow-50
+              dark:bg-yellow-900/20
+              text-xs text-yellow-800
+              dark:text-yellow-200
+            "
+          >
+            <div class="font-semibold">{{ t`Sync blocked (Pilot mode)` }}</div>
+            <div>{{ syncPilotMessage }}</div>
           </div>
           <div class="mt-3 pt-3 border-t dark:border-gray-800 text-xs">
             <button
@@ -225,6 +256,9 @@
               <div class="mb-3 flex flex-wrap gap-2">
                 <Button class="text-xs" @click="initializeRemoteNow">
                   {{ t`Initialize Remote (Admin)` }}
+                </Button>
+                <Button class="text-xs" @click="openRemoteSchemaCheckNow">
+                  {{ t`Remote Schema Check` }}
                 </Button>
                 <Button class="text-xs" @click="bootstrapCloudNow">
                   {{ t`Bootstrap To Cloud` }}
@@ -276,6 +310,47 @@
                 </div>
               </div>
               <div
+                v-if="remoteCheck.open"
+                class="mb-3 p-2 rounded border dark:border-gray-800 text-xs"
+              >
+                <div class="mb-2 text-gray-700 dark:text-gray-200">
+                  {{
+                    t`Remote Schema Check validates that required tables, views, functions, and RLS policies are present. It does not change data.`
+                  }}
+                </div>
+                <div class="mb-2 text-gray-700 dark:text-gray-200">
+                  {{
+                    t`Enter a Supabase Admin Access Token to run the check. This token is not saved.`
+                  }}
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                  <input
+                    v-model="remoteCheck.token"
+                    type="password"
+                    class="
+                      px-2
+                      py-1
+                      border
+                      rounded
+                      text-sm
+                      bg-white
+                      dark:bg-gray-890 dark:border-gray-700
+                    "
+                    :placeholder="t`Admin Access Token`"
+                  />
+                  <Button
+                    class="text-xs"
+                    :disabled="remoteCheck.running"
+                    @click="executeRemoteSchemaCheckNow"
+                  >
+                    {{ remoteCheck.running ? t`Checking...` : t`Check` }}
+                  </Button>
+                  <Button class="text-xs" @click="cancelRemoteSchemaCheckNow">
+                    {{ t`Cancel` }}
+                  </Button>
+                </div>
+              </div>
+              <div
                 v-if="clearRemote.open"
                 class="mb-3 p-2 rounded border border-red-200 dark:border-red-800 text-xs"
               >
@@ -286,7 +361,7 @@
                 </div>
                 <div class="mb-2 text-gray-700 dark:text-gray-200">
                   {{
-                    t`Type confirmation text and re-enter Sync Auth Token to continue.`
+                    t`Type confirmation text and re-enter Service Role Key to continue.`
                   }}
                 </div>
                 <div class="mb-2">
@@ -320,7 +395,7 @@
                       bg-white
                       dark:bg-gray-890 dark:border-gray-700
                     "
-                    :placeholder="t`Sync Auth Token`"
+                    :placeholder="t`Service Role Key`"
                   />
                 </div>
                 <div class="flex gap-2">
@@ -348,6 +423,12 @@
               </div>
               <div class="mb-2 text-gray-700 dark:text-gray-200">
                 {{ t`Sent` }}: {{ cloudSyncStatus.sent }}
+              </div>
+              <div
+                v-if="collaboratorAccessHint"
+                class="mt-2 text-xs text-amber-700 dark:text-amber-300"
+              >
+                {{ collaboratorAccessHint }}
               </div>
               <div
                 v-if="canManageCollaborators"
@@ -670,6 +751,7 @@ import {
   exportCloudSyncDiagnostics,
   flushCloudSyncOutbox,
   resetCloudSyncOutbox,
+  setRemoteSyncAccessKey,
   inviteCloudSyncCollaborator,
   initializeCloudSyncRemoteSchema,
   listCloudSyncCollaborators,
@@ -684,6 +766,8 @@ import {
   resetCloudSyncPullCursorAndRepull,
   runCloudSyncReconciliation,
   setCloudSyncEnrollmentStatus,
+  looksLikeJwt,
+  normalizeProjectRef,
   startCloudSyncWorker,
   stopCloudSyncWorker,
 } from 'src/utils/cloudSyncWorker';
@@ -715,6 +799,7 @@ export default defineComponent({
         failed: 0,
         sent: 0,
         lastError: '',
+        lastWarning: '',
         lastPushAt: '',
         lastPullAt: '',
         lastReconciliationAt: '',
@@ -749,6 +834,12 @@ export default defineComponent({
         token: '',
         running: false,
       },
+      remoteCheck: {
+        open: false,
+        token: '',
+        running: false,
+      },
+      serviceRoleKeySaved: '',
       collaborators: {
         loading: false,
         inviting: false,
@@ -771,7 +862,8 @@ export default defineComponent({
           projectId: string;
           companyId: string;
           companyName: string;
-          authToken: string;
+          apiKey: string;
+          syncKey: string;
         }>,
         activeId: '',
         labelInput: '',
@@ -794,6 +886,7 @@ export default defineComponent({
         failed: number;
         sent: number;
         lastError: string;
+        lastWarning: string;
         lastPushAt: string;
         lastPullAt: string;
         lastReconciliationAt: string;
@@ -828,6 +921,12 @@ export default defineComponent({
         token: string;
         running: boolean;
       };
+      remoteCheck: {
+        open: boolean;
+        token: string;
+        running: boolean;
+      };
+      serviceRoleKeySaved: string;
       collaborators: {
         loading: boolean;
         inviting: boolean;
@@ -850,7 +949,8 @@ export default defineComponent({
           projectId: string;
           companyId: string;
           companyName: string;
-          authToken: string;
+          apiKey: string;
+          syncKey: string;
         }>;
         activeId: string;
         labelInput: string;
@@ -954,7 +1054,27 @@ export default defineComponent({
       return !!this.fyo.store.isDevelopment;
     },
     canManageCollaborators(): boolean {
-      return this.showCloudSyncPanel && this.syncSetupMissing.length === 0;
+      const token = String(
+        (
+          this.fyo.singles.SystemSettings as
+            | { syncAuthToken?: string }
+            | undefined
+        )?.syncAuthToken ?? ''
+      ).trim();
+      return (
+        this.showCloudSyncPanel &&
+        this.syncSetupMissing.length === 0 &&
+        looksLikeJwt(token)
+      );
+    },
+    collaboratorAccessHint(): string {
+      if (!this.showCloudSyncPanel || this.syncSetupMissing.length) {
+        return '';
+      }
+      if (this.canManageCollaborators) {
+        return '';
+      }
+      return this.t`Collaborator management requires the Service Role Key. Paste it in Service Role Key before managing collaborators.`;
     },
     bootstrapProgressPercent(): number {
       if (!this.bootstrap.running) {
@@ -993,14 +1113,47 @@ export default defineComponent({
 
       if (
         this.syncSetupMissing.length > 0 ||
+        this.syncPilotBlocked ||
         this.cloudSyncStatus.failed > 0 ||
         !!this.cloudSyncStatus.lastError ||
+        !!this.cloudSyncStatus.lastWarning ||
         this.cloudSyncStatus.enrollmentStatus === 'error'
       ) {
         return { level: 'attention', label: this.t`Attention Needed` };
       }
 
       return { level: 'healthy', label: this.t`Healthy` };
+    },
+    syncPilotBlocked(): boolean {
+      const ss = this.fyo.singles.SystemSettings as
+        | {
+            syncEnabled?: boolean;
+            syncMode?: string;
+            syncCompanyId?: string;
+            syncAllowedCompanies?: string;
+          }
+        | undefined;
+      if (!ss?.syncEnabled || ss.syncMode !== 'pilot') {
+        return false;
+      }
+
+      const allowedCompanies = String(ss.syncAllowedCompanies ?? '')
+        .split(/[\n,]/)
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const companyId = String(ss.syncCompanyId ?? '').trim();
+      if (!companyId) {
+        return false;
+      }
+
+      return !allowedCompanies.includes(companyId);
+    },
+    syncPilotMessage(): string {
+      if (!this.syncPilotBlocked) {
+        return '';
+      }
+
+      return this.t`Sync is blocked in pilot mode. Add this company ID to Sync Allowed Companies or switch Sync Mode to On.`;
     },
     syncSetupMissing(): string[] {
       const ss = this.fyo.singles.SystemSettings;
@@ -1018,8 +1171,15 @@ export default defineComponent({
       if (!ss.syncCompanyId) {
         missing.push(this.t`Sync Company ID is required.`);
       }
+      if (!ss.syncApiKey) {
+        missing.push(
+          this.t`Anon Key is required.`
+        );
+      }
       if (!ss.syncAuthToken) {
-        missing.push(this.t`Sync Auth Token is required.`);
+        missing.push(
+          this.t`Service Role Key is required.`
+        );
       }
 
       return missing;
@@ -1032,6 +1192,7 @@ export default defineComponent({
     }
 
     this.update();
+    this.refreshServiceRoleKeyState(true);
   },
   activated(): void {
     const tab = this.$route.query.tab;
@@ -1049,6 +1210,8 @@ export default defineComponent({
 
       await this.sync();
     });
+    this.update();
+    this.refreshServiceRoleKeyState(true);
   },
   async deactivated(): Promise<void> {
     docsPathRef.value = '';
@@ -1093,6 +1256,7 @@ export default defineComponent({
       }
 
       this.update();
+      this.refreshServiceRoleKeyState(true);
     },
     async sync(): Promise<void> {
       this.syncActiveProjectProfileFromCurrentSettings();
@@ -1106,6 +1270,8 @@ export default defineComponent({
       for (const doc of syncableDocs) {
         await this.syncDoc(doc);
       }
+
+      this.refreshServiceRoleKeyState(true);
 
       if (this.fyo.singles.SystemSettings?.syncEnabled) {
         startCloudSyncWorker(this.fyo);
@@ -1156,6 +1322,18 @@ export default defineComponent({
       }
 
       this.update();
+
+      this.refreshServiceRoleKeyState(false);
+    },
+    refreshServiceRoleKeyState(markSaved: boolean): void {
+      const ss = this.fyo.singles.SystemSettings as
+        | { syncAuthToken?: string }
+        | undefined;
+      const current = String(ss?.syncAuthToken ?? '').trim();
+      if (markSaved) {
+        this.serviceRoleKeySaved = current;
+        return;
+      }
     },
     getFieldActionsForSection(): Record<string, string> {
       if (
@@ -1166,6 +1344,7 @@ export default defineComponent({
 
       return {
         syncCompanyId: this.t`Generate`,
+        syncAuthToken: this.t`Register`,
       };
     },
     async onSectionFieldAction(fieldname: string): Promise<void> {
@@ -1174,12 +1353,22 @@ export default defineComponent({
         fieldname === 'syncCompanyId'
       ) {
         await this.generateCompanyIdNow();
+        return;
+      }
+
+      if (
+        [ModelNameEnum.SystemSettings, SYNC_TAB_KEY].includes(this.activeTab) &&
+        fieldname === 'syncAuthToken'
+      ) {
+        await this.registerServiceRoleKeyNow();
+        return;
       }
     },
     getSystemSettingsDoc():
       | (Doc & {
           syncProjectId?: string;
           syncCompanyId?: string;
+          syncApiKey?: string;
           syncAuthToken?: string;
           syncProjectProfiles?: string;
           syncActiveProjectProfileId?: string;
@@ -1190,6 +1379,7 @@ export default defineComponent({
           | (Doc & {
               syncProjectId?: string;
               syncCompanyId?: string;
+              syncApiKey?: string;
               syncAuthToken?: string;
               syncProjectProfiles?: string;
               syncActiveProjectProfileId?: string;
@@ -1205,7 +1395,8 @@ export default defineComponent({
           projectId: string;
           companyId: string;
           companyName: string;
-          authToken: string;
+          apiKey: string;
+          syncKey: string;
         }>;
       }
 
@@ -1233,9 +1424,17 @@ export default defineComponent({
             companyName: String(
               (row as { companyName?: string }).companyName ?? ''
             ).trim(),
-            authToken: String(
-              (row as { authToken?: string; syncAuthToken?: string })
-                .authToken ??
+            apiKey: String(
+              (row as { apiKey?: string; syncApiKey?: string })
+                .apiKey ??
+                (row as { syncApiKey?: string }).syncApiKey ??
+                ''
+            ).trim(),
+            syncKey: String(
+              (row as { syncKey?: string; authToken?: string; syncAuthToken?: string })
+                .syncKey ??
+                (row as { authToken?: string; syncAuthToken?: string })
+                  .authToken ??
                 (row as { syncAuthToken?: string }).syncAuthToken ??
                 ''
             ).trim(),
@@ -1299,7 +1498,8 @@ export default defineComponent({
                   | undefined
               )?.companyName ?? ''
             ).trim(),
-            authToken: String(ss.syncAuthToken ?? ''),
+            apiKey: String(ss.syncApiKey ?? ''),
+            syncKey: String(ss.syncAuthToken ?? ''),
           },
         ];
         this.projectProfiles.activeId = legacyId;
@@ -1353,7 +1553,8 @@ export default defineComponent({
 
       const projectId = String(ss.syncProjectId ?? '').trim();
       const companyId = String(ss.syncCompanyId ?? '').trim();
-      const authToken = String(ss.syncAuthToken ?? '').trim();
+      const apiKey = String(ss.syncApiKey ?? '').trim();
+      const syncKey = String(ss.syncAuthToken ?? '').trim();
       const existing = this.projectProfiles.rows[activeIndex]!;
       const label =
         String(this.projectProfiles.labelInput ?? '').trim() ||
@@ -1367,7 +1568,8 @@ export default defineComponent({
         companyName: label,
         projectId,
         companyId,
-        authToken,
+        apiKey,
+        syncKey,
       };
     },
     async applyActiveProjectProfileToSettings(): Promise<void> {
@@ -1385,7 +1587,8 @@ export default defineComponent({
 
       await ss.set('syncProjectId', active.projectId);
       await ss.set('syncCompanyId', active.companyId);
-      await ss.set('syncAuthToken', active.authToken);
+      await ss.set('syncApiKey', active.apiKey ?? '');
+      await ss.set('syncAuthToken', active.syncKey ?? '');
     },
     async onProjectProfileChange(): Promise<void> {
       const selected = this.projectProfiles.rows.find(
@@ -1405,12 +1608,13 @@ export default defineComponent({
 
       const projectId = String(ss.syncProjectId ?? '').trim();
       const companyId = String(ss.syncCompanyId ?? '').trim();
-      const authToken = String(ss.syncAuthToken ?? '').trim();
-      if (!projectId || !companyId || !authToken) {
+      const apiKey = String(ss.syncApiKey ?? '').trim();
+      const syncKey = String(ss.syncAuthToken ?? '').trim();
+      if (!projectId || !companyId || !apiKey || !syncKey) {
         showToast({
           type: 'error',
           message: this
-            .t`Fill Sync Project ID, Sync Company ID, and Sync Auth Token before saving a profile.`,
+            .t`Fill Sync Project ID, Sync Company ID, Anon Key, and Service Role Key before saving a profile.`,
         });
         return;
       }
@@ -1433,7 +1637,8 @@ export default defineComponent({
           projectId,
           companyId,
           companyName,
-          authToken,
+          apiKey,
+          syncKey,
         };
         this.projectProfiles.activeId =
           this.projectProfiles.rows[existingIndex]!.id;
@@ -1448,7 +1653,8 @@ export default defineComponent({
           projectId,
           companyId,
           companyName,
-          authToken,
+          apiKey,
+          syncKey,
         });
         this.projectProfiles.activeId = id;
       }
@@ -1523,9 +1729,10 @@ export default defineComponent({
       );
       const lastFailed = failedRows[failedRows.length - 1];
       const syncState = this.fyo.singles.CloudSyncState as
-        | {
+          | {
             enrollmentStatus?: string;
             lastError?: string;
+            lastWarning?: string;
             lastPushAt?: string;
             lastPullAt?: string;
             lastReconciliationAt?: string;
@@ -1547,6 +1754,7 @@ export default defineComponent({
         failed,
         sent,
         lastError,
+        lastWarning: syncState?.lastWarning ?? '',
         lastPushAt: syncState?.lastPushAt ?? '',
         lastPullAt: syncState?.lastPullAt ?? '',
         lastReconciliationAt: syncState?.lastReconciliationAt ?? '',
@@ -1746,6 +1954,115 @@ export default defineComponent({
       this.remoteInit.token = '';
       this.remoteInit.running = false;
     },
+    openRemoteSchemaCheckNow(): void {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+            syncApiUrl?: string;
+          }
+        | undefined;
+      const projectRef = normalizeProjectRef(
+        systemSettings?.syncProjectId || systemSettings?.syncApiUrl
+      );
+      if (!projectRef) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Set Sync Project ID first, save settings, then run schema check.`,
+        });
+        return;
+      }
+
+      this.remoteCheck.open = true;
+      this.remoteCheck.token = '';
+      this.remoteCheck.running = false;
+    },
+    cancelRemoteSchemaCheckNow(): void {
+      this.remoteCheck.open = false;
+      this.remoteCheck.token = '';
+      this.remoteCheck.running = false;
+    },
+    async executeRemoteSchemaCheckNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+            syncApiUrl?: string;
+          }
+        | undefined;
+      const projectRef = normalizeProjectRef(
+        systemSettings?.syncProjectId || systemSettings?.syncApiUrl
+      );
+      if (!projectRef) {
+        showToast({
+          type: 'error',
+          message: this
+            .t`Set Sync Project ID first, save settings, then run schema check.`,
+        });
+        return;
+      }
+
+      const token = String(this.remoteCheck.token ?? '').trim();
+      if (!token) {
+        showToast({
+          type: 'error',
+          message: this.t`Enter admin access token to continue.`,
+        });
+        return;
+      }
+
+      this.remoteCheck.running = true;
+      try {
+        const schemaCheck = await verifyRemoteSchema(projectRef, token);
+        if (!schemaCheck.ok) {
+          const missingParts = [
+            schemaCheck.missingTables.length
+              ? this.t`Missing tables: ${schemaCheck.missingTables.join(', ')}`
+              : '',
+            schemaCheck.missingViews.length
+              ? this.t`Missing views: ${schemaCheck.missingViews.join(', ')}`
+              : '',
+            schemaCheck.rlsMissing.length
+              ? this.t`RLS not enabled: ${schemaCheck.rlsMissing.join(', ')}`
+              : '',
+            schemaCheck.missingColumns.length
+              ? this.t`Missing columns: ${schemaCheck.missingColumns.join(', ')}`
+              : '',
+            schemaCheck.missingFunctions.length
+              ? this.t`Missing functions: ${schemaCheck.missingFunctions.join(', ')}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' | ');
+          showToast({
+            type: 'warning',
+            message: this.t`Remote schema check incomplete. ${missingParts}`,
+          });
+        } else {
+          showToast({
+            type: 'success',
+            message: this.t`Remote schema and policies verified.`,
+          });
+        }
+        const inviteStatus = await checkInviteFunction(this.fyo);
+        if (!inviteStatus.ok) {
+          const message = inviteStatus.status === 404
+            ? this.t`invite-user function is missing. Deploy it, then set SERVICE_ROLE_KEY secret.`
+            : this.t`invite-user function check failed: ${inviteStatus.message}`;
+          showToast({
+            type: 'warning',
+            message,
+          });
+        }
+        this.cancelRemoteSchemaCheckNow();
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      } finally {
+        this.remoteCheck.running = false;
+      }
+    },
     async executeRemoteInitNow(): Promise<void> {
       const systemSettings = this.fyo.singles.SystemSettings as
         | {
@@ -1797,6 +2114,12 @@ export default defineComponent({
                       : '',
                     schemaCheck.rlsMissing.length
                       ? this.t`RLS not enabled: ${schemaCheck.rlsMissing.join(', ')}`
+                      : '',
+                    schemaCheck.missingColumns.length
+                      ? this.t`Missing columns: ${schemaCheck.missingColumns.join(', ')}`
+                      : '',
+                    schemaCheck.missingFunctions.length
+                      ? this.t`Missing functions: ${schemaCheck.missingFunctions.join(', ')}`
                       : '',
                   ]
                     .filter(Boolean)
@@ -1892,6 +2215,102 @@ export default defineComponent({
         type: 'success',
         message: this.t`Generated Sync Company ID. Click Save to apply.`,
       });
+    },
+    getJwtRole(token: string): string {
+      if (!looksLikeJwt(token)) {
+        return '';
+      }
+      try {
+        const payload = token.split('.')[1] ?? '';
+        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized.padEnd(
+          Math.ceil(normalized.length / 4) * 4,
+          '='
+        );
+        const decoded = JSON.parse(atob(padded)) as { role?: string };
+        return String(decoded.role ?? '');
+      } catch {
+        return '';
+      }
+    },
+    async generateSyncAccessKeyNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+            syncCompanyId?: string;
+            syncApiKey?: string;
+            syncAuthToken?: string;
+          }
+        | undefined;
+      if (!systemSettings) {
+        showToast({
+          type: 'error',
+          message: this.t`System Settings not available.`,
+        });
+        return;
+      }
+
+      showToast({
+        type: 'info',
+        message: this.t`Sync key generation is disabled. Use the Service Role Key as the sync key.`,
+      });
+      return;
+    },
+    async registerServiceRoleKeyNow(): Promise<void> {
+      const systemSettings = this.fyo.singles.SystemSettings as
+        | {
+            syncProjectId?: string;
+            syncCompanyId?: string;
+            syncAuthToken?: string;
+          }
+        | undefined;
+      if (!systemSettings) {
+        showToast({
+          type: 'error',
+          message: this.t`System Settings not available.`,
+        });
+        return;
+      }
+
+      const projectId = String(systemSettings.syncProjectId ?? '').trim();
+      const companyId = String(systemSettings.syncCompanyId ?? '').trim();
+      const serviceRoleKey = String(systemSettings.syncAuthToken ?? '').trim();
+      if (!projectId || !companyId) {
+        showToast({
+          type: 'error',
+          message: this.t`Fill Sync Project ID and Sync Company ID first.`,
+        });
+        return;
+      }
+      if (!serviceRoleKey) {
+        showToast({
+          type: 'error',
+          message: this.t`Service Role Key is required.`,
+        });
+        return;
+      }
+
+      const role = this.getJwtRole(serviceRoleKey);
+      if (role && role !== 'service_role') {
+        showToast({
+          type: 'error',
+          message: this.t`Service Role Key is invalid. Paste the service_role key from Supabase.`,
+        });
+        return;
+      }
+
+      try {
+        await setRemoteSyncAccessKey(this.fyo, serviceRoleKey, serviceRoleKey);
+        showToast({
+          type: 'success',
+          message: this.t`Service Role Key registered as sync key.`,
+        });
+      } catch (error) {
+        showToast({
+          type: 'error',
+          message: getErrorMessage(error as Error),
+        });
+      }
     },
     async syncNow(): Promise<void> {
       if (this.syncSetupMissing.length) {
@@ -2393,7 +2812,7 @@ export default defineComponent({
       if (!token || token !== savedToken) {
         showToast({
           type: 'error',
-          message: this.t`Token mismatch. Enter the exact Sync Auth Token.`,
+          message: this.t`Token mismatch. Enter the exact Service Role Key.`,
         });
         return;
       }

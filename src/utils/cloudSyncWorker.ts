@@ -2,6 +2,7 @@ import { Fyo } from 'fyo';
 import { DocValueMap } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
 import { CloudSyncOutbox } from 'models/baseModels/CloudSyncOutbox/CloudSyncOutbox';
+import { CloudSyncInboundQueue } from 'models/baseModels/CloudSyncInboundQueue/CloudSyncInboundQueue';
 import { CloudSyncCursor } from 'models/baseModels/CloudSyncCursor/CloudSyncCursor';
 import { CloudSyncState } from 'models/baseModels/CloudSyncState/CloudSyncState';
 import { ModelNameEnum } from 'models/types';
@@ -25,6 +26,30 @@ type RemoteSyncChange = {
     data?: Record<string, unknown>;
     external_key?: string;
   };
+};
+
+type ApplyRemoteResult = {
+  applied: boolean;
+  deferred?: boolean;
+  warning?: string;
+  reason?: string;
+  missingAccounts?: string[];
+};
+
+type CloudSyncConfig = {
+  enabled: boolean;
+  pilotBlocked?: boolean;
+  companyId: string;
+  apiKey: string;
+  syncKey: string;
+  pushApiUrl: string;
+  pullApiUrl: string;
+  companiesApiUrl: string;
+  clearApiUrl: string;
+  deviceId: string;
+  syncMode: 'off' | 'pilot' | 'on';
+  allowedCompanies: string[];
+  intervalSeconds: number;
 };
 
 export type SyncSnapshot = {
@@ -76,6 +101,7 @@ export type CloudSyncDiagnostics = {
     sent: number;
   };
   lastError: string;
+  lastWarning?: string;
 };
 
 export type CollaboratorRow = {
@@ -105,11 +131,20 @@ export type RemoteSchemaCheck = {
   missingTables: string[];
   missingViews: string[];
   rlsMissing: string[];
+  missingColumns: string[];
+  missingFunctions: string[];
 };
 
 type RemoteInitializationResult = {
   projectRef: string;
   appliedScripts: string[];
+};
+
+type InviteFunctionSource = {
+  name: string;
+  entrypointPath: string;
+  verifyJwt: boolean;
+  files: Array<{ path: string; content: string }>;
 };
 type BootstrapProgress = {
   stage:
@@ -137,9 +172,11 @@ function getSystemSettings(fyo: Fyo) {
         syncMode?: string;
         syncProjectId?: string;
         syncCompanyId?: string;
+        syncApiKey?: string;
         syncAuthToken?: string;
         syncApiUrl?: string;
         syncPullApiUrl?: string;
+        syncDeviceId?: string;
         syncIntervalSeconds?: number;
         syncAllowedCompanies?: string;
       }
@@ -151,7 +188,18 @@ function logCloudSync(message: string) {
   console.info(`[cloud-sync] ${message}`);
 }
 
+export function looksLikeJwt(token: string) {
+  const value = String(token ?? '').trim();
+  return value.startsWith('eyJ') && value.split('.').length >= 3;
+}
+
 function getDefaultPullApiUrl(pushApiUrl: string) {
+  if (pushApiUrl.includes('/apply_sync_event_with_key')) {
+    return pushApiUrl.replace(
+      '/apply_sync_event_with_key',
+      '/fetch_sync_changes_with_key'
+    );
+  }
   if (pushApiUrl.includes('/apply_sync_event')) {
     return pushApiUrl.replace('/apply_sync_event', '/fetch_sync_changes');
   }
@@ -160,10 +208,22 @@ function getDefaultPullApiUrl(pushApiUrl: string) {
 }
 
 function getDefaultSnapshotApiUrl(pullApiUrl: string) {
+  if (pullApiUrl.includes('/fetch_sync_changes_with_key')) {
+    return pullApiUrl.replace(
+      '/fetch_sync_changes_with_key',
+      '/fetch_sync_snapshot_with_key'
+    );
+  }
   if (pullApiUrl.includes('/fetch_sync_changes')) {
     return pullApiUrl.replace('/fetch_sync_changes', '/fetch_sync_snapshot');
   }
 
+  if (pullApiUrl.includes('/apply_sync_event_with_key')) {
+    return pullApiUrl.replace(
+      '/apply_sync_event_with_key',
+      '/fetch_sync_snapshot_with_key'
+    );
+  }
   if (pullApiUrl.includes('/apply_sync_event')) {
     return pullApiUrl.replace('/apply_sync_event', '/fetch_sync_snapshot');
   }
@@ -179,6 +239,12 @@ function getDefaultCompaniesApiUrl(pushApiUrl: string) {
     return `${base}/rest/v1/companies`;
   }
 
+  if (pushApiUrl.includes('/apply_sync_event_with_key')) {
+    return pushApiUrl.replace(
+      '/rpc/apply_sync_event_with_key',
+      '/companies'
+    );
+  }
   if (pushApiUrl.includes('/apply_sync_event')) {
     return pushApiUrl.replace('/rpc/apply_sync_event', '/companies');
   }
@@ -187,6 +253,12 @@ function getDefaultCompaniesApiUrl(pushApiUrl: string) {
 }
 
 function getDefaultClearApiUrl(pushApiUrl: string) {
+  if (pushApiUrl.includes('/apply_sync_event_with_key')) {
+    return pushApiUrl.replace(
+      '/apply_sync_event_with_key',
+      '/clear_sync_company_data_with_key'
+    );
+  }
   if (pushApiUrl.includes('/apply_sync_event')) {
     return pushApiUrl.replace('/apply_sync_event', '/clear_sync_company_data');
   }
@@ -194,7 +266,7 @@ function getDefaultClearApiUrl(pushApiUrl: string) {
   return pushApiUrl;
 }
 
-function normalizeProjectRef(projectIdOrUrl?: string) {
+export function normalizeProjectRef(projectIdOrUrl?: string) {
   const input = String(projectIdOrUrl ?? '').trim();
   if (!input) {
     return '';
@@ -248,7 +320,7 @@ function getDerivedPushApiUrl(projectIdOrUrl?: string) {
     return '';
   }
 
-  return `${baseRpcUrl}/apply_sync_event`;
+  return `${baseRpcUrl}/apply_sync_event_with_key`;
 }
 
 function getDerivedPullApiUrl(projectIdOrUrl?: string) {
@@ -257,10 +329,23 @@ function getDerivedPullApiUrl(projectIdOrUrl?: string) {
     return '';
   }
 
-  return `${baseRpcUrl}/fetch_sync_changes`;
+  return `${baseRpcUrl}/fetch_sync_changes_with_key`;
 }
 
-function getWorkerConfig(fyo: Fyo) {
+export function resolveSyncKeys(settings?: {
+  syncApiKey?: string;
+  syncAuthToken?: string;
+}) {
+  const apiKey = String(settings?.syncApiKey ?? '').trim();
+  const syncKey = String(settings?.syncAuthToken ?? '').trim();
+  return {
+    apiKey,
+    syncKey,
+    ok: !!apiKey && !!syncKey,
+  };
+}
+
+function getWorkerConfig(fyo: Fyo): CloudSyncConfig {
   const settings = getSystemSettings(fyo);
   const derivedPushApiUrl = getDerivedPushApiUrl(settings?.syncProjectId);
   const pushApiUrl = settings?.syncApiUrl?.trim() || derivedPushApiUrl;
@@ -270,6 +355,9 @@ function getWorkerConfig(fyo: Fyo) {
     derivedPullApiUrl ||
     getDefaultPullApiUrl(pushApiUrl);
   const companiesApiUrl = getDefaultCompaniesApiUrl(pushApiUrl);
+  const clearApiUrl = getDefaultClearApiUrl(pushApiUrl);
+
+  const { apiKey, syncKey } = resolveSyncKeys(settings);
 
   const isPilotMode = settings?.syncMode === 'pilot';
   const allowedCompanies = String(settings?.syncAllowedCompanies ?? '')
@@ -286,29 +374,42 @@ function getWorkerConfig(fyo: Fyo) {
       pilotAllowed &&
       !!pushApiUrl &&
       !!pullApiUrl &&
-      !!settings?.syncAuthToken &&
+      !!apiKey &&
+      !!syncKey &&
       !!settings?.syncCompanyId,
+    pilotBlocked:
+      !!settings?.syncEnabled &&
+      settings?.syncMode === 'pilot' &&
+      !pilotAllowed,
     pushApiUrl,
     pullApiUrl,
     companiesApiUrl,
-    token: settings?.syncAuthToken ?? '',
+    clearApiUrl,
+    apiKey,
+    syncKey,
     companyId: settings?.syncCompanyId ?? '',
+    deviceId: String(settings?.syncDeviceId ?? '').trim() || 'desktop',
+    syncMode: (settings?.syncMode ?? 'off') as 'off' | 'pilot' | 'on',
+    allowedCompanies,
     intervalSeconds: Math.max(settings?.syncIntervalSeconds ?? 15, 5),
   };
 }
 
 async function ensureRemoteCompanyExists(config: {
   companiesApiUrl: string;
-  token: string;
+  apiKey: string;
   companyId: string;
 }) {
+  if (!looksLikeJwt(config.apiKey)) {
+    return;
+  }
   try {
     await sendAPIRequest(config.companiesApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: config.token,
-        Authorization: `Bearer ${config.token}`,
+        apikey: config.apiKey,
+        Authorization: `Bearer ${config.apiKey}`,
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify([
@@ -320,7 +421,7 @@ async function ensureRemoteCompanyExists(config: {
     });
   } catch (error) {
     throw new Error(
-      `Unable to ensure remote company exists. Check Sync Auth Token permissions and Company ID. ${
+      `Unable to ensure remote company exists. Check Service Role Key permissions and Company ID. ${
         (error as Error).message
       }`
     );
@@ -354,6 +455,7 @@ async function updateCloudSyncState(
     lastPushAt: string;
     lastPullAt: string;
     lastError: string;
+    lastWarning: string;
     lastReconciliationAt: string;
     lastReconciliationStatus: string;
     lastReconciliationSummary: string;
@@ -511,7 +613,8 @@ export async function getLocalSyncSnapshot(fyo: Fyo): Promise<SyncSnapshot> {
 
 async function fetchRemoteSyncSnapshot(
   apiUrl: string,
-  token: string,
+  apiKey: string,
+  syncKey: string,
   companyId: string
 ): Promise<SyncSnapshot> {
   const snapshotApiUrl = getDefaultSnapshotApiUrl(apiUrl);
@@ -520,10 +623,11 @@ async function fetchRemoteSyncSnapshot(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: token,
+        apikey: apiKey,
       },
       body: JSON.stringify({
         target_company: companyId,
+        sync_key: syncKey,
       }),
     }),
     BOOTSTRAP_REQUEST_TIMEOUT_MS,
@@ -543,6 +647,11 @@ async function fetchRemoteSyncSnapshot(
   }
 
   if (response.error) {
+    if (String(response.error).includes('Invalid sync key')) {
+      throw new Error(
+        'Invalid sync key. Click "Register Service Role Key" after pasting the service_role key.'
+      );
+    }
     throw new Error(response.error);
   }
 
@@ -558,7 +667,8 @@ async function fetchRemoteSyncSnapshot(
 
 async function sendApplySyncEvent(
   apiUrl: string,
-  token: string,
+  apiKey: string,
+  syncKey: string,
   companyId: string,
   event: {
     event_id: string;
@@ -579,13 +689,14 @@ async function sendApplySyncEvent(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            apikey: token,
+            apikey: apiKey,
           },
           body: JSON.stringify({
             event: {
               ...event,
               company_id: companyId,
             },
+            sync_key: syncKey,
           }),
         }),
         BOOTSTRAP_REQUEST_TIMEOUT_MS,
@@ -695,7 +806,7 @@ export async function bootstrapCloudSyncFromLocal(
 
   await ensureRemoteCompanyExists({
     companiesApiUrl: config.companiesApiUrl,
-    token: config.token,
+    apiKey: config.apiKey,
     companyId: config.companyId,
   });
 
@@ -715,7 +826,8 @@ export async function bootstrapCloudSyncFromLocal(
     });
     const remoteSnapshot = await fetchRemoteSyncSnapshot(
       config.pullApiUrl,
-      config.token,
+      config.apiKey,
+      config.syncKey,
       config.companyId
     );
     const remoteHasData =
@@ -823,7 +935,8 @@ export async function bootstrapCloudSyncFromLocal(
 
         await sendApplySyncEvent(
           config.pushApiUrl,
-          config.token,
+          config.apiKey,
+          config.syncKey,
           config.companyId,
           {
             event_id: getEventId('Account', name),
@@ -871,7 +984,8 @@ export async function bootstrapCloudSyncFromLocal(
 
         await sendApplySyncEvent(
           config.pushApiUrl,
-          config.token,
+          config.apiKey,
+          config.syncKey,
           config.companyId,
           {
             event_id: getEventId('Party', name),
@@ -922,7 +1036,8 @@ export async function bootstrapCloudSyncFromLocal(
 
         await sendApplySyncEvent(
           config.pushApiUrl,
-          config.token,
+          config.apiKey,
+          config.syncKey,
           config.companyId,
           {
             event_id: getEventId('JournalEntry', name),
@@ -996,7 +1111,12 @@ export async function runCloudSyncBootstrapDryRun(
 
   const [local, remote] = await Promise.all([
     getLocalSyncSnapshot(fyo),
-    fetchRemoteSyncSnapshot(config.pullApiUrl, config.token, config.companyId),
+    fetchRemoteSyncSnapshot(
+      config.pullApiUrl,
+      config.apiKey,
+      config.syncKey,
+      config.companyId
+    ),
   ]);
 
   const remoteHasData =
@@ -1057,7 +1177,12 @@ export async function runCloudSyncReconciliation(
 
   const [local, remote] = await Promise.all([
     getLocalSyncSnapshot(fyo),
-    fetchRemoteSyncSnapshot(config.pullApiUrl, config.token, config.companyId),
+    fetchRemoteSyncSnapshot(
+      config.pullApiUrl,
+      config.apiKey,
+      config.syncKey,
+      config.companyId
+    ),
   ]);
 
   const result = compareSyncSnapshots(local, remote);
@@ -1079,23 +1204,59 @@ export async function clearCloudSyncRemoteCompanyData(fyo: Fyo) {
     throw new Error('Cloud sync is not fully configured');
   }
 
-  const clearApiUrl = getDefaultClearApiUrl(config.pushApiUrl);
+  const baseRpcUrl = getBaseRestRpcUrl(
+    getSystemSettings(fyo)?.syncProjectId || getSystemSettings(fyo)?.syncApiUrl
+  );
+  const clearApiUrl = baseRpcUrl
+    ? `${baseRpcUrl}/clear_sync_company_data_with_key`
+    : config.clearApiUrl;
   logCloudSync(`clearing remote company data for ${config.companyId}`);
 
-  const response = (await sendAPIRequest(clearApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: config.token,
-    },
-    body: JSON.stringify({
-      target_company: config.companyId,
-    }),
-  })) as {
-    success?: boolean;
-    error?: string;
-    deleted?: Record<string, number>;
-  } | null;
+  let response:
+    | {
+        success?: boolean;
+        error?: string;
+        deleted?: Record<string, number>;
+      }
+    | null = null;
+  try {
+    response = (await sendAPIRequest(clearApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: config.apiKey,
+      },
+      body: JSON.stringify({
+        target_company: config.companyId,
+        sync_key: config.syncKey,
+      }),
+    })) as {
+      success?: boolean;
+      error?: string;
+      deleted?: Record<string, number>;
+    } | null;
+  } catch (error) {
+    const message = String((error as Error)?.message ?? '');
+    if (message.includes('clear_sync_company_data') && baseRpcUrl) {
+      // Fallback for older schema: clear_sync_company_data(target_company)
+      response = (await sendAPIRequest(`${baseRpcUrl}/clear_sync_company_data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: config.apiKey,
+        },
+        body: JSON.stringify({
+          target_company: config.companyId,
+        }),
+      })) as {
+        success?: boolean;
+        error?: string;
+        deleted?: Record<string, number>;
+      } | null;
+    } else {
+      throw error;
+    }
+  }
 
   if (!response) {
     throw new Error('Empty response from clear remote data API');
@@ -1191,7 +1352,7 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
   try {
     await ensureRemoteCompanyExists({
       companiesApiUrl: config.companiesApiUrl,
-      token: config.token,
+      apiKey: config.apiKey,
       companyId: config.companyId,
     });
 
@@ -1211,7 +1372,8 @@ export async function flushCloudSyncOutbox(fyo: Fyo) {
     for (const item of items) {
       await processOutboxItem(fyo, item as CloudSyncOutbox, {
         apiUrl: config.pushApiUrl,
-        token: config.token,
+        apiKey: config.apiKey,
+        syncKey: config.syncKey,
         companyId: config.companyId,
       });
     }
@@ -1302,6 +1464,94 @@ export async function runCloudSyncCycle(fyo: Fyo) {
   await runAutoReconciliationIfDue(fyo);
 }
 
+async function enqueueDeferredInboundChange(
+  fyo: Fyo,
+  change: RemoteSyncChange,
+  reason: string
+) {
+  const existing = await fyo.db.getAll(ModelNameEnum.CloudSyncInboundQueue, {
+    filters: {
+      seq: String(change.seq ?? ''),
+      docType: change.doc_type,
+    },
+  });
+  if (existing.length) {
+    return;
+  }
+
+  const doc = fyo.doc.getNewDoc(ModelNameEnum.CloudSyncInboundQueue, {
+    seq: String(change.seq ?? ''),
+    docType: change.doc_type,
+    operation: change.operation,
+    status: 'deferred',
+    attempts: 0,
+    nextRetryAt: new Date(Date.now() + 30_000).toISOString(),
+    errorMessage: reason,
+    payload: JSON.stringify(change.payload ?? {}),
+  }) as CloudSyncInboundQueue;
+
+  doc._addDocToSyncQueue = false;
+  await doc.sync();
+}
+
+async function processDeferredInboundQueue(fyo: Fyo) {
+  const now = new Date().toISOString();
+  const queued = await fyo.db.getAll(ModelNameEnum.CloudSyncInboundQueue, {
+    filters: { status: 'deferred' },
+  });
+  for (const row of queued) {
+    const doc = (await fyo.doc.getDoc(
+      ModelNameEnum.CloudSyncInboundQueue,
+      row.name as string
+    )) as CloudSyncInboundQueue;
+
+    if (doc.nextRetryAt && doc.nextRetryAt > now) {
+      continue;
+    }
+
+    let payload: RemoteSyncChange['payload'] = {};
+    try {
+      payload = JSON.parse(String(doc.payload ?? '{}')) as RemoteSyncChange['payload'];
+    } catch {
+      payload = {};
+    }
+
+    const result = await applyRemoteChangeWithResult(fyo, {
+      seq: Number(doc.seq ?? 0),
+      doc_type: String(doc.docType ?? ''),
+      operation: String(doc.operation ?? ''),
+      payload,
+    });
+
+    if (result.applied) {
+      await fyo.db.delete(ModelNameEnum.CloudSyncInboundQueue, doc.name as string);
+      continue;
+    }
+
+    if (result.deferred) {
+      const attempts = (doc.attempts ?? 0) + 1;
+      const nextRetryAt = new Date(Date.now() + Math.min(attempts, 10) * 60_000);
+      await doc.setAndSync({
+        attempts,
+        nextRetryAt: nextRetryAt.toISOString(),
+        errorMessage: result.reason ?? doc.errorMessage ?? '',
+      });
+      await updateCloudSyncState(fyo, {
+        lastWarning: result.reason ?? doc.errorMessage ?? '',
+      });
+      continue;
+    }
+
+    await doc.setAndSync({
+      status: 'failed',
+      errorMessage: result.reason ?? doc.errorMessage ?? '',
+    });
+    await updateCloudSyncState(fyo, {
+      lastWarning: result.reason ?? doc.errorMessage ?? '',
+    });
+  }
+}
+
 export async function pullCloudSyncChanges(fyo: Fyo) {
   const online =
     typeof navigator === 'undefined' ? true : navigator.onLine !== false;
@@ -1315,32 +1565,87 @@ export async function pullCloudSyncChanges(fyo: Fyo) {
 
   const config = getWorkerConfig(fyo);
   if (!config.enabled) {
+    if (config.pilotBlocked) {
+      await updateCloudSyncState(fyo, {
+        lastWarning:
+          'Sync is blocked in pilot mode. Add this company ID to Sync Allowed Companies or switch Sync Mode to On.',
+      });
+    }
     return;
   }
+
+  await processDeferredInboundQueue(fyo);
 
   const cursorDoc = await getOrCreateCursor(fyo, config.companyId);
   const lastSeq = cursorDoc.lastSeq ?? 0;
 
-  const response = (await sendAPIRequest(config.pullApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: config.token,
-    },
-    body: JSON.stringify({
-      target_company: config.companyId,
-      last_seq: lastSeq,
-      max_rows: 100,
-    }),
-  })) as RemoteSyncChange[] | { error?: string } | null;
-
-  if (!response || !Array.isArray(response)) {
+  let response: RemoteSyncChange[] | { error?: string } | null = null;
+  try {
+    response = (await sendAPIRequest(config.pullApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: config.apiKey,
+      },
+      body: JSON.stringify({
+        target_company: config.companyId,
+        last_seq: lastSeq,
+        max_rows: 100,
+        sync_key: config.syncKey,
+      }),
+    })) as RemoteSyncChange[] | { error?: string } | null;
+  } catch (error) {
+    const message = (error as Error)?.message ?? 'Sync pull failed';
+    const friendly = message.includes('Invalid sync key')
+      ? 'Invalid sync key. Click "Register Service Role Key" after pasting the service_role key.'
+      : message;
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'error',
+      lastError: friendly,
+    });
     return;
   }
 
+  if (!response || !Array.isArray(response)) {
+    const errorMessage =
+      (response as { error?: string } | null)?.error ??
+      'Unexpected response from remote sync endpoint.';
+    await updateCloudSyncState(fyo, {
+      enrollmentStatus: 'error',
+      lastError: `${errorMessage} Verify Anon Key, Service Role Key, and Sync API URL, then try Sync Now.`,
+    });
+    return;
+  }
+
+  const accountAndParty = response.filter(
+    (change) => change.doc_type !== 'JournalEntry'
+  );
+  const journalEntries = response.filter(
+    (change) => change.doc_type === 'JournalEntry'
+  );
+
   let maxSeq = lastSeq;
-  for (const change of response) {
-    await applyRemoteChange(fyo, change);
+  for (const change of accountAndParty) {
+    await applyRemoteChangeWithResult(fyo, change);
+    maxSeq = Math.max(maxSeq, change.seq ?? maxSeq);
+  }
+
+  for (const change of journalEntries) {
+    const result = await applyRemoteChangeWithResult(fyo, change);
+    if (result.deferred) {
+      await enqueueDeferredInboundChange(
+        fyo,
+        change,
+        result.reason ?? 'Deferred journal entry due to missing accounts.'
+      );
+      await updateCloudSyncState(fyo, {
+        lastWarning:
+          result.reason ??
+          'Deferred journal entry due to missing account references.',
+      });
+    } else if (result.warning) {
+      await updateCloudSyncState(fyo, { lastWarning: result.warning });
+    }
     maxSeq = Math.max(maxSeq, change.seq ?? maxSeq);
   }
 
@@ -1381,7 +1686,8 @@ export async function exportCloudSyncDiagnostics(
     try {
       remoteSnapshot = await fetchRemoteSyncSnapshot(
         config.pullApiUrl,
-        config.token,
+        config.apiKey,
+        config.syncKey,
         config.companyId
       );
       dryRun = await runCloudSyncBootstrapDryRun(fyo);
@@ -1420,6 +1726,7 @@ export async function exportCloudSyncDiagnostics(
       sent,
     },
     lastError: String(stateDoc?.lastError ?? ''),
+    lastWarning: String(stateDoc?.lastWarning ?? ''),
   };
 }
 
@@ -1431,6 +1738,105 @@ export async function pauseCloudSync(fyo: Fyo) {
 export async function resumeCloudSync(fyo: Fyo) {
   await setCloudSyncEnrollmentStatus(fyo, 'active', '');
   startCloudSyncWorker(fyo);
+}
+
+type MultipartField = {
+  name: string;
+  content: string;
+  filename?: string;
+  contentType?: string;
+};
+
+function buildMultipartFormData(fields: MultipartField[]) {
+  const boundary = `----cloud-sync-${Math.random().toString(16).slice(2)}`;
+  const parts: string[] = [];
+
+  for (const field of fields) {
+    parts.push(`--${boundary}\r\n`);
+    let disposition = `Content-Disposition: form-data; name="${field.name}"`;
+    if (field.filename) {
+      disposition += `; filename="${field.filename}"`;
+    }
+    parts.push(`${disposition}\r\n`);
+    if (field.contentType) {
+      parts.push(`Content-Type: ${field.contentType}\r\n`);
+    }
+    parts.push(`\r\n`);
+    parts.push(field.content);
+    parts.push(`\r\n`);
+  }
+
+  parts.push(`--${boundary}--\r\n`);
+  return {
+    body: parts.join(''),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
+
+async function listRemoteFunctions(
+  projectRef: string,
+  accessToken: string
+) {
+  const endpoint = `https://api.supabase.com/v1/projects/${projectRef}/functions`;
+  const response = (await sendAPIRequest(endpoint, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })) as Array<{ name?: string; slug?: string }> | null;
+
+  if (!response || !Array.isArray(response)) {
+    return [];
+  }
+
+  return response;
+}
+
+async function deployInviteUserFunction(
+  projectRef: string,
+  accessToken: string
+) {
+  const source = (await ipc.getSyncInviteFunctionSource()) as
+    | InviteFunctionSource
+    | undefined;
+  if (!source || !source.files?.length) {
+    throw new Error('invite-user function source is missing.');
+  }
+
+  const entryFile = source.files[0];
+  const metadata = {
+    name: source.name,
+    entrypoint_path: source.entrypointPath,
+    verify_jwt: source.verifyJwt,
+  };
+
+  const { body, contentType } = buildMultipartFormData([
+    {
+      name: 'metadata',
+      content: JSON.stringify(metadata),
+      contentType: 'application/json',
+    },
+    {
+      name: 'file',
+      filename: entryFile.path,
+      contentType: 'application/typescript',
+      content: entryFile.content,
+    },
+  ]);
+
+  const endpoint = `https://api.supabase.com/v1/projects/${projectRef}/functions/deploy?slug=${encodeURIComponent(
+    source.name
+  )}`;
+
+  await sendAPIRequest(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': contentType,
+      Accept: 'application/json',
+    },
+    body,
+  });
 }
 
 export async function initializeCloudSyncRemoteSchema(
@@ -1481,6 +1887,53 @@ export async function initializeCloudSyncRemoteSchema(
     }
   }
 
+  const enableRlsSql = `
+    alter table public.profiles enable row level security;
+    alter table public.company_users enable row level security;
+    alter table public.company_user_invitations enable row level security;
+    alter table public.accounts enable row level security;
+    alter table public.parties enable row level security;
+    alter table public.journal_entries enable row level security;
+    alter table public.journal_entry_lines enable row level security;
+  `;
+
+  try {
+    await sendAPIRequest(queryApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ query: enableRlsSql }),
+    });
+    appliedScripts.push('enable_rls');
+  } catch (error) {
+    throw new Error(
+      `Remote initialization failed while enabling RLS: ${
+        (error as Error).message
+      }`
+    );
+  }
+
+  try {
+    const functions = await listRemoteFunctions(projectRef, accessToken);
+    const hasInviteUser = functions.some(
+      (fn) =>
+        fn?.slug?.toLowerCase() === 'invite-user' ||
+        fn?.name?.toLowerCase() === 'invite-user'
+    );
+    if (!hasInviteUser) {
+      await deployInviteUserFunction(projectRef, accessToken);
+      appliedScripts.push('deploy_invite_user');
+    }
+  } catch (error) {
+    throw new Error(
+      `Remote initialization failed while deploying invite-user: ${
+        (error as Error).message
+      }`
+    );
+  }
+
   await updateCloudSyncState(fyo, {
     enrollmentStatus: 'not_enrolled',
     lastError: '',
@@ -1492,13 +1945,60 @@ export async function initializeCloudSyncRemoteSchema(
   };
 }
 
+export async function setRemoteSyncAccessKey(
+  fyo: Fyo,
+  syncKey: string,
+  adminToken: string
+): Promise<void> {
+  const settings = getSystemSettings(fyo);
+  const baseRpcUrl = getBaseRestRpcUrl(
+    settings?.syncProjectId || settings?.syncApiUrl
+  );
+  if (!baseRpcUrl) {
+    throw new Error('Sync Project ID is required');
+  }
+
+  const companyId = String(settings?.syncCompanyId ?? '').trim();
+  if (!companyId) {
+    throw new Error('Sync Company ID is required');
+  }
+
+  const token = String(adminToken ?? '').trim();
+  if (!token) {
+    throw new Error('Service Role Key is required to register sync key');
+  }
+
+  const endpoint = `${baseRpcUrl}/set_company_sync_key`;
+  const response = (await sendAPIRequest(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: token,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      target_company: companyId,
+      raw_key: syncKey,
+    }),
+  })) as { error?: string; success?: boolean } | null;
+
+  if (response?.error) {
+    throw new Error(response.error);
+  }
+}
+
 export async function listCloudSyncCollaborators(
   fyo: Fyo
 ): Promise<CollaboratorRow[]> {
   const config = getWorkerConfig(fyo);
   const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
-  if (!baseUrl || !config.token || !config.companyId) {
+  if (!baseUrl || !config.syncKey || !config.companyId) {
     throw new Error('Cloud sync is not fully configured');
+  }
+  if (!looksLikeJwt(config.syncKey)) {
+    throw new Error(
+      'Collaborator management requires the Service Role Key.'
+    );
   }
 
   const endpoint = `${baseUrl}/rest/v1/company_users_with_profile?company_id=eq.${encodeURIComponent(
@@ -1507,7 +2007,7 @@ export async function listCloudSyncCollaborators(
   const response = (await sendAPIRequest(endpoint, {
     method: 'GET',
     headers: {
-      apikey: config.token,
+      apikey: config.syncKey,
     },
   })) as CollaboratorRow[] | { error?: string } | null;
 
@@ -1529,7 +2029,7 @@ export async function listCloudSyncInvitations(
 ): Promise<CollaboratorInviteRow[]> {
   const config = getWorkerConfig(fyo);
   const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
-  if (!baseUrl || !config.token || !config.companyId) {
+  if (!baseUrl || !config.syncKey || !config.companyId) {
     throw new Error('Cloud sync is not fully configured');
   }
 
@@ -1539,8 +2039,8 @@ export async function listCloudSyncInvitations(
   const response = (await sendAPIRequest(endpoint, {
     method: 'GET',
     headers: {
-      apikey: config.token,
-      Authorization: `Bearer ${config.token}`,
+      apikey: config.syncKey,
+      Authorization: `Bearer ${config.syncKey}`,
     },
   })) as CollaboratorInviteRow[] | { error?: string } | null;
 
@@ -1571,13 +2071,16 @@ export async function checkInviteFunction(
     await sendAPIRequest(endpoint, {
       method: 'OPTIONS',
       headers: {
-        apikey: config.token,
-        Authorization: config.token ? `Bearer ${config.token}` : '',
+        apikey: config.syncKey,
+        Authorization: config.syncKey ? `Bearer ${config.syncKey}` : '',
       },
     });
     return { ok: true, status: 200, message: 'invite-user is reachable.' };
   } catch (error) {
     const message = (error as Error)?.message ?? 'Invite function check failed';
+    if (message.includes('Invalid JSON response')) {
+      return { ok: true, status: 200, message: 'invite-user is reachable.' };
+    }
     const match = /HTTP\\s+(\\d+)/i.exec(message);
     const status = match ? Number(match[1]) : 0;
     return {
@@ -1604,6 +2107,17 @@ export async function verifyRemoteSchema(
   const requiredViews = [
     'company_users_with_profile',
     'journal_entries_with_user',
+  ];
+  const requiredColumns = [
+    'companies.sync_key_hash',
+    'journal_entries.submitted',
+    'journal_entries.last_modified_at',
+  ];
+  const requiredFunctions = [
+    'apply_sync_event_with_key',
+    'fetch_sync_changes_with_key',
+    'set_company_sync_key',
+    'fetch_sync_snapshot_with_key',
   ];
 
   const tablesResult = (await sendAPIRequest(queryApiUrl, {
@@ -1646,28 +2160,83 @@ export async function verifyRemoteSchema(
       query: `
         select lower(relname) as name, relrowsecurity
         from pg_class
-        where relname in ('companies','company_users','company_user_invitations','profiles');
+        where relname in ('profiles','company_users','company_user_invitations','accounts','parties','journal_entries','journal_entry_lines');
       `,
     }),
   })) as Array<{ name: string; relrowsecurity: boolean }>;
+
+  const columnsResult = (await sendAPIRequest(queryApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      query: `
+        select lower(table_name) as table_name, lower(column_name) as column_name
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name in ('companies','journal_entries');
+      `,
+    }),
+  })) as Array<{ table_name: string; column_name: string }>;
+
+  const functionsResult = (await sendAPIRequest(queryApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      query: `
+        select lower(proname) as name
+        from pg_proc
+        join pg_namespace n on n.oid = pg_proc.pronamespace
+        where n.nspname = 'public';
+      `,
+    }),
+  })) as Array<{ name: string }>;
 
   const tableSet = new Set(tablesResult.map((row) => row.name));
   const viewSet = new Set(viewsResult.map((row) => row.name));
   const rlsMap = new Map(
     rlsResult.map((row) => [row.name, row.relrowsecurity])
   );
+  const columnSet = new Set(
+    columnsResult.map((row) => `${row.table_name}.${row.column_name}`)
+  );
+  const functionSet = new Set(functionsResult.map((row) => row.name));
 
   const missingTables = requiredTables.filter((name) => !tableSet.has(name));
   const missingViews = requiredViews.filter((name) => !viewSet.has(name));
-  const rlsMissing = ['companies','company_users','company_user_invitations','profiles'].filter(
-    (name) => !rlsMap.get(name)
+  const rlsMissing = [
+    'profiles',
+    'company_users',
+    'company_user_invitations',
+    'accounts',
+    'parties',
+    'journal_entries',
+    'journal_entry_lines',
+  ].filter((name) => !rlsMap.get(name));
+  const missingColumns = requiredColumns.filter(
+    (name) => !columnSet.has(name)
+  );
+  const missingFunctions = requiredFunctions.filter(
+    (name) => !functionSet.has(name)
   );
 
   return {
-    ok: missingTables.length === 0 && missingViews.length === 0 && rlsMissing.length === 0,
+    ok:
+      missingTables.length === 0 &&
+      missingViews.length === 0 &&
+      rlsMissing.length === 0 &&
+      missingColumns.length === 0 &&
+      missingFunctions.length === 0,
     missingTables,
     missingViews,
     rlsMissing,
+    missingColumns,
+    missingFunctions,
   };
 }
 
@@ -1678,7 +2247,7 @@ export async function inviteCloudSyncCollaborator(
 ) {
   const config = getWorkerConfig(fyo);
   const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
-  if (!baseUrl || !config.token || !config.companyId) {
+  if (!baseUrl || !config.apiKey || !config.companyId) {
     throw new Error('Cloud sync is not fully configured');
   }
 
@@ -1696,8 +2265,8 @@ export async function inviteCloudSyncCollaborator(
   };
   const headers = {
     'Content-Type': 'application/json',
-    apikey: config.token,
-    Authorization: `Bearer ${config.token}`,
+    apikey: config.syncKey,
+    Authorization: `Bearer ${config.syncKey}`,
   };
   let response: { error?: string } | string | null = null;
   const inviteAuthUserViaServiceToken = async () => {
@@ -1739,7 +2308,7 @@ export async function inviteCloudSyncCollaborator(
       companyId: config.companyId,
       email: inviteEmail,
       role,
-      accessToken: config.token,
+      accessToken: config.syncKey,
     }),
   })) as { error?: string } | string | null;
 
@@ -1753,7 +2322,7 @@ export async function inviteCloudSyncCollaborator(
 export async function removeCloudSyncCollaborator(fyo: Fyo, userId: string) {
   const config = getWorkerConfig(fyo);
   const baseUrl = getSupabaseBaseUrl(getSystemSettings(fyo)?.syncProjectId);
-  if (!baseUrl || !config.token || !config.companyId) {
+  if (!baseUrl || !config.apiKey || !config.companyId) {
     throw new Error('Cloud sync is not fully configured');
   }
 
@@ -1768,7 +2337,7 @@ export async function removeCloudSyncCollaborator(fyo: Fyo, userId: string) {
   await sendAPIRequest(endpoint, {
     method: 'DELETE',
     headers: {
-      apikey: config.token,
+      apikey: config.apiKey,
       Prefer: 'return=minimal',
     },
   });
@@ -1801,7 +2370,7 @@ async function getOrCreateCursor(
 async function processOutboxItem(
   fyo: Fyo,
   item: CloudSyncOutbox,
-  config: { apiUrl: string; token: string; companyId: string }
+  config: { apiUrl: string; apiKey: string; syncKey: string; companyId: string }
 ) {
   if (!item.name) {
     return;
@@ -1826,7 +2395,7 @@ async function processOutboxItem(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: config.token,
+        apikey: config.apiKey,
       },
       body: JSON.stringify({
         event: {
@@ -1837,6 +2406,7 @@ async function processOutboxItem(
           operation: outboxDoc.operation,
           payload: sanitizedPayload,
         },
+        sync_key: config.syncKey,
       }),
     })) as { success?: boolean; error?: string } | null;
 
@@ -1866,21 +2436,33 @@ async function processOutboxItem(
 }
 
 export async function applyRemoteChange(fyo: Fyo, change: RemoteSyncChange) {
+  await applyRemoteChangeWithResult(fyo, change);
+}
+
+async function applyRemoteChangeWithResult(
+  fyo: Fyo,
+  change: RemoteSyncChange
+): Promise<ApplyRemoteResult> {
   const operation = (change.operation ?? '').toLowerCase();
   if (change.doc_type === 'Account') {
     await applyRemoteAccountChange(fyo, change.payload ?? {}, operation);
-    return;
+    return { applied: true };
   }
 
   if (change.doc_type === 'Party') {
     await applyRemotePartyChange(fyo, change.payload ?? {}, operation);
-    return;
+    return { applied: true };
   }
 
   if (change.doc_type === 'JournalEntry') {
-    await applyRemoteJournalEntryChange(fyo, change.payload ?? {}, operation);
-    return;
+    return await applyRemoteJournalEntryChange(
+      fyo,
+      change.payload ?? {},
+      operation
+    );
   }
+
+  return { applied: false, reason: 'unsupported_doc_type' };
 }
 
 async function applyRemoteAccountChange(
@@ -2015,11 +2597,11 @@ async function applyRemoteJournalEntryChange(
     id?: string;
   },
   operation: string
-) {
+) : Promise<ApplyRemoteResult> {
   const data = payload.data ?? {};
   const name = String(data.name ?? payload.external_key ?? payload.id ?? '');
   if (!name) {
-    return;
+    return { applied: false, reason: 'missing_document_name' };
   }
 
   const existing = await getExistingDocByName(
@@ -2029,9 +2611,10 @@ async function applyRemoteJournalEntryChange(
   );
   if (operation === 'delete') {
     if (!existing) {
-      return;
+      return { applied: false, reason: 'missing_local_document' };
     }
 
+    let cancelled = false;
     await withSyncQueueSuppressed(existing, async () => {
       if (existing.canDelete) {
         await existing.delete().catch(() => undefined);
@@ -2039,10 +2622,17 @@ async function applyRemoteJournalEntryChange(
       }
 
       if (existing.canCancel) {
+        cancelled = true;
         await existing.cancel().catch(() => undefined);
       }
     });
-    return;
+    return cancelled
+      ? {
+          applied: true,
+          warning:
+            'Remote delete could not be applied locally, so the entry was cancelled. If you need it deleted, open the entry and delete it manually.',
+        }
+      : { applied: true };
   }
 
   const jeValues: DocValueMap = {
@@ -2058,11 +2648,15 @@ async function applyRemoteJournalEntryChange(
 
   const lineRows = Array.isArray(data.accounts) ? data.accounts : [];
   const mappedLines = [] as DocValueMap[];
+  const missingAccounts = new Set<string>();
   for (const rawRow of lineRows) {
     const row = (rawRow ?? {}) as Record<string, unknown>;
     const accountRef = String(row.account ?? '');
     const localAccount = await resolveAccountName(fyo, accountRef);
     if (!localAccount) {
+      if (accountRef) {
+        missingAccounts.add(accountRef);
+      }
       continue;
     }
 
@@ -2076,7 +2670,17 @@ async function applyRemoteJournalEntryChange(
   }
 
   if (mappedLines.length < 2) {
-    return;
+    if (missingAccounts.size > 0) {
+      return {
+        applied: false,
+        deferred: true,
+        reason: `Missing accounts: ${[...missingAccounts].join(
+          ', '
+        )}. Run Sync Now or Re-pull All to sync accounts, then retry.`,
+        missingAccounts: [...missingAccounts],
+      };
+    }
+    return { applied: false, reason: 'insufficient_lines' };
   }
 
   if (!existing) {
@@ -2092,11 +2696,11 @@ async function applyRemoteJournalEntryChange(
         await doc.submit().catch(() => undefined);
       }
     });
-    return;
+    return { applied: true };
   }
 
   if (existing.isSubmitted || existing.isCancelled) {
-    return;
+    return { applied: false, reason: 'local_submitted_or_cancelled' };
   }
 
   await withSyncQueueSuppressed(existing, async () => {
@@ -2111,6 +2715,7 @@ async function applyRemoteJournalEntryChange(
       await existing.submit().catch(() => undefined);
     }
   });
+  return { applied: true };
 }
 
 async function resolveAccountName(fyo: Fyo, accountRef: string) {

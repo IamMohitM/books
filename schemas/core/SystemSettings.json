@@ -232,10 +232,17 @@
       "section": "Sync"
     },
     {
+      "fieldname": "syncApiKey",
+      "label": "Anon Key",
+      "fieldtype": "Secret",
+      "description": "Supabase anon key used for REST/RPC authentication headers.",
+      "section": "Sync"
+    },
+    {
       "fieldname": "syncAuthToken",
-      "label": "Sync Auth Token",
-      "fieldtype": "Data",
-      "description": "Bearer/API token used for push/pull RPC calls.",
+      "label": "Service Role Key",
+      "fieldtype": "Secret",
+      "description": "Supabase service_role key used as the sync key for desktop push/pull and admin actions.",
       "section": "Sync"
     },
     {
