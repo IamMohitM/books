@@ -56,7 +56,7 @@ Option B (manual):
 In **Desktop → Settings → Cloud Sync** fill:
 - **Sync Project ID** = Supabase project ref
 - **Sync Company ID** = company UUID for this project
-- **Sync Auth Token** = **Service Role Key** for this project
+- **Sync Access Key** = generate in Desktop (uses service_role only for setup)
 - **Supabase PAT** = the Personal Access Token you generated
 
 Then click:
@@ -83,7 +83,8 @@ On the mobile sign-in screen, add a project profile:
 ---
 
 ### Notes
-- The **Service Role Key** is required for desktop invite + sync.
+- The **Service Role Key** is required only to generate the Sync Access Key or run admin setup.
+- The **Sync Access Key** is used by desktop for daily sync.
 - The **Anon Key** is used by mobile clients.
 - The **PAT** is only for admin setup steps (Init Remote Admin, Bootstrap to Claude).
 - Repeat this checklist for every Supabase project.

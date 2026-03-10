@@ -30,7 +30,7 @@ These are the controls normal operators should use.
 | `Enable Cloud Sync` | Turning cloud sync on/off for this desktop/company. |
 | `Sync Project ID` | First-time setup or switching Supabase projects. |
 | `Sync Company ID` | Ensuring data syncs to the correct company tenant. |
-| `Sync Auth Token` | Authenticating sync in production; fixing auth failures. |
+| `Sync Access Key` | Authenticating sync in production; fixing auth failures. |
 | `Save` | Applying any updated sync configuration before actions. |
 | `Sync Now` | Immediate push/pull when data must appear now. |
 | `Repair Queue` | Recovering from failed/stuck sync queue items. |
@@ -52,9 +52,9 @@ These are the controls normal operators should use.
 - **Use when:** Initial setup. Use `Generate` if creating a new company scope.
 - **Best for:** Data isolation and correct tenant routing.
 
-### `Sync Auth Token`
-- **What it does:** Authenticates sync API calls.
-- **Use when:** Initial setup, token rotation, or fixing auth failures.
+### `Sync Access Key`
+- **What it does:** Authenticates desktop sync API calls.
+- **Use when:** Initial setup, key rotation, or fixing auth failures.
 - **Best for:** Production reliability and secure RPC access.
 
 ### `Sync Now`

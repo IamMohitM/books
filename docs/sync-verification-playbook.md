@@ -7,7 +7,7 @@ Use this checklist after reset to verify end-to-end behavior.
 - Desktop sync project is configured with:
   - `Sync Project ID`
   - `Sync Company ID`
-  - `Sync Auth Token` (`service_role`)
+  - `Sync Access Key` (generated in Desktop)
 - Mobile uses:
   - same `project ref`
   - **legacy anon key** (not service_role)
@@ -91,4 +91,3 @@ Expected:
   - user is authenticated but missing company membership in `company_users`.
 - `Access refresh failed: ...`:
   - query error shown explicitly; use it for diagnosis.
-

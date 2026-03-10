@@ -8,7 +8,7 @@ In desktop `Settings -> Cloud Sync`, fill:
 
 1. `Sync Project ID`
 2. `Sync Company ID`
-3. `Sync Auth Token`
+3. `Sync Access Key`
 
 ## 1) Sync Project ID
 
@@ -31,16 +31,11 @@ How to set:
 Important:
 - Desktop and mobile must use data tied to the same company.
 
-## 3) Sync Auth Token
+## 3) Sync Access Key
 
 Where:
-- Supabase Dashboard -> `Settings` -> `API`
-
-What to use for desktop sync:
-- `service_role` key
-
-Why:
-- Desktop sync runs privileged operations (RPC, remote initialization, bootstrap, collaborator access management).
+- Generate it in Desktop `Settings -> Cloud Sync` using the `Generate` button.
+- The desktop uses `service_role` **only** during generation, then switches to the Sync Access Key.
 
 Do not use for mobile:
 - Mobile must use only publishable/anon key.
@@ -64,7 +59,7 @@ Do not put `service_role` in mobile app.
 
 ## Common mistakes
 
-1. Using anon/publishable key as desktop `Sync Auth Token`.
+1. Using anon/publishable key as desktop `Sync Access Key`.
 2. Using wrong `Sync Company ID`.
 3. Using different project on mobile vs desktop.
 4. User signed up but not invited (no row in `company_users`).
