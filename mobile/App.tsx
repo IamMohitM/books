@@ -30,7 +30,6 @@ import AppShell from './src/screens/AppShell';
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [profilesReady, setProfilesReady] = useState(false);
-  const [, setProfilesVersion] = useState(0);
   const [selectedProfileId, setSelectedProfileId] = useState(
     mobileProjectProfiles[0]?.id ?? ''
   );
@@ -66,7 +65,6 @@ export default function App() {
       if (!nextActive && mobileProjectProfiles[0]) {
         setSelectedProfileId(mobileProjectProfiles[0].id);
       }
-      setProfilesVersion((v) => v + 1);
       setProfilesReady(true);
     };
 
@@ -106,18 +104,28 @@ export default function App() {
 
       // Also manually check for session in case listener doesn't fire immediately
       // This is especially important for signup which creates a session
-      const checkSessionInterval = setInterval(async () => {
+      let attempts = 0;
+      const maxAttempts = 20;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const checkSession = async () => {
         if (!mounted) return;
         const { data } = await client.auth.getSession();
         if (mounted && data.session !== null) {
           setSession(data.session);
-          clearInterval(checkSessionInterval);
+          return;
         }
-      }, 500);
+        attempts += 1;
+        if (attempts < maxAttempts) {
+          timeoutId = setTimeout(checkSession, 500);
+        }
+      };
+      void checkSession();
 
       const localCleanup = () => {
         listener.subscription?.unsubscribe();
-        clearInterval(checkSessionInterval);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
       };
       cleanup = localCleanup;
       return localCleanup;
@@ -135,6 +143,36 @@ export default function App() {
   const selectedProfile =
     mobileProjectProfiles.find((p) => p.id === selectedProfileId) ??
     mobileProjectProfiles[0];
+
+  const profilePicker = (
+    <View style={styles.profilePicker}>
+      <Text style={styles.subtitle}>Project</Text>
+      <View style={styles.profileRow}>
+        {mobileProjectProfiles.map((profile) => {
+          const active = profile.id === selectedProfileId;
+          return (
+            <TouchableOpacity
+              key={profile.id}
+              style={[styles.profileChip, active && styles.profileChipActive]}
+              onPress={() => {
+                void setActiveMobileProfile(profile.id);
+                setSelectedProfileId(profile.id);
+              }}
+            >
+              <Text
+                style={[
+                  styles.profileChipText,
+                  active && styles.profileChipTextActive,
+                ]}
+              >
+                {profile.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
 
   const addProjectProfile = async () => {
     try {
@@ -160,7 +198,6 @@ export default function App() {
       await setActiveMobileProfile(profile.id);
       await persistMobileProjectProfilesToDisk();
       setSelectedProfileId(profile.id);
-      setProfilesVersion((v) => v + 1);
       setNewProjectRef('');
       setNewProjectKey('');
       setNewProjectLabel('');
@@ -193,7 +230,6 @@ export default function App() {
                 setSelectedProfileId(first.id);
               }
               setSession(null);
-              setProfilesVersion((v) => v + 1);
 
               showAlert(
                 'Profiles Reset',
@@ -248,7 +284,6 @@ export default function App() {
             try {
               removeMobileProjectProfile(profileId);
               await persistMobileProjectProfilesToDisk();
-              setProfilesVersion((v) => v + 1);
               showAlert('Profile removed', `${target.label} was removed.`);
             } catch (error) {
               showAlert('Unable to remove profile', (error as Error).message);
@@ -305,6 +340,20 @@ export default function App() {
     </View>
   );
 
+  const authContent = (
+    <>
+      <Text style={styles.title}>Cash Books</Text>
+      {!hasProfiles && (
+        <Text style={styles.emptyHint}>
+          No project configured yet. Add a project profile to continue.
+        </Text>
+      )}
+      {hasMultipleProfiles && profilePicker}
+      {addProjectForm}
+      {hasProfiles && <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />}
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {session ? (
@@ -325,92 +374,7 @@ export default function App() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.title}>Cash Books</Text>
-              {!hasProfiles && (
-                <Text style={styles.emptyHint}>
-                  No project configured yet. Add a project profile to continue.
-                </Text>
-              )}
-              {hasMultipleProfiles && (
-                <View style={styles.profilePicker}>
-                  <Text style={styles.subtitle}>Project</Text>
-                  <View style={styles.profileRow}>
-                    {mobileProjectProfiles.map((profile) => {
-                      const active = profile.id === selectedProfileId;
-                      return (
-                        <TouchableOpacity
-                          key={profile.id}
-                          style={[
-                            styles.profileChip,
-                            active && styles.profileChipActive,
-                          ]}
-                          onPress={() => {
-                            void setActiveMobileProfile(profile.id);
-                            setSelectedProfileId(profile.id);
-                          }}
-                        >
-                          <Text
-                            style={[
-                              styles.profileChipText,
-                              active && styles.profileChipTextActive,
-                            ]}
-                          >
-                            {profile.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
-              <View style={styles.addProjectCard}>
-                <Text style={styles.subtitle}>Add Project (one-time)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Project ref (abcd1234...)"
-                  autoCapitalize="none"
-                  value={newProjectRef}
-                  onChangeText={setNewProjectRef}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Legacy Anon Key (not Secret Key)"
-                  autoCapitalize="none"
-                  value={newProjectKey}
-                  onChangeText={setNewProjectKey}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Optional label"
-                  autoCapitalize="words"
-                  value={newProjectLabel}
-                  onChangeText={setNewProjectLabel}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.addProjectButton,
-                    validatingProject && styles.addProjectButtonDisabled,
-                  ]}
-                  onPress={addProjectProfile}
-                  disabled={validatingProject}
-                >
-                  <Text style={styles.addProjectText}>
-                    {validatingProject ? 'Validating...' : 'Add Project Profile'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.resetProfilesButton}
-                  onPress={resetProjectProfiles}
-                >
-                  <Text style={styles.resetProfilesText}>Reset Saved Profiles</Text>
-                </TouchableOpacity>
-                {!!projectStatus && (
-                  <Text style={styles.projectStatus}>{projectStatus}</Text>
-                )}
-              </View>
-              {hasProfiles && (
-                <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
-              )}
+              {authContent}
             </ScrollView>
           ) : (
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -419,48 +383,7 @@ export default function App() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.title}>Cash Books</Text>
-                {!hasProfiles && (
-                  <Text style={styles.emptyHint}>
-                    No project configured yet. Add a project profile to continue.
-                  </Text>
-                )}
-                {hasMultipleProfiles && (
-                  <View style={styles.profilePicker}>
-                    <Text style={styles.subtitle}>Project</Text>
-                    <View style={styles.profileRow}>
-                      {mobileProjectProfiles.map((profile) => {
-                        const active = profile.id === selectedProfileId;
-                        return (
-                          <TouchableOpacity
-                            key={profile.id}
-                            style={[
-                              styles.profileChip,
-                              active && styles.profileChipActive,
-                            ]}
-                            onPress={() => {
-                              void setActiveMobileProfile(profile.id);
-                              setSelectedProfileId(profile.id);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.profileChipText,
-                                active && styles.profileChipTextActive,
-                              ]}
-                            >
-                              {profile.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-                {addProjectForm}
-                {hasProfiles && (
-                  <AuthScreen activeProfileLabel={selectedProfile?.label ?? 'Project'} />
-                )}
+                {authContent}
               </ScrollView>
             </TouchableWithoutFeedback>
           )}

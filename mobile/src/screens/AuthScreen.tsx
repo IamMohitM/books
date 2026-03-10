@@ -27,23 +27,6 @@ export default function AuthScreen({
       .trim()
       .toLowerCase();
 
-  const mapSignInErrorMessage = (message: string) => {
-    const normalized = String(message ?? '').toLowerCase();
-    if (normalized.includes('invalid login credentials')) {
-      return "Incorrect password, or user doesn't exist in this project yet. If new, sign up first.";
-    }
-
-    if (normalized.includes('email not confirmed')) {
-      return 'Email not confirmed yet. Confirm your email first, then sign in.';
-    }
-
-    if (normalized.includes('too many requests')) {
-      return 'Too many attempts. Please wait and try again.';
-    }
-
-    return message;
-  };
-
   const signIn = async () => {
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !password) {

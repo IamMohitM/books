@@ -108,15 +108,17 @@ export default function TransactionsScreen({ companyId, refreshKey }: { companyI
         const summary = cashMap.get(entry.id) ?? lineMap.get(entry.id);
         const lines = lineGroups.get(entry.id) ?? [];
         const mainAccountName = summary?.account_name ?? null;
-        const secondary = lines
-          .filter(
-            (line) =>
-              !!line.account_name &&
-              line.account_name !== mainAccountName
-          )
-          .sort((a, b) => b.amount - a.amount)
-          .map((line) => line.account_name)
-          .find((name): name is string => !!name);
+        let secondary: string | null = null;
+        let secondaryAmount = -1;
+        lines.forEach((line) => {
+          if (!line.account_name || line.account_name === mainAccountName) {
+            return;
+          }
+          if (line.amount > secondaryAmount) {
+            secondaryAmount = line.amount;
+            secondary = line.account_name;
+          }
+        });
         return {
           ...entry,
           main_account_name: mainAccountName,

@@ -65,7 +65,10 @@ export default function SettingsScreen({
     }
 
     let inviteError: string | null = null;
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
+      timeoutId = setTimeout(() => controller.abort(), 15000);
       const response = await fetch(`${supabasePublicUrl}/functions/v1/invite-user`, {
         method: 'POST',
         headers: {
@@ -78,6 +81,7 @@ export default function SettingsScreen({
           role: 'editor',
           accessToken: session.access_token,
         }),
+        signal: controller.signal,
       });
 
       const text = await response.text();
@@ -101,7 +105,15 @@ export default function SettingsScreen({
         }
       }
     } catch (err) {
-      inviteError = err instanceof Error ? err.message : 'Invite failed.';
+      if (err instanceof Error && err.name === 'AbortError') {
+        inviteError = 'Invite request timed out. Please try again.';
+      } else {
+        inviteError = err instanceof Error ? err.message : 'Invite failed.';
+      }
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
 
     setInviting(false);
