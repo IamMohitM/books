@@ -31,6 +31,8 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountsSource, setAccountsSource] = useState<'accounts' | 'ledger' | null>(null);
   const [search, setSearch] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<AccountRow | null>(null);
 
@@ -65,15 +67,48 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
   useEffect(() => {
     const loadAccounts = async () => {
       setAccountsLoading(true);
-      const { data } = await supabase
-        .from('accounts')
-        .select('id,name')
-        .eq('company_id', companyId)
+      setAccountsError(null);
+      const { data, error } = await supabase
+        .rpc('fetch_accounts_for_company', { target_company: companyId })
         .order('name', { ascending: true });
 
-      if (data) {
+      if (!error && data && data.length > 0) {
         setAccounts(data as AccountRow[]);
+        setAccountsSource('accounts');
+        setAccountsLoading(false);
+        return;
       }
+
+      if (error) {
+        setAccountsError(error.message);
+      }
+
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('ledger_entries')
+        .select('account_id,account_name')
+        .eq('company_id', companyId)
+        .eq('submitted', true)
+        .order('account_name', { ascending: true });
+
+      if (ledgerError) {
+        setAccountsError(ledgerError.message);
+        setAccounts([]);
+        setAccountsSource(null);
+        setAccountsLoading(false);
+        return;
+      }
+
+      const unique = new Map<string, AccountRow>();
+      (ledgerData ?? []).forEach((row: any) => {
+        const id = String(row.account_id ?? '').trim();
+        const name = String(row.account_name ?? '').trim();
+        if (id && name && !unique.has(id)) {
+          unique.set(id, { id, name });
+        }
+      });
+      const fallback = Array.from(unique.values());
+      setAccounts(fallback);
+      setAccountsSource('ledger');
       setAccountsLoading(false);
     };
 
@@ -161,6 +196,16 @@ export default function LedgerScreen({ companyId }: { companyId: string }) {
             onChangeText={setSearch}
             autoCapitalize="none"
           />
+          {!!accountsError && (
+            <Text style={styles.errorText}>
+              Unable to load accounts directly. {accountsError}
+            </Text>
+          )}
+          {accountsSource === 'ledger' && (
+            <Text style={styles.infoText}>
+              Showing accounts from transactions. Ask an owner to verify account access.
+            </Text>
+          )}
           {accountsLoading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="small" color="#0f172a" />
@@ -281,6 +326,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 15,
   },
+  errorText: { fontSize: 12, color: '#dc2626', marginTop: 8 },
+  infoText: { fontSize: 12, color: '#475569', marginTop: 6 },
   accountList: { marginTop: 10 },
   accountRow: {
     borderWidth: 1,

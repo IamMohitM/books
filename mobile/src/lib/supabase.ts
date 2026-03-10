@@ -21,6 +21,10 @@ const PROFILE_STORE_FILE = `${
   FileSystem.documentDirectory ?? 'file:///tmp/'
 }sync-project-profiles.json`;
 const WEB_PROFILE_STORE_KEY = 'sync-project-profiles';
+const REMOVED_ENV_STORE_FILE = `${
+  FileSystem.documentDirectory ?? 'file:///tmp/'
+}sync-project-profiles-removed.json`;
+const WEB_REMOVED_ENV_KEY = 'sync-project-profiles-removed';
 const PROFILE_VALIDATION_TIMEOUT_MS = 6_000;
 
 function getExpoEnv(name: string): string {
@@ -140,6 +144,41 @@ const envProfiles = parseProfilesFromEnv();
 export let mobileProjectProfiles: MobileProjectProfile[] = [...envProfiles];
 let profilesEpoch = 0;
 
+async function loadRemovedEnvProjectRefs(): Promise<Set<string>> {
+  try {
+    if (Platform.OS === 'web') {
+      const raw =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem(WEB_REMOVED_ENV_KEY)
+          : null;
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw) as string[];
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    }
+
+    const info = await FileSystem.getInfoAsync(REMOVED_ENV_STORE_FILE);
+    if (!info.exists) return new Set();
+    const content = await FileSystem.readAsStringAsync(REMOVED_ENV_STORE_FILE);
+    const parsed = JSON.parse(content) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+async function persistRemovedEnvProjectRefs(refs: Set<string>) {
+  const json = JSON.stringify(Array.from(refs), null, 2);
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(WEB_REMOVED_ENV_KEY, json);
+    }
+    return;
+  }
+  await FileSystem.writeAsStringAsync(REMOVED_ENV_STORE_FILE, json, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
 function getStorageKeyForUrl(url: string) {
   try {
     const hostname = new URL(url).hostname;
@@ -203,6 +242,11 @@ export async function setActiveMobileProfile(profileId: string): Promise<Supabas
     throw new Error(`Unknown profile: ${profileId}`);
   }
 
+  const removedEnvRefs = await loadRemovedEnvProjectRefs();
+  if (removedEnvRefs.delete(nextProfile.projectRef)) {
+    await persistRemovedEnvProjectRefs(removedEnvRefs);
+  }
+
   activeProfile = nextProfile;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   supabase = createSupabaseClient(activeProfile.url, activeProfile.anonKey);
@@ -214,6 +258,10 @@ export async function setActiveMobileProfile(profileId: string): Promise<Supabas
 export async function loadMobileProjectProfilesFromDisk() {
   const startEpoch = profilesEpoch;
   try {
+    const removedEnvRefs = await loadRemovedEnvProjectRefs();
+    const baseEnvProfiles = envProfiles.filter(
+      (profile) => !removedEnvRefs.has(profile.projectRef)
+    );
     if (Platform.OS === 'web') {
       const raw =
         typeof localStorage !== 'undefined'
@@ -223,6 +271,7 @@ export async function loadMobileProjectProfilesFromDisk() {
         return mobileProjectProfiles;
       }
       if (!raw) {
+        mobileProjectProfiles = [...baseEnvProfiles];
         return mobileProjectProfiles;
       }
       const parsed = JSON.parse(raw) as Array<Partial<MobileProjectProfile>>;
@@ -235,10 +284,11 @@ export async function loadMobileProjectProfilesFromDisk() {
         : [];
 
       if (!diskRows.length) {
+        mobileProjectProfiles = [...baseEnvProfiles];
         return mobileProjectProfiles;
       }
 
-      mobileProjectProfiles = mergeProfiles(envProfiles, diskRows);
+      mobileProjectProfiles = mergeProfiles(baseEnvProfiles, diskRows);
 
       if (activeProfile && !mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
         activeProfile = mobileProjectProfiles[0] ?? null;
@@ -259,6 +309,7 @@ export async function loadMobileProjectProfilesFromDisk() {
       return mobileProjectProfiles;
     }
     if (!info.exists) {
+      mobileProjectProfiles = [...baseEnvProfiles];
       return mobileProjectProfiles;
     }
 
@@ -276,10 +327,11 @@ export async function loadMobileProjectProfilesFromDisk() {
       : [];
 
     if (!diskRows.length) {
+      mobileProjectProfiles = [...baseEnvProfiles];
       return mobileProjectProfiles;
     }
 
-    mobileProjectProfiles = mergeProfiles(envProfiles, diskRows);
+    mobileProjectProfiles = mergeProfiles(baseEnvProfiles, diskRows);
 
     if (activeProfile && !mobileProjectProfiles.find((row) => row.id === activeProfile.id)) {
       activeProfile = mobileProjectProfiles[0] ?? null;
@@ -315,18 +367,17 @@ export async function resetMobileProjectProfilesToDefault() {
   profilesEpoch += 1;
 
   // Clear in-memory state FIRST
-  mobileProjectProfiles =
-    envProfiles.length > 0 ? [envProfiles[0]!] : [...envProfiles];
-  activeProfile = mobileProjectProfiles[0] ?? null;
-  supabasePublicAnonKey = activeProfile?.anonKey ?? '';
-  supabasePublicUrl = activeProfile?.url ?? '';
-  supabase = activeProfile
-    ? createSupabaseClient(activeProfile.url, activeProfile.anonKey)
-    : null;
+  mobileProjectProfiles = [];
+  activeProfile = null;
+  supabasePublicAnonKey = '';
+  supabasePublicUrl = '';
+  supabase = null;
 
   if (Platform.OS === 'web') {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(WEB_PROFILE_STORE_KEY);
+      const removed = Array.from(envProfiles.map((profile) => profile.projectRef));
+      localStorage.setItem(WEB_REMOVED_ENV_KEY, JSON.stringify(removed));
     }
   } else {
     // Sign out before resetting
@@ -338,11 +389,15 @@ export async function resetMobileProjectProfilesToDefault() {
       console.warn('Error signing out during reset:', error);
     }
 
-    await setActiveMobileProfile(activeProfile.id);
-
-    // Delete file and VERIFY deletion succeeded
+    // Delete files and VERIFY deletion succeeded
     try {
       await FileSystem.deleteAsync(PROFILE_STORE_FILE, { idempotent: true });
+      const removed = Array.from(envProfiles.map((profile) => profile.projectRef));
+      await FileSystem.writeAsStringAsync(
+        REMOVED_ENV_STORE_FILE,
+        JSON.stringify(removed, null, 2),
+        { encoding: FileSystem.EncodingType.UTF8 }
+      );
 
       // Verify file was actually deleted
       const info = await FileSystem.getInfoAsync(PROFILE_STORE_FILE);
@@ -505,18 +560,15 @@ export function addOrUpdateMobileProjectProfile(input: {
   return profile;
 }
 
-export function removeMobileProjectProfile(profileId: string) {
+export async function removeMobileProjectProfile(profileId: string) {
   const target = mobileProjectProfiles.find((profile) => profile.id === profileId);
   if (!target) {
     throw new Error('Profile not found');
   }
 
-  const isEnvProfile = envProfiles.some(
-    (profile) => profile.projectRef === target.projectRef
-  );
-  if (isEnvProfile) {
-    throw new Error('Default environment project cannot be removed.');
-  }
+  const removedEnvRefs = await loadRemovedEnvProjectRefs();
+  removedEnvRefs.add(target.projectRef);
+  await persistRemovedEnvProjectRefs(removedEnvRefs);
 
   mobileProjectProfiles = mobileProjectProfiles.filter(
     (profile) => profile.id !== profileId

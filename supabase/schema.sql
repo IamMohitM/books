@@ -145,6 +145,9 @@ create or replace function public.is_company_member(target_company uuid)
 returns boolean
 language sql
 stable
+security definer
+set search_path = public, pg_temp
+set row_security = off
 as $$
   select exists (
     select 1 from public.company_users cu
@@ -152,6 +155,42 @@ as $$
       and cu.user_id = auth.uid()
   );
 $$;
+
+-- Explicit no-RLS helper for policies to avoid recursive RLS evaluation
+create or replace function public.is_company_member_no_rls(target_company uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+set row_security = off
+as $$
+  select exists (
+    select 1 from public.company_users cu
+    where cu.company_id = target_company
+      and cu.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.fetch_accounts_for_company(target_company uuid)
+returns setof public.accounts
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+set row_security = off
+as $$
+  select a.*
+  from public.accounts a
+  where a.company_id = target_company
+    and exists (
+      select 1 from public.company_users cu
+      where cu.company_id = target_company
+        and cu.user_id = auth.uid()
+    );
+$$;
+
+grant execute on function public.fetch_accounts_for_company(uuid) to anon, authenticated;
 
 create or replace function public.ensure_external_key()
 returns trigger

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getSupabaseClient } from '../lib/supabase';
 import QuickAddModal from '../components/QuickAddModal';
@@ -11,6 +12,13 @@ import CashSummaryScreen from './CashSummaryScreen';
 type TabKey = 'transactions' | 'ledger' | 'cash' | 'settings';
 
 type CompanyUser = { company_id: string };
+
+const getCompanySelectionKey = (userId: string) => `mobile-company-selection-${userId}`;
+const formatCompanyId = (companyId: string) => {
+  if (!companyId) return 'Unknown';
+  if (companyId.length <= 8) return companyId;
+  return `${companyId.slice(0, 4)}...${companyId.slice(-4)}`;
+};
 
 export default function AppShell({
   session,
@@ -25,15 +33,40 @@ export default function AppShell({
 }) {
   const [activeTab, setActiveTab] = useState<TabKey>('transactions');
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [companyMessage, setCompanyMessage] = useState('');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+
+  const persistCompanySelection = async (nextCompanyId: string) => {
+    const currentUserId = String(session?.user?.id ?? '').trim();
+    if (!currentUserId) return;
+    const storageKey = getCompanySelectionKey(currentUserId);
+    try {
+      if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(storageKey, nextCompanyId);
+      } else {
+        await AsyncStorage.setItem(storageKey, nextCompanyId);
+      }
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const selectCompany = async (nextCompanyId: string) => {
+    setCompanyId(nextCompanyId);
+    setCompanyMessage('');
+    setShowCompanyPicker(false);
+    await persistCompanySelection(nextCompanyId);
+  };
 
   useEffect(() => {
     const loadCompany = async () => {
       const currentUserId = String(session?.user?.id ?? '').trim();
       if (!currentUserId) {
         setCompanyId(null);
+        setCompanyOptions([]);
         setCompanyMessage('No signed-in user session found. Please sign in again.');
         return;
       }
@@ -41,22 +74,42 @@ export default function AppShell({
       const { data, error } = await getSupabaseClient()
         .from('company_users')
         .select('company_id')
-        .eq('user_id', currentUserId)
-        .limit(1);
+        .eq('user_id', currentUserId);
 
       if (error) {
         setCompanyId(null);
+        setCompanyOptions([]);
         setCompanyMessage('Unable to load company access right now. Pull to retry.');
         return;
       }
 
-      if (data && data.length > 0) {
-        setCompanyId((data[0] as CompanyUser).company_id);
+      const rows = (data ?? []) as CompanyUser[];
+      const uniqueCompanyIds = Array.from(
+        new Set(rows.map((row) => String(row.company_id ?? '').trim()).filter(Boolean))
+      );
+      if (uniqueCompanyIds.length > 0) {
+        setCompanyOptions(uniqueCompanyIds);
+        let preferred = uniqueCompanyIds[0];
+        try {
+          const storageKey = getCompanySelectionKey(currentUserId);
+          const stored =
+            Platform.OS === 'web' && typeof localStorage !== 'undefined'
+              ? localStorage.getItem(storageKey)
+              : await AsyncStorage.getItem(storageKey);
+        if (stored && uniqueCompanyIds.includes(stored)) {
+          preferred = stored;
+        }
+      } catch {
+        // Fall back to first company.
+      }
+        setCompanyId(preferred);
         setCompanyMessage('');
+        await persistCompanySelection(preferred);
         return;
       }
 
       setCompanyId(null);
+      setCompanyOptions([]);
       setCompanyMessage(
         'Your account exists, but this email is not yet assigned to a company in this project. Ask an owner to invite this email as collaborator, then tap Refresh Access.'
       );
@@ -83,15 +136,19 @@ export default function AppShell({
               const { data, error } = await getSupabaseClient()
                 .from('company_users')
                 .select('company_id')
-                .eq('user_id', currentUserId)
-                .limit(1);
+                .eq('user_id', currentUserId);
               if (error) {
                 setCompanyMessage(`Access refresh failed: ${error.message}`);
                 return;
               }
-              if (data && data.length > 0) {
-                setCompanyId((data[0] as CompanyUser).company_id);
-                setCompanyMessage('');
+              const rows = (data ?? []) as CompanyUser[];
+              const uniqueCompanyIds = Array.from(
+                new Set(rows.map((row) => String(row.company_id ?? '').trim()).filter(Boolean))
+              );
+              if (uniqueCompanyIds.length > 0) {
+                setCompanyOptions(uniqueCompanyIds);
+                const preferred = uniqueCompanyIds[0];
+                await selectCompany(preferred);
                 return;
               }
 
@@ -122,7 +179,8 @@ export default function AppShell({
       );
     }
 
-    if (activeTab === 'transactions') return <TransactionsScreen companyId={companyId} refreshKey={refreshKey} />;
+    if (activeTab === 'transactions')
+      return <TransactionsScreen companyId={companyId} refreshKey={refreshKey} />;
     if (activeTab === 'ledger') return <LedgerScreen companyId={companyId} />;
     if (activeTab === 'cash') return <CashSummaryScreen companyId={companyId} />;
     return (
@@ -142,6 +200,17 @@ export default function AppShell({
       <Text style={styles.profileHint}>
         Signed in as: {session?.user?.email ?? 'Unknown user'}
       </Text>
+      {companyId && companyOptions.length > 1 && (
+        <View style={styles.companyRow}>
+          <Text style={styles.companyLabel}>Company: {formatCompanyId(companyId)}</Text>
+          <TouchableOpacity
+            style={styles.companySwitchButton}
+            onPress={() => setShowCompanyPicker(true)}
+          >
+            <Text style={styles.companySwitchText}>Switch Company</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={styles.content}>{content}</View>
       <View style={styles.tabs}>
         <Tab
@@ -183,6 +252,34 @@ export default function AppShell({
           onCreated={() => setRefreshKey((prev) => prev + 1)}
         />
       )}
+      <Modal visible={showCompanyPicker} animationType="slide" transparent>
+        <View style={styles.companyPickerOverlay}>
+          <View style={styles.companyPickerCard}>
+            <Text style={styles.companyPickerTitle}>Select Company</Text>
+            {companyOptions.map((id) => {
+              const active = id === companyId;
+              return (
+                <TouchableOpacity
+                  key={id}
+                  style={[styles.companyPickerRow, active && styles.companyPickerRowActive]}
+                  onPress={() => selectCompany(id)}
+                >
+                  <Text style={[styles.companyPickerText, active && styles.companyPickerTextActive]}>
+                    {formatCompanyId(id)}
+                  </Text>
+                  {active && <Text style={styles.companyPickerActive}>Active</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.companyPickerClose}
+              onPress={() => setShowCompanyPicker(false)}
+            >
+              <Text style={styles.companyPickerCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -227,6 +324,24 @@ const styles = StyleSheet.create({
   },
   header: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
   profileHint: { fontSize: 14, color: '#64748b', marginTop: -6, marginBottom: 8 },
+  companyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  companyLabel: { fontSize: 13, color: '#0f172a', fontWeight: '600' },
+  companySwitchButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+  },
+  companySwitchText: { fontSize: 12, color: '#f8fafc', fontWeight: '700' },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -324,4 +439,40 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   quickAddText: { color: '#0f172a', fontSize: 32, fontWeight: '800', marginTop: -2 },
+  companyPickerOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    padding: 20,
+  },
+  companyPickerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    gap: 10,
+  },
+  companyPickerTitle: { fontSize: 18, fontWeight: '700' },
+  companyPickerRow: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#f8fafc',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  companyPickerRowActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  companyPickerText: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  companyPickerTextActive: { color: '#f8fafc' },
+  companyPickerActive: { fontSize: 12, color: '#f8fafc', fontWeight: '700' },
+  companyPickerClose: {
+    marginTop: 6,
+    borderRadius: 10,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  companyPickerCloseText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
 });

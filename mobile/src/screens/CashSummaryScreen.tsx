@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,6 +40,23 @@ const toLocalISODate = (value: Date) => {
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const parseISODate = (value: string) => {
+  const [year, month, day] = String(value ?? '')
+    .split('-')
+    .map((part) => Number(part));
+  if (!year || !month || !day) {
+    return new Date();
+  }
+
+  return new Date(year, month - 1, day);
+};
+
+const formatDateDMYDash = (value: string) => {
+  const [year, month, day] = String(value ?? '').split('-');
+  if (!year || !month || !day) return value;
+  return `${day}-${month}-${year}`;
 };
 
 const getDefaultFromDate = () => {
@@ -89,6 +107,8 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
   const [loadingOverShort, setLoadingOverShort] = useState(false);
   const [dateFrom, setDateFrom] = useState(getDefaultFromDate());
   const [dateTo, setDateTo] = useState(getDefaultToDate());
+  const [activeRangePicker, setActiveRangePicker] = useState<'from' | 'to' | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(parseISODate(getDefaultToDate()));
   const [accountSearch, setAccountSearch] = useState('');
   const [selectedOverShortAccount, setSelectedOverShortAccount] = useState<AccountRow | null>(
     null
@@ -99,9 +119,7 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
     const loadAccounts = async () => {
       setLoadingAccounts(true);
       const { data: accountData } = await supabase
-        .from('accounts')
-        .select('id,name,account_type,is_group')
-        .eq('company_id', companyId)
+        .rpc('fetch_accounts_for_company', { target_company: companyId })
         .eq('is_group', false)
         .order('name', { ascending: true });
 
@@ -229,6 +247,16 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
     return accounts.filter((row) => row.name.toLowerCase().includes(query));
   }, [accountSearch, accounts]);
 
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const monthStart = new Date(calendarYear, calendarMonthIndex, 1);
+  const monthEnd = new Date(calendarYear, calendarMonthIndex + 1, 0);
+  const monthDays = monthEnd.getDate();
+  const startWeekday = monthStart.getDay();
+  const leadingBlanks = Array.from({ length: startWeekday }, (_, i) => `blank-${i}`);
+  const dayCells = Array.from({ length: monthDays }, (_, i) => i + 1);
+  const selectedDate = activeRangePicker === 'from' ? dateFrom : dateTo;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Cash In Hand Summary</Text>
@@ -236,27 +264,125 @@ export default function CashSummaryScreen({ companyId }: { companyId: string }) 
       <View style={styles.rangeCard}>
         <View style={styles.rangeField}>
           <Text style={styles.rangeLabel}>From</Text>
-          <TextInput
+          <TouchableOpacity
             style={styles.rangeInput}
-            value={dateFrom}
-            onChangeText={setDateFrom}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
-          />
+            onPress={() => {
+              setActiveRangePicker('from');
+              setCalendarMonth(parseISODate(dateFrom));
+            }}
+          >
+            <Text style={styles.rangeValue}>{formatDateDMYDash(dateFrom)}</Text>
+          </TouchableOpacity>
           <Text style={styles.rangeHint}>{formatDateDMY(dateFrom)}</Text>
         </View>
         <View style={styles.rangeField}>
           <Text style={styles.rangeLabel}>To</Text>
-          <TextInput
+          <TouchableOpacity
             style={styles.rangeInput}
-            value={dateTo}
-            onChangeText={setDateTo}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
-          />
+            onPress={() => {
+              setActiveRangePicker('to');
+              setCalendarMonth(parseISODate(dateTo));
+            }}
+          >
+            <Text style={styles.rangeValue}>{formatDateDMYDash(dateTo)}</Text>
+          </TouchableOpacity>
           <Text style={styles.rangeHint}>{formatDateDMY(dateTo)}</Text>
         </View>
       </View>
+      <Modal visible={activeRangePicker !== null} animationType="slide" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                style={styles.calendarNav}
+                onPress={() =>
+                  setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1))
+                }
+              >
+                <Text style={styles.calendarNavText}>{'<'}</Text>
+              </TouchableOpacity>
+              <Text style={styles.calendarMonthLabel}>
+                {calendarMonth.toLocaleString('default', {
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </Text>
+              <TouchableOpacity
+                style={styles.calendarNav}
+                onPress={() =>
+                  setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1))
+                }
+              >
+                <Text style={styles.calendarNavText}>{'>'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.calendarWeekdays}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <Text key={`${day}-${index}`} style={styles.calendarWeekday}>
+                  {day}
+                </Text>
+              ))}
+            </View>
+            <View style={styles.calendarGrid}>
+              {leadingBlanks.map((key) => (
+                <View key={key} style={styles.calendarCell} />
+              ))}
+              {dayCells.map((day) => {
+                const iso = toLocalISODate(
+                  new Date(calendarYear, calendarMonthIndex, day)
+                );
+                const selected = iso === selectedDate;
+                return (
+                  <TouchableOpacity
+                    key={iso}
+                    style={[styles.calendarCell, selected && styles.calendarCellActive]}
+                    onPress={() => {
+                      if (activeRangePicker === 'from') {
+                        setDateFrom(iso);
+                      } else {
+                        setDateTo(iso);
+                      }
+                      setActiveRangePicker(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarCellText,
+                        selected && styles.calendarCellTextActive,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.calendarFooter}>
+              <TouchableOpacity
+                style={styles.todayButton}
+                onPress={() => {
+                  const today = toLocalISODate(new Date());
+                  if (activeRangePicker === 'from') {
+                    setDateFrom(today);
+                  } else {
+                    setDateTo(today);
+                  }
+                  setCalendarMonth(parseISODate(today));
+                  setActiveRangePicker(null);
+                }}
+              >
+                <Text style={styles.todayButtonText}>Today</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setActiveRangePicker(null)}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.tableHeader}>
         <Text style={[styles.tableHeaderCell, styles.periodCol]}>Period</Text>
@@ -391,8 +517,75 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 6,
     fontSize: 16,
+    backgroundColor: '#fff',
   },
+  rangeValue: { fontSize: 16, color: '#0f172a', fontWeight: '600' },
   rangeHint: { fontSize: 13, color: '#94a3b8', marginTop: 4 },
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    padding: 20,
+  },
+  calendarCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 18,
+    gap: 12,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  calendarNav: { padding: 6 },
+  calendarNavText: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  calendarMonthLabel: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  calendarWeekdays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  calendarWeekday: {
+    width: 34,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  calendarCell: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarCellActive: { backgroundColor: '#0f172a' },
+  calendarCellText: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  calendarCellTextActive: { color: '#f8fafc' },
+  calendarFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#e2e8f0',
+  },
+  todayButtonText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  closeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0f172a',
+  },
+  closeButtonText: { fontSize: 13, fontWeight: '700', color: '#f8fafc' },
   searchInput: {
     borderWidth: 1,
     borderColor: '#e2e8f0',

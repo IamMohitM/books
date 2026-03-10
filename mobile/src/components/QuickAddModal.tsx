@@ -58,6 +58,8 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
   const [debitAccountId, setDebitAccountId] = useState<string>('');
   const [creditAccountId, setCreditAccountId] = useState<string>('');
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountsSource, setAccountsSource] = useState<'accounts' | 'ledger' | null>(null);
   const [debitSearch, setDebitSearch] = useState('');
   const [creditSearch, setCreditSearch] = useState('');
   const [debitFocused, setDebitFocused] = useState(false);
@@ -77,16 +79,57 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
 
   useEffect(() => {
     const loadAccounts = async () => {
-      const { data } = await supabase
-        .from('accounts')
-        .select('id,name,is_group,root_type,account_type')
-        .eq('company_id', companyId)
+      setAccountsError(null);
+      const { data, error } = await supabase
+        .rpc('fetch_accounts_for_company', { target_company: companyId })
         .order('name', { ascending: true });
 
-      if (data && data.length > 0) {
+      if (!error && data && data.length > 0) {
         setAccounts(data as Account[]);
+        setAccountsSource('accounts');
         setDebitAccountId((data[0] as Account).id);
         setCreditAccountId((data[0] as Account).id);
+        return;
+      }
+
+      if (error) {
+        setAccountsError(error.message);
+      }
+
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('ledger_entries')
+        .select('account_id,account_name')
+        .eq('company_id', companyId)
+        .eq('submitted', true)
+        .order('account_name', { ascending: true });
+
+      if (ledgerError) {
+        setAccountsError(ledgerError.message);
+        setAccounts([]);
+        setAccountsSource(null);
+        return;
+      }
+
+      const unique = new Map<string, Account>();
+      (ledgerData ?? []).forEach((row: any) => {
+        const id = String(row.account_id ?? '').trim();
+        const name = String(row.account_name ?? '').trim();
+        if (id && name && !unique.has(id)) {
+          unique.set(id, {
+            id,
+            name,
+            is_group: false,
+            root_type: null,
+            account_type: null,
+          });
+        }
+      });
+      const fallback = Array.from(unique.values());
+      setAccounts(fallback);
+      setAccountsSource('ledger');
+      if (fallback[0]) {
+        setDebitAccountId(fallback[0].id);
+        setCreditAccountId(fallback[0].id);
       }
     };
 
@@ -261,6 +304,16 @@ export default function QuickAddModal({ companyId, visible, onClose, onCreated }
     <View style={styles.modal}>
       <View style={styles.modalContent}>
               <Text style={styles.title}>Quick Add</Text>
+              {!!accountsError && (
+                <Text style={styles.errorText}>
+                  Unable to load accounts directly. {accountsError}
+                </Text>
+              )}
+              {accountsSource === 'ledger' && (
+                <Text style={styles.infoText}>
+                  Showing accounts from transactions. Ask an owner to verify account access.
+                </Text>
+              )}
               <TextInput
                 style={styles.input}
                 placeholder="Amount"
@@ -783,6 +836,7 @@ const styles = StyleSheet.create({
   parentItemActive: { backgroundColor: '#e2e8f0' },
   parentItemText: { fontSize: 15 },
   errorText: { fontSize: 13, color: '#dc2626' },
+  infoText: { fontSize: 13, color: '#475569' },
   successText: { fontSize: 13, color: '#16a34a' },
   emptyText: { fontSize: 13, color: '#94a3b8', paddingVertical: 8 },
   matchRow: {

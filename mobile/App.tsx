@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import {
   addOrUpdateMobileProjectProfile,
+  getSupabaseClient,
   loadMobileProjectProfilesFromDisk,
   mobileProjectProfiles,
   persistMobileProjectProfilesToDisk,
@@ -30,6 +31,8 @@ import AppShell from './src/screens/AppShell';
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [profilesReady, setProfilesReady] = useState(false);
+  const [, setProfilesEpoch] = useState(0);
+  const [profilesSnapshot, setProfilesSnapshot] = useState([...mobileProjectProfiles]);
   const [selectedProfileId, setSelectedProfileId] = useState(
     mobileProjectProfiles[0]?.id ?? ''
   );
@@ -51,6 +54,19 @@ export default function App() {
     Alert.alert(title, message);
   };
 
+  const confirmAlert = (title: string, message: string): Promise<boolean> => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'OK', onPress: () => resolve(true) },
+      ]);
+    });
+  };
+
   useEffect(() => {
     let mounted = true;
     const hydrate = async () => {
@@ -65,6 +81,8 @@ export default function App() {
       if (!nextActive && mobileProjectProfiles[0]) {
         setSelectedProfileId(mobileProjectProfiles[0].id);
       }
+      setProfilesSnapshot([...mobileProjectProfiles]);
+      setProfilesEpoch((value) => value + 1);
       setProfilesReady(true);
     };
 
@@ -79,7 +97,7 @@ export default function App() {
       return;
     }
 
-    if (!mobileProjectProfiles.find((profile) => profile.id === selectedProfileId)) {
+    if (!profilesSnapshot.find((profile) => profile.id === selectedProfileId)) {
       return;
     }
 
@@ -138,17 +156,17 @@ export default function App() {
     };
   }, [profilesReady, selectedProfileId]);
 
-  const hasProfiles = mobileProjectProfiles.length > 0;
-  const hasMultipleProfiles = mobileProjectProfiles.length > 1;
+  const hasProfiles = profilesSnapshot.length > 0;
+  const hasMultipleProfiles = profilesSnapshot.length > 1;
   const selectedProfile =
-    mobileProjectProfiles.find((p) => p.id === selectedProfileId) ??
-    mobileProjectProfiles[0];
+    profilesSnapshot.find((p) => p.id === selectedProfileId) ??
+    profilesSnapshot[0];
 
   const profilePicker = (
     <View style={styles.profilePicker}>
       <Text style={styles.subtitle}>Project</Text>
       <View style={styles.profileRow}>
-        {mobileProjectProfiles.map((profile) => {
+        {profilesSnapshot.map((profile) => {
           const active = profile.id === selectedProfileId;
           return (
             <TouchableOpacity
@@ -198,12 +216,14 @@ export default function App() {
       await setActiveMobileProfile(profile.id);
       await persistMobileProjectProfilesToDisk();
       setSelectedProfileId(profile.id);
+      setProfilesSnapshot([...mobileProjectProfiles]);
+      setProfilesEpoch((value) => value + 1);
       setNewProjectRef('');
       setNewProjectKey('');
       setNewProjectLabel('');
       setShowAddProjectModal(false);
       setShowProjectSwitcher(false);
-      showAlert('Project added', `Added ${profile.label}`);
+      setProjectStatus(`Project added: ${profile.label}`);
     } catch (error) {
       showAlert('Unable to add project', (error as Error).message);
     } finally {
@@ -211,40 +231,31 @@ export default function App() {
     }
   };
 
-  const resetProjectProfiles = () => {
-    Alert.alert(
+  const resetProjectProfiles = async () => {
+    const confirmed = await confirmAlert(
       'Reset project profiles?',
-      'This will remove all saved profiles on this device and restore default profile from app environment.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await resetMobileProjectProfilesToDefault();
-
-              // Force complete refresh
-              const first = mobileProjectProfiles[0];
-              if (first) {
-                setSelectedProfileId(first.id);
-              }
-              setSession(null);
-
-              showAlert(
-                'Profiles Reset',
-                'All saved profiles cleared. App has been refreshed to default profile.'
-              );
-            } catch (error) {
-              showAlert(
-                'Reset Failed',
-                `Could not complete reset: ${(error as Error).message}`
-              );
-            }
-          },
-        },
-      ]
+      'This will remove all saved profiles on this device and clear any defaults.'
     );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await resetMobileProjectProfilesToDefault();
+
+      // Force complete refresh
+      setSelectedProfileId('');
+      setSession(null);
+      setProfilesSnapshot([...mobileProjectProfiles]);
+      setProfilesEpoch((value) => value + 1);
+
+      showAlert('Profiles Reset', 'All saved profiles cleared on this device.');
+    } catch (error) {
+      showAlert(
+        'Reset Failed',
+        `Could not complete reset: ${(error as Error).message}`
+      );
+    }
   };
 
   const openAddProjectModal = () => {
@@ -253,45 +264,57 @@ export default function App() {
     setShowAddProjectModal(true);
   };
 
-  const removeProjectProfile = (profileId: string) => {
+  const removeProjectProfile = async (profileId: string) => {
     const target = mobileProjectProfiles.find((profile) => profile.id === profileId);
     if (!target) {
       return;
     }
 
-    if (mobileProjectProfiles.length <= 1) {
-      showAlert('Cannot remove profile', 'At least one project profile is required.');
+    const isActive = profileId === selectedProfileId;
+    const isLast = mobileProjectProfiles.length <= 1;
+    const confirmTitle = isActive && isLast
+      ? `Remove ${target.label} and sign out?`
+      : `Remove ${target.label}?`;
+    const confirmMessage = isActive && isLast
+      ? 'This removes the last saved profile and signs you out of this project.'
+      : 'This removes only the saved profile from this device.';
+
+    const confirmed = await confirmAlert(confirmTitle, confirmMessage);
+    if (!confirmed) {
       return;
     }
 
-    if (profileId === selectedProfileId) {
-      showAlert(
-        'Switch project first',
-        'Switch to another project before removing the active one.'
-      );
-      return;
-    }
+    try {
+      if (isActive && isLast) {
+        await getSupabaseClient().auth.signOut();
+      }
 
-    Alert.alert(
-      `Remove ${target.label}?`,
-      'This removes only the saved profile from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              removeMobileProjectProfile(profileId);
-              await persistMobileProjectProfilesToDisk();
-              showAlert('Profile removed', `${target.label} was removed.`);
-            } catch (error) {
-              showAlert('Unable to remove profile', (error as Error).message);
-            }
-          },
-        },
-      ]
-    );
+      if (isActive && !isLast) {
+        const fallback = profilesSnapshot.find(
+          (profile) => profile.id !== profileId
+        );
+        if (!fallback) {
+          showAlert('Cannot remove profile', 'No alternate profile found.');
+          return;
+        }
+        const client = await setActiveMobileProfile(fallback.id);
+        setSelectedProfileId(fallback.id);
+        const { data } = await client.auth.getSession();
+        setSession(data.session);
+      }
+
+      await removeMobileProjectProfile(profileId);
+      await persistMobileProjectProfilesToDisk();
+      if (isActive && isLast) {
+        setSelectedProfileId('');
+        setSession(null);
+      }
+      setProfilesSnapshot([...mobileProjectProfiles]);
+      setProfilesEpoch((value) => value + 1);
+      showAlert('Profile removed', `${target.label} was removed.`);
+    } catch (error) {
+      showAlert('Unable to remove profile', (error as Error).message);
+    }
   };
 
   const addProjectForm = (
@@ -397,7 +420,7 @@ export default function App() {
               Select a project. You may be asked to sign in again.
             </Text>
             <View style={styles.switcherList}>
-              {mobileProjectProfiles.map((profile) => {
+              {profilesSnapshot.map((profile) => {
                 const active = profile.id === selectedProfileId;
                 return (
                   <View key={profile.id} style={styles.switcherRowWrap}>
