@@ -84,6 +84,7 @@ export enum ModelNameEnum {
   ERPNextSyncQueue = 'ERPNextSyncQueue',
   FetchFromERPNextQueue = 'FetchFromERPNextQueue',
   CloudSyncOutbox = 'CloudSyncOutbox',
+  CloudSyncInboundQueue = 'CloudSyncInboundQueue',
   CloudSyncCursor = 'CloudSyncCursor',
   CloudSyncState = 'CloudSyncState',
 }

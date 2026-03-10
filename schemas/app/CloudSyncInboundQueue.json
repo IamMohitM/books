@@ -1,0 +1,69 @@
+{
+  "name": "CloudSyncInboundQueue",
+  "label": "Cloud Sync Inbound Queue",
+  "naming": "random",
+  "fields": [
+    {
+      "fieldname": "seq",
+      "label": "Sequence",
+      "fieldtype": "Int",
+      "required": true
+    },
+    {
+      "fieldname": "docType",
+      "label": "Doc Type",
+      "fieldtype": "Select",
+      "options": [
+        { "value": "Account", "label": "Account" },
+        { "value": "Party", "label": "Party" },
+        { "value": "JournalEntry", "label": "Journal Entry" }
+      ],
+      "required": true
+    },
+    {
+      "fieldname": "operation",
+      "label": "Operation",
+      "fieldtype": "Select",
+      "options": [
+        { "value": "create", "label": "Create" },
+        { "value": "update", "label": "Update" },
+        { "value": "delete", "label": "Delete" }
+      ],
+      "required": true
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": [
+        { "value": "deferred", "label": "Deferred" },
+        { "value": "failed", "label": "Failed" }
+      ],
+      "default": "deferred",
+      "required": true
+    },
+    {
+      "fieldname": "attempts",
+      "label": "Attempts",
+      "fieldtype": "Int",
+      "default": 0,
+      "required": true
+    },
+    {
+      "fieldname": "nextRetryAt",
+      "label": "Next Retry At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "errorMessage",
+      "label": "Error Message",
+      "fieldtype": "Text"
+    },
+    {
+      "fieldname": "payload",
+      "label": "Payload",
+      "fieldtype": "Text",
+      "hidden": true
+    }
+  ]
+}

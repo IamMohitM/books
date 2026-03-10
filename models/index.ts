@@ -62,6 +62,7 @@ import { FetchFromERPNextQueue } from './baseModels/FetchFromERPNextQueue/FetchF
 import { IntegrationErrorLog } from './baseModels/IntegrationErrorLog/IntegrationErrorLog';
 import { ItemEnquiry } from './baseModels/ItemEnquiry/ItemEnquiry';
 import { CloudSyncOutbox } from './baseModels/CloudSyncOutbox/CloudSyncOutbox';
+import { CloudSyncInboundQueue } from './baseModels/CloudSyncInboundQueue/CloudSyncInboundQueue';
 import { CloudSyncCursor } from './baseModels/CloudSyncCursor/CloudSyncCursor';
 import { CloudSyncState } from './baseModels/CloudSyncState/CloudSyncState';
 
@@ -130,6 +131,7 @@ export const models = {
   ERPNextSyncSettings,
   ERPNextSyncQueue,
   FetchFromERPNextQueue,
+  CloudSyncInboundQueue,
   CloudSyncOutbox,
   CloudSyncCursor,
   CloudSyncState,

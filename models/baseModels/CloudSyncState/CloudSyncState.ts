@@ -5,6 +5,7 @@ export class CloudSyncState extends Doc {
   lastPushAt?: string;
   lastPullAt?: string;
   lastError?: string;
+  lastWarning?: string;
   lastReconciliationAt?: string;
   lastReconciliationStatus?: string;
   lastReconciliationSummary?: string;

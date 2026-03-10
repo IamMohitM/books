@@ -85,6 +85,7 @@ import FetchFromERPNextQueue from './app/FetchFromERPNextQueue.json';
 import IntegrationErrorLog from './app/IntegrationErrorLog.json';
 import ItemGroup from './app/ItemGroup.json';
 import CloudSyncOutbox from './app/CloudSyncOutbox.json';
+import CloudSyncInboundQueue from './app/CloudSyncInboundQueue.json';
 import CloudSyncCursor from './app/CloudSyncCursor.json';
 import CloudSyncState from './app/CloudSyncState.json';
 import { Schema, SchemaStub } from './types';
@@ -201,6 +202,7 @@ export const appSchemas: Schema[] | SchemaStub[] = [
   ERPNextSyncSettings as Schema,
   ERPNextSyncQueue as Schema,
   FetchFromERPNextQueue as Schema,
+  CloudSyncInboundQueue as Schema,
   CloudSyncOutbox as Schema,
   CloudSyncCursor as Schema,
   CloudSyncState as Schema,

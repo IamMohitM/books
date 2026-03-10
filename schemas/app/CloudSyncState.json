@@ -48,6 +48,11 @@
       "fieldtype": "Text"
     },
     {
+      "fieldname": "lastWarning",
+      "label": "Last Warning",
+      "fieldtype": "Text"
+    },
+    {
       "fieldname": "lastReconciliationAt",
       "label": "Last Reconciliation At",
       "fieldtype": "Datetime"
