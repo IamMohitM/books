@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act } from 'react-test-renderer';
 import QuickAddModal from '../src/components/QuickAddModal';
 import { supabase } from '../src/lib/supabase';
 
@@ -19,6 +20,7 @@ describe('QuickAddModal', () => {
   ];
 
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
 
     const accountsQuery: any = {
@@ -35,6 +37,19 @@ describe('QuickAddModal', () => {
     (supabase.rpc as jest.Mock).mockResolvedValue({ error: null });
   });
 
+  afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  const flushAnimations = () => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+  };
+
   it('shows an error when amount is missing', async () => {
     const { getByTestId, getByText } = render(
       <QuickAddModal
@@ -44,6 +59,7 @@ describe('QuickAddModal', () => {
         onCreated={jest.fn()}
       />
     );
+    flushAnimations();
 
     await waitFor(() => expect(getByTestId('debit-search')).toBeTruthy());
 
@@ -59,6 +75,7 @@ describe('QuickAddModal', () => {
     const { getByTestId } = render(
       <QuickAddModal companyId="company-1" visible onClose={onClose} onCreated={onCreated} />
     );
+    flushAnimations();
 
     await waitFor(() => expect(getByTestId('credit-search')).toBeTruthy());
 
