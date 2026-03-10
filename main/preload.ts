@@ -224,6 +224,17 @@ const ipc = {
     )) as Array<{ name: string; sql: string }>;
   },
 
+  async getSyncInviteFunctionSource() {
+    return (await ipcRenderer.invoke(
+      IPC_ACTIONS.GET_SYNC_INVITE_FUNCTION_SOURCE
+    )) as {
+      name: string;
+      entrypointPath: string;
+      verifyJwt: boolean;
+      files: Array<{ path: string; content: string }>;
+    };
+  },
+
   registerMainProcessErrorListener(listener: IPCRendererListener) {
     ipcRenderer.on(IPC_CHANNELS.LOG_MAIN_PROCESS_ERROR, listener);
   },

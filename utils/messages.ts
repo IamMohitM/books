@@ -38,6 +38,7 @@ export enum IPC_ACTIONS {
   CREATE_DB_BACKUP = 'create-db-backup',
   SEND_API_REQUEST = 'send-api-request',
   GET_SYNC_INIT_SCRIPTS = 'get-sync-init-scripts',
+  GET_SYNC_INVITE_FUNCTION_SOURCE = 'get-sync-invite-function-source',
   // Database messages
   DB_CREATE = 'db-create',
   DB_CONNECT = 'db-connect',

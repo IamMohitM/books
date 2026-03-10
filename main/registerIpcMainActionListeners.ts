@@ -271,6 +271,49 @@ export default function registerIpcMainActionListeners(main: Main) {
     return scripts;
   });
 
+  ipcMain.handle(IPC_ACTIONS.GET_SYNC_INVITE_FUNCTION_SOURCE, () => {
+    const resolveFunctionPath = (relativePath: string) => {
+      const normalized = relativePath.replace(/^supabase[\\/]/, '');
+      if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'supabase', normalized);
+      }
+      return path.resolve(process.cwd(), relativePath);
+    };
+
+    const baseDir = resolveFunctionPath('supabase/functions/invite-user');
+    const entrypointPath = 'index.ts';
+    const entrypointAbs = path.join(baseDir, entrypointPath);
+    const configAbs = path.join(baseDir, 'config.toml');
+
+    if (!fs.existsSync(entrypointAbs)) {
+      throw new Error(
+        `Missing invite-user function: ${entrypointAbs} is not available.`
+      );
+    }
+
+    const entryContent = fs.readFileSync(entrypointAbs, 'utf8');
+    let verifyJwt = true;
+    if (fs.existsSync(configAbs)) {
+      const configContent = fs.readFileSync(configAbs, 'utf8');
+      const match = /verify_jwt\\s*=\\s*(true|false)/i.exec(configContent);
+      if (match) {
+        verifyJwt = match[1].toLowerCase() === 'true';
+      }
+    }
+
+    return {
+      name: 'invite-user',
+      entrypointPath,
+      verifyJwt,
+      files: [
+        {
+          path: entrypointPath,
+          content: entryContent,
+        },
+      ],
+    };
+  });
+
   ipcMain.handle(
     IPC_ACTIONS.GET_OPEN_FILEPATH,
     async (_, options: OpenDialogOptions) => {
