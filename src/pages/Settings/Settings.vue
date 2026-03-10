@@ -305,8 +305,59 @@
                     {{ remoteInit.running ? t`Initializing...` : t`Initialize` }}
                   </Button>
                   <Button class="text-xs" @click="cancelRemoteInitNow">
-                    {{ t`Cancel` }}
+                    {{
+                      remoteInit.running ? t`Cancel` : t`Close`
+                    }}
                   </Button>
+                </div>
+                <div v-if="remoteInit.steps.length" class="mt-3 space-y-2">
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">
+                    {{ t`Initialize Remote Progress` }}
+                  </div>
+                  <div
+                    v-for="step in remoteInit.steps"
+                    :key="step.id"
+                    class="flex flex-col gap-1"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="h-2.5 w-2.5 rounded-full"
+                        :class="{
+                          'bg-gray-400': step.status === 'pending',
+                          'bg-blue-500': step.status === 'running',
+                          'bg-green-500': step.status === 'done',
+                          'bg-yellow-500': step.status === 'warning',
+                          'bg-red-500': step.status === 'error',
+                        }"
+                      ></span>
+                      <div class="text-gray-700 dark:text-gray-200">
+                        {{ step.label }}
+                      </div>
+                      <div class="text-gray-500 dark:text-gray-400">
+                        <span v-if="step.status === 'pending'">{{
+                          t`Pending`
+                        }}</span>
+                        <span v-else-if="step.status === 'running'">{{
+                          t`Running`
+                        }}</span>
+                        <span v-else-if="step.status === 'done'">{{
+                          t`Done`
+                        }}</span>
+                        <span v-else-if="step.status === 'warning'">{{
+                          t`Needs attention`
+                        }}</span>
+                        <span v-else-if="step.status === 'error'">{{
+                          t`Failed`
+                        }}</span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="step.detail"
+                      class="text-gray-600 dark:text-gray-300"
+                    >
+                      {{ step.detail }}
+                    </div>
+                  </div>
                 </div>
               </div>
               <div
@@ -833,6 +884,12 @@ export default defineComponent({
         open: false,
         token: '',
         running: false,
+        steps: [] as Array<{
+          id: string;
+          label: string;
+          status: 'pending' | 'running' | 'done' | 'warning' | 'error';
+          detail?: string;
+        }>,
       },
       remoteCheck: {
         open: false,
@@ -920,6 +977,12 @@ export default defineComponent({
         open: boolean;
         token: string;
         running: boolean;
+        steps: Array<{
+          id: string;
+          label: string;
+          status: 'pending' | 'running' | 'done' | 'warning' | 'error';
+          detail?: string;
+        }>;
       };
       remoteCheck: {
         open: boolean;
@@ -1948,11 +2011,51 @@ export default defineComponent({
       this.remoteInit.open = true;
       this.remoteInit.token = '';
       this.remoteInit.running = false;
+      this.resetRemoteInitSteps();
     },
     cancelRemoteInitNow(): void {
       this.remoteInit.open = false;
       this.remoteInit.token = '';
       this.remoteInit.running = false;
+      this.remoteInit.steps = [];
+    },
+    resetRemoteInitSteps(): void {
+      this.remoteInit.steps = [
+        {
+          id: 'schema',
+          label: this.t`Apply base schema + sync migrations`,
+          status: 'pending',
+        },
+        {
+          id: 'status',
+          label: this.t`Refresh sync status`,
+          status: 'pending',
+        },
+        {
+          id: 'verify',
+          label: this.t`Verify remote schema + policies`,
+          status: 'pending',
+        },
+        {
+          id: 'invite',
+          label: this.t`Check invite-user function`,
+          status: 'pending',
+        },
+      ];
+    },
+    updateRemoteInitStep(
+      id: string,
+      status: 'pending' | 'running' | 'done' | 'warning' | 'error',
+      detail?: string
+    ): void {
+      const step = this.remoteInit.steps.find((item) => item.id === id);
+      if (!step) {
+        return;
+      }
+      step.status = status;
+      if (detail !== undefined) {
+        step.detail = detail;
+      }
     },
     openRemoteSchemaCheckNow(): void {
       const systemSettings = this.fyo.singles.SystemSettings as
@@ -2098,12 +2201,32 @@ export default defineComponent({
             isPrimary: true,
             action: async () => {
               this.remoteInit.running = true;
+              this.resetRemoteInitSteps();
               try {
+                this.updateRemoteInitStep('schema', 'running');
                 const result = await initializeCloudSyncRemoteSchema(this.fyo, {
                   accessToken: token,
                 });
+                this.updateRemoteInitStep(
+                  'schema',
+                  'done',
+                  this
+                    .t`Applied ${result.appliedScripts.length} scripts.`
+                );
+
+                this.updateRemoteInitStep('status', 'running');
                 await this.refreshCloudSyncStatus();
-                const schemaCheck = await verifyRemoteSchema(result.projectRef, token);
+                this.updateRemoteInitStep(
+                  'status',
+                  'done',
+                  this.t`Sync status refreshed.`
+                );
+
+                this.updateRemoteInitStep('verify', 'running');
+                const schemaCheck = await verifyRemoteSchema(
+                  result.projectRef,
+                  token
+                );
                 if (!schemaCheck.ok) {
                   const missingParts = [
                     schemaCheck.missingTables.length
@@ -2124,33 +2247,62 @@ export default defineComponent({
                   ]
                     .filter(Boolean)
                     .join(' | ');
+                  this.updateRemoteInitStep(
+                    'verify',
+                    'warning',
+                    missingParts
+                      ? this.t`Remote check incomplete. ${missingParts}`
+                      : this.t`Remote check incomplete.`
+                  );
                   showToast({
                     type: 'warning',
                     message: this.t`Remote schema check incomplete. ${missingParts}`,
                   });
                 } else {
+                  this.updateRemoteInitStep(
+                    'verify',
+                    'done',
+                    this.t`Remote schema verified.`
+                  );
                   showToast({
                     type: 'success',
                     message: this.t`Remote schema and policies verified.`,
                   });
                 }
+
+                this.updateRemoteInitStep('invite', 'running');
                 const inviteStatus = await checkInviteFunction(this.fyo);
                 if (!inviteStatus.ok) {
-                  const message = inviteStatus.status === 404
-                    ? this.t`invite-user function is missing. Deploy it, then set SERVICE_ROLE_KEY secret.`
-                    : this.t`invite-user function check failed: ${inviteStatus.message}`;
+                  const message =
+                    inviteStatus.status === 404
+                      ? this.t`invite-user function is missing. Deploy it, then set SERVICE_ROLE_KEY secret.`
+                      : this.t`invite-user function check failed: ${inviteStatus.message}`;
+                  this.updateRemoteInitStep('invite', 'warning', message);
                   showToast({
                     type: 'warning',
                     message,
                   });
+                } else {
+                  this.updateRemoteInitStep(
+                    'invite',
+                    'done',
+                    this.t`invite-user function is available.`
+                  );
                 }
-                this.cancelRemoteInitNow();
+
+                this.remoteInit.token = '';
                 showToast({
                   type: 'success',
                   message: this
                     .t`Remote schema initialized for ${result.projectRef}. Applied ${result.appliedScripts.length} scripts.`,
                 });
               } catch (error) {
+                this.updateRemoteInitStep(
+                  this.remoteInit.steps.find((step) => step.status === 'running')
+                    ?.id ?? 'schema',
+                  'error',
+                  getErrorMessage(error as Error)
+                );
                 this.remoteInit.running = false;
                 showToast({
                   type: 'error',
@@ -2158,6 +2310,7 @@ export default defineComponent({
                 });
                 throw error;
               }
+              this.remoteInit.running = false;
             },
           },
           {
