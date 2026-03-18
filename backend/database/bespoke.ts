@@ -183,8 +183,23 @@ export class BespokeQueries {
     }
 
     const summary = [];
+    let previousNetBalance: number | null = null;
     // For each month, calculate: Debits - Credits = Closing
     for (const month of months) {
+      let openingBalance = 0;
+      if (previousNetBalance === null) {
+        const dayBefore = new Date(month.periodStart);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        const dayBeforeStr = BespokeQueries.toISODate(dayBefore);
+        const openingResult = await BespokeQueries.getCashInHand(
+          db,
+          dayBeforeStr
+        );
+        openingBalance = openingResult.cashInHand;
+      } else {
+        openingBalance = previousNetBalance;
+      }
+
       // Get all cash account debits and credits for this month
       const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
         .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
@@ -209,16 +224,21 @@ export class BespokeQueries {
       const debits = monthlyFlow?.totalDebit ?? 0;
       const credits = monthlyFlow?.totalCredit ?? 0;
       const closingBalance = Number(debits) - Number(credits);
+      const netBalance = openingBalance + closingBalance;
 
       summary.push({
         period: month.period,
         periodStart: month.periodStart,
         periodEnd: month.periodEnd,
+        openingBalance,
         debits: Number(debits),
         credits: Number(credits),
         closingBalance,
+        netBalance,
         netChange: closingBalance,
       });
+
+      previousNetBalance = netBalance;
     }
 
     return summary;

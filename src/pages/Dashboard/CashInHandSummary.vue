@@ -70,6 +70,18 @@
                 dark:text-gray-300
               "
             >
+              {{ t`Opening` }}
+            </th>
+            <th
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
               {{ t`Debits` }}
             </th>
             <th
@@ -83,6 +95,18 @@
               "
             >
               {{ t`Credits` }}
+            </th>
+            <th
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
+              {{ t`Balance` }}
             </th>
             <th
               class="
@@ -114,6 +138,9 @@
             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
               {{ row.period }}
             </td>
+            <td class="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
+              {{ fyo.format(row.openingBalance, 'Currency') }}
+            </td>
             <td class="px-3 py-2 text-right text-green-600 dark:text-green-400">
               {{ fyo.format(row.debits, 'Currency') }}
             </td>
@@ -131,6 +158,18 @@
               "
             >
               {{ fyo.format(row.closingBalance, 'Currency') }}
+            </td>
+            <td
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-900
+                dark:text-gray-100
+              "
+            >
+              {{ fyo.format(row.netBalance, 'Currency') }}
             </td>
           </tr>
         </tbody>
