@@ -326,7 +326,13 @@ export class Doc extends Observable<DocValue | Doc[]> {
       return false;
     }
 
-    this._setDirty(true);
+    const shouldAutoSyncSubmittedFieldEdit =
+      this._shouldAutoSyncSubmittedFieldEdit(fieldname);
+
+    if (!shouldAutoSyncSubmittedFieldEdit) {
+      this._setDirty(true);
+    }
+
     if (typeof value === 'string') {
       value = value.trim();
     }
@@ -347,6 +353,10 @@ export class Doc extends Observable<DocValue | Doc[]> {
       await this.parentdoc._applyChange(this.parentFieldname as string);
     } else {
       await this._applyChange(fieldname, retriggerChildDocApplyChange);
+    }
+
+    if (shouldAutoSyncSubmittedFieldEdit) {
+      await this.sync();
     }
 
     return true;
@@ -387,6 +397,14 @@ export class Doc extends Observable<DocValue | Doc[]> {
     }
 
     return !areDocValuesEqual(currentValue as DocValue, value as DocValue);
+  }
+
+  _shouldAutoSyncSubmittedFieldEdit(fieldname: string): boolean {
+    return (
+      this.schemaName === ModelNameEnum.JournalEntry &&
+      this.isSubmitted &&
+      fieldname === 'userRemark'
+    );
   }
 
   async _applyChange(

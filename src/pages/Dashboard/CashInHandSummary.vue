@@ -150,10 +150,26 @@
           <tr
             v-for="row in summaryData"
             :key="row.periodStart"
-            class="border-b dark:border-gray-800 align-top"
+            class="border-b dark:border-gray-800 align-middle"
           >
             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
-              <div>{{ row.period }}</div>
+              <div class="font-medium">{{ row.period }}</div>
+              <div class="mt-1 flex items-center gap-2">
+                <span
+                  class="
+                    rounded-full
+                    px-2
+                    py-0.5
+                    text-[11px]
+                    font-medium
+                    uppercase
+                    tracking-wide
+                  "
+                  :class="getClosingBadgeClass(row)"
+                >
+                  {{ getClosingBadgeText(row) }}
+                </span>
+              </div>
               <div
                 v-if="row.error"
                 class="mt-1 text-xs text-red-600 dark:text-red-400"
@@ -183,50 +199,94 @@
               {{ fyo.format(row.expectedClosingBalance, 'Currency') }}
             </td>
             <td class="px-3 py-2">
-              <input
-                :value="row.draftClosingBalance"
-                type="number"
-                step="0.01"
-                class="
-                  w-32
-                  text-sm
-                  px-2
-                  py-1
-                  border
-                  dark:border-gray-700
-                  rounded
-                  text-right
-                  dark:bg-gray-800 dark:text-gray-100
-                "
-                :disabled="row.saving || row.deleting"
-                @input="updateDraft(row, $event)"
-              />
+              <div class="flex items-center justify-end">
+                <label
+                  class="
+                    flex
+                    w-40
+                    items-center
+                    gap-2
+                    rounded-xl
+                    border
+                    px-3
+                    py-2
+                    transition-colors
+                    dark:bg-gray-850
+                  "
+                  :class="getClosingFieldClass(row)"
+                >
+                  <span
+                    class="
+                      text-[11px]
+                      font-semibold
+                      uppercase
+                      tracking-wide
+                      text-gray-400
+                      dark:text-gray-500
+                    "
+                  >
+                    {{ t`Close` }}
+                  </span>
+                  <input
+                    :value="row.draftClosingBalance"
+                    type="number"
+                    step="0.01"
+                    class="
+                      w-full
+                      bg-transparent
+                      text-right text-sm
+                      font-medium
+                      text-gray-900
+                      outline-none
+                      dark:text-gray-100
+                    "
+                    :disabled="row.saving || row.deleting"
+                    @input="updateDraft(row, $event)"
+                  />
+                </label>
+              </div>
             </td>
             <td
               class="px-3 py-2 text-right font-semibold"
               :class="getDifferenceClass(row.difference)"
             >
-              <span v-if="row.difference === null" class="text-gray-400"
-                >-</span
+              <span
+                v-if="row.difference === null"
+                class="
+                  text-xs
+                  font-medium
+                  uppercase
+                  tracking-wide
+                  text-gray-400
+                "
               >
+                {{ t`Pending` }}
+              </span>
               <span v-else>
                 {{ row.difference > 0 ? '+' : '' }}
                 {{ fyo.format(row.difference, 'Currency') }}
               </span>
             </td>
             <td class="px-3 py-2">
-              <div class="flex items-center justify-end gap-2">
+              <div class="flex items-center justify-end gap-1.5">
                 <button
                   class="
+                    inline-flex
+                    min-w-[4.5rem]
+                    items-center
+                    justify-center
+                    rounded-full
                     px-3
-                    py-1
+                    py-1.5
                     text-xs
-                    rounded
-                    border
-                    dark:border-gray-700
-                    text-gray-700
-                    dark:text-gray-200
+                    font-medium
+                    transition-colors
                     disabled:opacity-50
+                  "
+                  :class="
+                    canSave(row)
+                      ? 'bg-black text-white hover:bg-gray-800 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white'
+                      : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
                   "
                   :disabled="!canSave(row)"
                   @click="saveClosingBalance(row)"
@@ -235,15 +295,22 @@
                 </button>
                 <button
                   class="
+                    inline-flex
+                    min-w-[4.5rem]
+                    items-center
+                    justify-center
+                    rounded-full
                     px-3
-                    py-1
+                    py-1.5
                     text-xs
-                    rounded
-                    border
-                    dark:border-gray-700
-                    text-gray-700
-                    dark:text-gray-200
+                    font-medium
+                    transition-colors
                     disabled:opacity-50
+                  "
+                  :class="
+                    row.recordName && !row.saving && !row.deleting
+                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
                   "
                   :disabled="!row.recordName || row.saving || row.deleting"
                   @click="clearClosingBalance(row)"
@@ -370,6 +437,43 @@ export default defineComponent({
       }
 
       return 'text-gray-900 dark:text-gray-100';
+    },
+    getClosingBadgeText(row: SummaryRowViewModel): string {
+      if (row.recordName) {
+        return this.t`Saved`;
+      }
+
+      if (this.parseDraftValue(row.draftClosingBalance) !== null) {
+        return this.t`Editing`;
+      }
+
+      return this.t`Open`;
+    },
+    getClosingBadgeClass(row: SummaryRowViewModel): string {
+      if (row.recordName) {
+        return 'bg-green-100 text-green-700 dark:bg-green-400/10 dark:text-green-300';
+      }
+
+      if (this.parseDraftValue(row.draftClosingBalance) !== null) {
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300';
+      }
+
+      return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+    },
+    getClosingFieldClass(row: SummaryRowViewModel): string {
+      if (row.error) {
+        return 'border-red-300 bg-red-50 dark:border-red-500/40 dark:bg-red-500/10';
+      }
+
+      if (this.canSave(row)) {
+        return 'border-gray-900 bg-white shadow-sm dark:border-gray-500 dark:bg-gray-800';
+      }
+
+      if (row.recordName) {
+        return 'border-green-200 bg-green-50/70 dark:border-green-500/30 dark:bg-green-500/10';
+      }
+
+      return 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800';
     },
     async saveClosingBalance(row: SummaryRowViewModel) {
       const closingBalance = this.parseDraftValue(row.draftClosingBalance);
