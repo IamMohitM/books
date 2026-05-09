@@ -102,6 +102,33 @@ export abstract class LedgerReport extends Report {
       }
     )) as RawLedgerEntry[];
 
+    const journalEntryNames = [
+      ...new Set(
+        entries
+          .filter((entry) => entry.referenceType === ModelNameEnum.JournalEntry)
+          .map((entry) => entry.referenceName)
+          .filter(Boolean)
+      ),
+    ];
+
+    const userRemarkMap = new Map<string, string>();
+    if (journalEntryNames.length) {
+      const journalEntries = (await this.fyo.db.getAllRaw(
+        ModelNameEnum.JournalEntry,
+        {
+          fields: ['name', 'userRemark'],
+          filters: { name: ['in', journalEntryNames] },
+        }
+      )) as Array<{ name: string; userRemark?: string }>;
+
+      for (const journalEntry of journalEntries) {
+        userRemarkMap.set(
+          journalEntry.name,
+          String(journalEntry.userRemark ?? '')
+        );
+      }
+    }
+
     this._rawData = entries.map((entry) => {
       return {
         name: safeParseInt(entry.name),
@@ -110,6 +137,10 @@ export abstract class LedgerReport extends Report {
         debit: Math.abs(safeParseFloat(entry.debit)),
         credit: Math.abs(safeParseFloat(entry.credit)),
         balance: 0,
+        userRemark:
+          entry.referenceType === ModelNameEnum.JournalEntry
+            ? userRemarkMap.get(entry.referenceName) ?? ''
+            : '',
         referenceType: entry.referenceType,
         referenceName: entry.referenceName,
         party: entry.party,

@@ -82,6 +82,7 @@ export class GeneralLedger extends LedgerReport {
       debit: totalDebit,
       credit: totalCredit,
       balance: totalDebit - totalCredit,
+      userRemark: '',
       referenceType: '',
       referenceName: '',
       party: '',
@@ -195,6 +196,7 @@ export class GeneralLedger extends LedgerReport {
       referenceType: '',
       referenceName: '',
       party: '',
+      userRemark: '',
       reverted: false,
       reverts: '',
     });
@@ -229,6 +231,7 @@ export class GeneralLedger extends LedgerReport {
           debit,
           credit,
           balance: debit - credit,
+          userRemark: '',
           referenceType: '',
           referenceName: '',
           party: '',
@@ -261,7 +264,7 @@ export class GeneralLedger extends LedgerReport {
     }
 
     if (this.referenceType !== 'All') {
-      filters.referenceType = this.referenceType as string;
+      filters.referenceType = this.referenceType;
     }
 
     if (this.toDate) {
@@ -269,7 +272,7 @@ export class GeneralLedger extends LedgerReport {
       const toDate = DateTime.fromISO(this.toDate as string)
         .endOf('day')
         .toISO();
-      (filters.date as string[]).push('<=', toDate as string);
+      (filters.date as string[]).push('<=', toDate);
     }
 
     if (this.fromDate) {
@@ -277,7 +280,7 @@ export class GeneralLedger extends LedgerReport {
       const fromDate = DateTime.fromISO(this.fromDate as string)
         .startOf('day')
         .toISO();
-      (filters.date as string[]).push('>=', fromDate as string);
+      (filters.date as string[]).push('>=', fromDate);
     }
 
     if (!this.reverted) {
@@ -418,6 +421,12 @@ export class GeneralLedger extends LedgerReport {
         label: t`Party`,
         fieldtype: 'Link',
         fieldname: 'party',
+      },
+      {
+        label: t`Remark`,
+        fieldtype: 'Text',
+        fieldname: 'userRemark',
+        width: 2,
       },
       {
         label: t`Ref Name`,

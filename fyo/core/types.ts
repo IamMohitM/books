@@ -34,9 +34,15 @@ export type AuthDemuxConstructor = new (isElectron?: boolean) => AuthDemuxBase;
 export type ConfigMap = {
   files: ConfigFile[];
   lastSelectedFilePath: null | string;
-  language: string 
-  deviceId: string
+  language: string;
+  deviceId: string;
+  reportColumnState: Record<string, ReportColumnState>;
 };
+
+export interface ReportColumnState {
+  columnSelection: Record<string, boolean>;
+  columnOrder: string[];
+}
 
 export interface ConfigFile {
   id: string;

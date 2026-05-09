@@ -19,6 +19,106 @@
       >
         <feather-icon name="printer" class="w-4 h-4"></feather-icon>
       </Button>
+      <Popover
+        v-if="report?.columnOptions.length"
+        placement="bottom-end"
+        :popover-class="'w-64'"
+      >
+        <template #target="{ togglePopover }">
+          <Button
+            :icon="true"
+            :title="t`Choose visible columns`"
+            @click="togglePopover()"
+          >
+            <feather-icon name="sliders" class="w-4 h-4"></feather-icon>
+          </Button>
+        </template>
+        <template #content>
+          <div class="p-3">
+            <p
+              class="
+                mb-2
+                text-xs
+                font-semibold
+                uppercase
+                tracking-wide
+                text-gray-500
+                dark:text-gray-400
+              "
+            >
+              {{ t`Columns` }}
+            </p>
+            <div class="flex flex-col gap-2">
+              <label
+                v-for="column in report.columnOptions"
+                :key="column.fieldname"
+                class="
+                  flex
+                  items-center
+                  justify-between
+                  gap-3
+                  rounded
+                  px-2
+                  py-1.5
+                  hover:bg-gray-50
+                  dark:hover:bg-gray-800
+                "
+              >
+                <span class="text-sm text-gray-800 dark:text-gray-100">
+                  {{ column.label }}
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    class="
+                      inline-flex
+                      h-6
+                      w-6
+                      items-center
+                      justify-center
+                      rounded
+                      text-gray-500
+                      hover:bg-gray-100 hover:text-gray-900
+                      dark:text-gray-400
+                      dark:hover:bg-gray-700
+                      dark:hover:text-gray-100
+                    "
+                    type="button"
+                    :title="t`Move left`"
+                    @click.prevent="moveColumn(column.fieldname, 'up')"
+                  >
+                    <feather-icon name="chevron-up" class="w-3 h-3" />
+                  </button>
+                  <button
+                    class="
+                      inline-flex
+                      h-6
+                      w-6
+                      items-center
+                      justify-center
+                      rounded
+                      text-gray-500
+                      hover:bg-gray-100 hover:text-gray-900
+                      dark:text-gray-400
+                      dark:hover:bg-gray-700
+                      dark:hover:text-gray-100
+                    "
+                    type="button"
+                    :title="t`Move right`"
+                    @click.prevent="moveColumn(column.fieldname, 'down')"
+                  >
+                    <feather-icon name="chevron-down" class="w-3 h-3" />
+                  </button>
+                  <input
+                    type="checkbox"
+                    :checked="report.columnSelection[column.fieldname] ?? true"
+                    @change="handleColumnToggle(column.fieldname, $event)"
+                  />
+                </div>
+              </label>
+            </div>
+          </div>
+        </template>
+      </Popover>
     </PageHeader>
 
     <!-- Filters -->
@@ -53,6 +153,7 @@ import Button from 'src/components/Button.vue';
 import FormControl from 'src/components/Controls/FormControl.vue';
 import DropdownWithActions from 'src/components/DropdownWithActions.vue';
 import PageHeader from 'src/components/PageHeader.vue';
+import Popover from 'src/components/Popover.vue';
 import ListReport from 'src/components/Report/ListReport.vue';
 import { fyo } from 'src/initFyo';
 import { shortcutsKey } from 'src/utils/injectionKeys';
@@ -69,6 +170,7 @@ export default defineComponent({
     ListReport,
     DropdownWithActions,
     Button,
+    Popover,
   },
   provide() {
     return {
@@ -158,6 +260,20 @@ export default defineComponent({
   },
   methods: {
     routeTo,
+    async handleColumnToggle(fieldname: string, event: Event) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+
+      await this.updateColumnSelection(fieldname, target.checked);
+    },
+    async updateColumnSelection(fieldname: string, value: boolean) {
+      await this.report?.updateColumnSelection(fieldname, value);
+    },
+    async moveColumn(fieldname: string, direction: 'up' | 'down') {
+      await this.report?.moveColumn(fieldname, direction);
+    },
     async setReportData() {
       if (this.report === null) {
         this.report = await getReport(this.reportClassName);

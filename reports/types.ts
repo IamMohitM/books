@@ -47,6 +47,7 @@ export interface RawLedgerEntry {
   date: string;
   debit: string;
   credit: string;
+  userRemark?: string;
   referenceType: string;
   referenceName: string;
   party: string;
@@ -65,6 +66,7 @@ export interface LedgerEntry {
   debit: number | null;
   credit: number | null;
   balance: number | null;
+  userRemark?: string;
   referenceType: string;
   referenceName: string;
   party: string;
