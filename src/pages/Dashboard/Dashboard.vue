@@ -41,22 +41,6 @@
           @period-change="handlePeriodChange"
         />
         <hr class="dark:border-gray-800" />
-        <div class="flex w-full">
-          <UnpaidInvoices
-            :schema-name="'SalesInvoice'"
-            :common-period="period"
-            :dark-mode="darkMode"
-            class="border-e dark:border-gray-800"
-            @period-change="handlePeriodChange"
-          />
-          <UnpaidInvoices
-            :schema-name="'PurchaseInvoice'"
-            :common-period="period"
-            :dark-mode="darkMode"
-            @period-change="handlePeriodChange"
-          />
-        </div>
-        <hr class="dark:border-gray-800" />
         <div class="flex">
           <ProfitAndLoss
             class="w-full p-4 border-e dark:border-gray-800"
@@ -86,7 +70,6 @@
 
 <script>
 import PageHeader from 'src/components/PageHeader.vue';
-import UnpaidInvoices from './UnpaidInvoices.vue';
 import CashInHandSummary from './CashInHandSummary.vue';
 import Cashflow from './Cashflow.vue';
 import Expenses from './Expenses.vue';
@@ -105,7 +88,6 @@ export default {
     Expenses,
     LoanSummary,
     PeriodSelector,
-    UnpaidInvoices,
   },
   props: {
     darkMode: { type: Boolean, default: false },
