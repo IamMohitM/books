@@ -1,0 +1,28 @@
+{
+  "name": "MonthlyCashClose",
+  "label": "Monthly Cash Close",
+  "naming": "manual",
+  "fields": [
+    {
+      "fieldname": "name",
+      "label": "Month Key",
+      "fieldtype": "Data",
+      "required": true,
+      "readOnly": true,
+      "hidden": true
+    },
+    {
+      "fieldname": "periodStart",
+      "label": "Period Start",
+      "fieldtype": "Date",
+      "required": true
+    },
+    {
+      "fieldname": "closingBalance",
+      "label": "Closing Balance",
+      "fieldtype": "Currency",
+      "required": true
+    }
+  ],
+  "keywordFields": ["periodStart"]
+}

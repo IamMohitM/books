@@ -6,9 +6,9 @@
       </p>
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-1">
-          <label class="text-sm text-gray-600 dark:text-gray-400"
-            >{{ t`From` }}:</label
-          >
+          <label class="text-sm text-gray-600 dark:text-gray-400">
+            {{ t`From` }}:
+          </label>
           <input
             v-model="dateRangeFrom"
             type="date"
@@ -24,9 +24,9 @@
           />
         </div>
         <div class="flex items-center gap-1">
-          <label class="text-sm text-gray-600 dark:text-gray-400"
-            >{{ t`To` }}:</label
-          >
+          <label class="text-sm text-gray-600 dark:text-gray-400">
+            {{ t`To` }}:
+          </label>
           <input
             v-model="dateRangeTo"
             type="date"
@@ -106,7 +106,7 @@
                 dark:text-gray-300
               "
             >
-              {{ t`Balance` }}
+              {{ t`Expected` }}
             </th>
             <th
               class="
@@ -120,23 +120,46 @@
             >
               {{ t`Closing` }}
             </th>
+            <th
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
+              {{ t`Difference` }}
+            </th>
+            <th
+              class="
+                px-3
+                py-2
+                text-right
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
+              {{ t`Actions` }}
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="(row, index) in summaryData"
-            :key="index"
-            class="
-              border-b
-              dark:border-gray-800
-              hover:bg-gray-50
-              dark:hover:bg-gray-800
-              cursor-pointer
-            "
-            @click="selectMonth(row)"
+            v-for="row in summaryData"
+            :key="row.periodStart"
+            class="border-b dark:border-gray-800 align-top"
           >
             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
-              {{ row.period }}
+              <div>{{ row.period }}</div>
+              <div
+                v-if="row.error"
+                class="mt-1 text-xs text-red-600 dark:text-red-400"
+              >
+                {{ row.error }}
+              </div>
             </td>
             <td class="px-3 py-2 text-right text-gray-700 dark:text-gray-300">
               {{ fyo.format(row.openingBalance, 'Currency') }}
@@ -157,19 +180,77 @@
                 dark:text-gray-100
               "
             >
-              {{ fyo.format(row.closingBalance, 'Currency') }}
+              {{ fyo.format(row.expectedClosingBalance, 'Currency') }}
+            </td>
+            <td class="px-3 py-2">
+              <input
+                :value="row.draftClosingBalance"
+                type="number"
+                step="0.01"
+                class="
+                  w-32
+                  text-sm
+                  px-2
+                  py-1
+                  border
+                  dark:border-gray-700
+                  rounded
+                  text-right
+                  dark:bg-gray-800 dark:text-gray-100
+                "
+                :disabled="row.saving || row.deleting"
+                @input="updateDraft(row, $event)"
+              />
             </td>
             <td
-              class="
-                px-3
-                py-2
-                text-right
-                font-semibold
-                text-gray-900
-                dark:text-gray-100
-              "
+              class="px-3 py-2 text-right font-semibold"
+              :class="getDifferenceClass(row.difference)"
             >
-              {{ fyo.format(row.netBalance, 'Currency') }}
+              <span v-if="row.difference === null" class="text-gray-400"
+                >-</span
+              >
+              <span v-else>
+                {{ row.difference > 0 ? '+' : '' }}
+                {{ fyo.format(row.difference, 'Currency') }}
+              </span>
+            </td>
+            <td class="px-3 py-2">
+              <div class="flex items-center justify-end gap-2">
+                <button
+                  class="
+                    px-3
+                    py-1
+                    text-xs
+                    rounded
+                    border
+                    dark:border-gray-700
+                    text-gray-700
+                    dark:text-gray-200
+                    disabled:opacity-50
+                  "
+                  :disabled="!canSave(row)"
+                  @click="saveClosingBalance(row)"
+                >
+                  {{ row.saving ? t`Saving...` : t`Save` }}
+                </button>
+                <button
+                  class="
+                    px-3
+                    py-1
+                    text-xs
+                    rounded
+                    border
+                    dark:border-gray-700
+                    text-gray-700
+                    dark:text-gray-200
+                    disabled:opacity-50
+                  "
+                  :disabled="!row.recordName || row.saving || row.deleting"
+                  @click="clearClosingBalance(row)"
+                >
+                  {{ row.deleting ? t`Clearing...` : t`Clear` }}
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -185,9 +266,17 @@
 </template>
 
 <script lang="ts">
+import { ModelNameEnum } from 'models/types';
 import { fyo } from 'src/initFyo';
 import { defineComponent } from 'vue';
 import { CashInHandSummaryRow } from 'utils/db/types';
+
+type SummaryRowViewModel = CashInHandSummaryRow & {
+  draftClosingBalance: string;
+  saving: boolean;
+  deleting: boolean;
+  error: string | null;
+};
 
 export default defineComponent({
   name: 'CashInHandSummary',
@@ -196,10 +285,9 @@ export default defineComponent({
   },
   data() {
     return {
-      summaryData: [] as CashInHandSummaryRow[],
+      summaryData: [] as SummaryRowViewModel[],
       dateRangeFrom: this.getDefaultFromDate(),
       dateRangeTo: this.getDefaultToDate(),
-      selectedMonth: null as CashInHandSummaryRow | null,
       fyo,
     };
   },
@@ -211,10 +299,6 @@ export default defineComponent({
     void this.setData();
   },
   methods: {
-    selectMonth(row: CashInHandSummaryRow) {
-      this.selectedMonth = row;
-      this.$emit('month-selected', row);
-    },
     getDefaultFromDate(): string {
       const today = new Date();
       const year = today.getFullYear();
@@ -235,12 +319,118 @@ export default defineComponent({
 
       return `${year}-${month}-${date}`;
     },
+    hydrateRows(rows: CashInHandSummaryRow[]): SummaryRowViewModel[] {
+      return rows.map((row) => ({
+        ...row,
+        draftClosingBalance:
+          row.actualClosingBalance === null
+            ? ''
+            : String(row.actualClosingBalance),
+        saving: false,
+        deleting: false,
+        error: null,
+      }));
+    },
+    parseDraftValue(value: string): number | null {
+      const normalized = value.trim();
+      if (!normalized.length) {
+        return null;
+      }
+
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+    updateDraft(row: SummaryRowViewModel, event: Event) {
+      row.error = null;
+      row.draftClosingBalance = (event.target as HTMLInputElement).value;
+    },
+    canSave(row: SummaryRowViewModel): boolean {
+      if (row.saving || row.deleting) {
+        return false;
+      }
+
+      const parsed = this.parseDraftValue(row.draftClosingBalance);
+      if (parsed === null) {
+        return false;
+      }
+
+      return parsed !== row.actualClosingBalance;
+    },
+    getDifferenceClass(value: number | null): string {
+      if (value === null) {
+        return 'text-gray-400 dark:text-gray-500';
+      }
+
+      if (value > 0) {
+        return 'text-green-600 dark:text-green-400';
+      }
+
+      if (value < 0) {
+        return 'text-red-600 dark:text-red-400';
+      }
+
+      return 'text-gray-900 dark:text-gray-100';
+    },
+    async saveClosingBalance(row: SummaryRowViewModel) {
+      const closingBalance = this.parseDraftValue(row.draftClosingBalance);
+      if (closingBalance === null) {
+        row.error = this.$t`Enter a closing balance`;
+        return;
+      }
+
+      row.saving = true;
+      row.error = null;
+      const recordName = row.recordName ?? row.periodStart;
+
+      try {
+        if (row.recordName) {
+          const doc = await fyo.doc.getDoc(
+            ModelNameEnum.MonthlyCashClose,
+            recordName
+          );
+          await doc.set('closingBalance', closingBalance);
+          await doc.sync();
+        } else {
+          const doc = fyo.doc.getNewDoc(ModelNameEnum.MonthlyCashClose, {
+            name: recordName,
+            periodStart: row.periodStart,
+            closingBalance,
+          });
+          await doc.sync();
+        }
+
+        await this.setData();
+      } catch (error) {
+        row.error = this.$t`Error saving closing balance`;
+      } finally {
+        row.saving = false;
+      }
+    },
+    async clearClosingBalance(row: SummaryRowViewModel) {
+      if (!row.recordName) {
+        row.draftClosingBalance = '';
+        row.error = null;
+        return;
+      }
+
+      row.deleting = true;
+      row.error = null;
+
+      try {
+        await fyo.db.delete(ModelNameEnum.MonthlyCashClose, row.recordName);
+        await this.setData();
+      } catch (error) {
+        row.error = this.$t`Error clearing closing balance`;
+      } finally {
+        row.deleting = false;
+      }
+    },
     async setData() {
       const result = await fyo.db.getCashInHandSummary(
         this.dateRangeFrom as string,
         this.dateRangeTo as string
       );
-      this.summaryData = result;
+      this.summaryData = this.hydrateRows(result);
     },
   },
 });

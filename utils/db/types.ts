@@ -143,9 +143,10 @@ export type CashInHandSummaryRow = {
   openingBalance: number;
   debits: number;
   credits: number;
-  closingBalance: number;
-  netBalance: number;
-  netChange: number;
+  expectedClosingBalance: number;
+  actualClosingBalance: number | null;
+  difference: number | null;
+  recordName: string | null;
 };
 
 export type CashInHandSummary = CashInHandSummaryRow[];

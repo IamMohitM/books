@@ -97,16 +97,18 @@ test('cash in hand includes end-of-month entries with time', async (t) => {
   t.ok(baselineJanRow, 'baseline jan summary row exists');
   if (decRow) {
     t.equal(
-      decRow.closingBalance - (baselineDecRow?.closingBalance ?? 0),
+      decRow.expectedClosingBalance -
+        (baselineDecRow?.expectedClosingBalance ?? 0),
       -150,
       'dec closing includes 12/31 entries'
     );
   }
   if (janRow) {
     t.equal(
-      janRow.closingBalance - (baselineJanRow?.closingBalance ?? 0),
-      0,
-      'jan closing unchanged without jan entries'
+      janRow.expectedClosingBalance -
+        (baselineJanRow?.expectedClosingBalance ?? 0),
+      -150,
+      'jan expected closing follows december closing even without jan entries'
     );
   }
 

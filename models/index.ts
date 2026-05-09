@@ -13,6 +13,7 @@ import { LoyaltyProgram } from './baseModels/LoyaltyProgram/LoyaltyProgram';
 import { LoyaltyPointEntry } from './baseModels/LoyaltyPointEntry/LoyaltyPointEntry';
 import { LoanProfile } from './baseModels/LoanProfile/LoanProfile';
 import { LoanProfileHistoricalPayment } from './baseModels/LoanProfileHistoricalPayment/LoanProfileHistoricalPayment';
+import { MonthlyCashClose } from './baseModels/MonthlyCashClose';
 import { CollectionRulesItems } from './baseModels/CollectionRulesItems/CollectionRulesItems';
 import { Lead } from './baseModels/Lead/Lead';
 import { AppliedCouponCodes } from './baseModels/AppliedCouponCodes/AppliedCouponCodes';
@@ -86,6 +87,7 @@ export const models = {
   LoyaltyPointEntry,
   LoanProfile,
   LoanProfileHistoricalPayment,
+  MonthlyCashClose,
   CollectionRulesItems,
   CouponCode,
   Payment,

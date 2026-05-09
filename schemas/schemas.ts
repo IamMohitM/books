@@ -22,6 +22,7 @@ import LoyaltyProgram from './app/LoyaltyProgram.json';
 import LoyaltyPointEntry from './app/LoyaltyPointEntry.json';
 import LoanProfile from './app/LoanProfile.json';
 import LoanProfileHistoricalPayment from './app/LoanProfileHistoricalPayment.json';
+import MonthlyCashClose from './app/MonthlyCashClose.json';
 import CollectionRulesItems from './app/CollectionRulesItems.json';
 import CouponCode from './app/CouponCode.json';
 import AppliedCouponCodes from './app/AppliedCouponCodes.json';
@@ -135,6 +136,7 @@ export const appSchemas: Schema[] | SchemaStub[] = [
   LoyaltyPointEntry as Schema,
   LoanProfile as Schema,
   LoanProfileHistoricalPayment as Schema,
+  MonthlyCashClose as Schema,
   CollectionRulesItems as Schema,
 
   Payment as Schema,

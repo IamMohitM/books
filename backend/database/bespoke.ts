@@ -1,6 +1,5 @@
 import {
   Cashflow,
-  CashReconciliationSummary,
   IncomeExpense,
   LoanLedgerRow,
   LoanSnapshot,
@@ -134,10 +133,7 @@ export class BespokeQueries {
         credit: 'AccountingLedgerEntry.credit',
       })
       .where('AccountingLedgerEntry.reverted', false)
-      .whereRaw(
-        "date(AccountingLedgerEntry.date) <= date(?)",
-        [asOfDate]
-      )
+      .whereRaw('date(AccountingLedgerEntry.date) <= date(?)', [asOfDate])
       .where('Account.accountType', 'Cash')
       .where('Account.isGroup', false)
       .first()) as { debit?: number; credit?: number } | undefined;
@@ -146,6 +142,48 @@ export class BespokeQueries {
     const credit = result?.credit ?? 0;
     const cashInHand = Number(debit) - Number(credit);
     return { cashInHand };
+  }
+
+  static async getCashMovement(
+    db: DatabaseCore,
+    fromDate: string,
+    toDate: string
+  ) {
+    if (fromDate > toDate) {
+      return { debits: 0, credits: 0 };
+    }
+
+    const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
+      .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
+      .sum({
+        totalDebit: 'AccountingLedgerEntry.debit',
+        totalCredit: 'AccountingLedgerEntry.credit',
+      })
+      .where('AccountingLedgerEntry.reverted', false)
+      .whereRaw(
+        'date(AccountingLedgerEntry.date) between date(?) and date(?)',
+        [fromDate, toDate]
+      )
+      .where('Account.accountType', 'Cash')
+      .where('Account.isGroup', false)
+      .first()) as
+      | {
+          totalDebit?: number;
+          totalCredit?: number;
+        }
+      | undefined;
+
+    return {
+      debits: Number(monthlyFlow?.totalDebit ?? 0),
+      credits: Number(monthlyFlow?.totalCredit ?? 0),
+    };
+  }
+
+  static getMonthEnd(periodStart: string): string {
+    const start = new Date(periodStart);
+    return BespokeQueries.toISODate(
+      new Date(start.getFullYear(), start.getMonth() + 1, 0)
+    );
   }
 
   static async getCashInHandSummary(
@@ -183,62 +221,105 @@ export class BespokeQueries {
     }
 
     const summary = [];
-    let previousNetBalance: number | null = null;
-    // For each month, calculate: Debits - Credits = Closing
-    for (const month of months) {
+    const firstMonth = months[0];
+    const latestPriorClose = firstMonth
+      ? ((await db.knex!('MonthlyCashClose')
+          .select('name', 'periodStart', 'closingBalance')
+          .where('periodStart', '<', firstMonth.periodStart)
+          .orderBy('periodStart', 'desc')
+          .first()) as
+          | {
+              name: string;
+              periodStart: string;
+              closingBalance: number;
+            }
+          | undefined)
+      : undefined;
+
+    const lastMonth = months[months.length - 1];
+    const visibleCloseRows =
+      firstMonth && lastMonth
+        ? ((await db.knex!('MonthlyCashClose')
+            .select('name', 'periodStart', 'closingBalance')
+            .whereBetween('periodStart', [
+              firstMonth.periodStart,
+              lastMonth.periodStart,
+            ])
+            .orderBy('periodStart', 'asc')) as Array<{
+            name: string;
+            periodStart: string;
+            closingBalance: number;
+          }>)
+        : [];
+    const closeByPeriodStart = new Map(
+      visibleCloseRows.map((row) => [row.periodStart, row])
+    );
+
+    let previousClosingBalance: number | null = null;
+    for (const [index, month] of months.entries()) {
       let openingBalance = 0;
-      if (previousNetBalance === null) {
-        const dayBefore = new Date(month.periodStart);
-        dayBefore.setDate(dayBefore.getDate() - 1);
-        const dayBeforeStr = BespokeQueries.toISODate(dayBefore);
-        const openingResult = await BespokeQueries.getCashInHand(
-          db,
-          dayBeforeStr
-        );
-        openingBalance = openingResult.cashInHand;
+      if (index === 0) {
+        if (latestPriorClose) {
+          const priorMonthEnd = BespokeQueries.getMonthEnd(
+            latestPriorClose.periodStart
+          );
+          const bridgeStart = new Date(priorMonthEnd);
+          bridgeStart.setDate(bridgeStart.getDate() + 1);
+          const bridgeEnd = new Date(month.periodStart);
+          bridgeEnd.setDate(bridgeEnd.getDate() - 1);
+
+          const bridgeMovement = await BespokeQueries.getCashMovement(
+            db,
+            BespokeQueries.toISODate(bridgeStart),
+            BespokeQueries.toISODate(bridgeEnd)
+          );
+          openingBalance =
+            Number(latestPriorClose.closingBalance) +
+            bridgeMovement.debits -
+            bridgeMovement.credits;
+        } else {
+          const dayBefore = new Date(month.periodStart);
+          dayBefore.setDate(dayBefore.getDate() - 1);
+          const openingResult = await BespokeQueries.getCashInHand(
+            db,
+            BespokeQueries.toISODate(dayBefore)
+          );
+          openingBalance = openingResult.cashInHand;
+        }
       } else {
-        openingBalance = previousNetBalance;
+        openingBalance = previousClosingBalance ?? 0;
       }
 
-      // Get all cash account debits and credits for this month
-      const monthlyFlow = (await db.knex!('AccountingLedgerEntry')
-        .join('Account', 'AccountingLedgerEntry.account', 'Account.name')
-        .sum({
-          totalDebit: 'AccountingLedgerEntry.debit',
-          totalCredit: 'AccountingLedgerEntry.credit',
-        })
-        .where('AccountingLedgerEntry.reverted', false)
-        .whereRaw(
-          "date(AccountingLedgerEntry.date) between date(?) and date(?)",
-          [month.periodStart, month.periodEnd]
-        )
-        .where('Account.accountType', 'Cash')
-        .where('Account.isGroup', false)
-        .first()) as
-        | {
-            totalDebit?: number;
-            totalCredit?: number;
-          }
-        | undefined;
-
-      const debits = monthlyFlow?.totalDebit ?? 0;
-      const credits = monthlyFlow?.totalCredit ?? 0;
-      const closingBalance = Number(debits) - Number(credits);
-      const netBalance = openingBalance + closingBalance;
+      const monthlyFlow = await BespokeQueries.getCashMovement(
+        db,
+        month.periodStart,
+        month.periodEnd
+      );
+      const expectedClosingBalance =
+        openingBalance + monthlyFlow.debits - monthlyFlow.credits;
+      const savedClose = closeByPeriodStart.get(month.periodStart);
+      const actualClosingBalance = savedClose
+        ? Number(savedClose.closingBalance)
+        : null;
+      const difference =
+        actualClosingBalance === null
+          ? null
+          : actualClosingBalance - expectedClosingBalance;
 
       summary.push({
         period: month.period,
         periodStart: month.periodStart,
         periodEnd: month.periodEnd,
         openingBalance,
-        debits: Number(debits),
-        credits: Number(credits),
-        closingBalance,
-        netBalance,
-        netChange: closingBalance,
+        debits: monthlyFlow.debits,
+        credits: monthlyFlow.credits,
+        expectedClosingBalance,
+        actualClosingBalance,
+        difference,
+        recordName: savedClose?.name ?? null,
       });
 
-      previousNetBalance = netBalance;
+      previousClosingBalance = actualClosingBalance ?? expectedClosingBalance;
     }
 
     return summary;
@@ -262,8 +343,16 @@ export class BespokeQueries {
 
     let current = new Date(from.getFullYear(), from.getMonth(), 1);
     while (current <= endOfRange) {
-      const periodStart = new Date(current.getFullYear(), current.getMonth(), 1);
-      const periodEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
+      const periodStart = new Date(
+        current.getFullYear(),
+        current.getMonth(),
+        1
+      );
+      const periodEnd = new Date(
+        current.getFullYear(),
+        current.getMonth() + 1,
+        0
+      );
       months.push({
         period: periodStart.toLocaleString('default', {
           month: 'short',
@@ -326,7 +415,7 @@ export class BespokeQueries {
       })
       .where('AccountingLedgerEntry.reverted', false)
       .whereRaw(
-        "date(AccountingLedgerEntry.date) between date(?) and date(?)",
+        'date(AccountingLedgerEntry.date) between date(?) and date(?)',
         [periodStart, periodEnd]
       )
       .where('Account.accountType', 'Cash')
