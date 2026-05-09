@@ -3,6 +3,7 @@ import { Action } from 'fyo/model/types';
 import { DateTime } from 'luxon';
 import { ModelNameEnum } from 'models/types';
 import { Report } from 'reports/Report';
+import { filterRowsWithExistingReferences } from 'reports/ledgerReferenceFilter';
 import { ColumnField, ReportData, ReportRow } from 'reports/types';
 import { Field } from 'schemas/types';
 import { LoanLedgerRow } from 'utils/db/types';
@@ -32,7 +33,7 @@ export class LoanLedger extends Report {
   asOfDate?: string;
   loading = false;
 
-  async setDefaultFilters() {
+  setDefaultFilters() {
     if (!this.asOfDate) {
       this.asOfDate = DateTime.now().toISODate();
     }
@@ -186,8 +187,12 @@ export class LoanLedger extends Report {
       fromDate,
       toDate
     );
+    const validLedgerRows = await filterRowsWithExistingReferences(
+      this.fyo,
+      ledgerRows
+    );
 
-    const rows = this.buildLoanLedger(profile, ledgerRows, asOfDate);
+    const rows = this.buildLoanLedger(profile, validLedgerRows, asOfDate);
     this.reportData = this.getRows(rows);
     this.loading = false;
   }
@@ -524,7 +529,7 @@ export class LoanLedger extends Report {
           let display = String(value ?? '');
 
           if (column.fieldtype === 'Currency' && isNumeric) {
-            display = this.fyo.format(value as number, 'Currency');
+            display = this.fyo.format(value, 'Currency');
           } else if (column.fieldtype === 'Date' && value) {
             display = this.fyo.format(value, 'Date');
           }

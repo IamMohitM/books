@@ -111,6 +111,7 @@ export type LoanLedgerRow = {
   date: string;
   debit: number;
   credit: number;
+  referenceType: string;
   referenceName: string;
   loanProfile: string;
   loanComponent: string;

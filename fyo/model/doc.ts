@@ -356,6 +356,7 @@ export class Doc extends Observable<DocValue | Doc[]> {
     }
 
     if (shouldAutoSyncSubmittedFieldEdit) {
+      await this._refreshModifiedMetaValuesFromDb();
       await this.sync();
     }
 
@@ -642,6 +643,25 @@ export class Doc extends Observable<DocValue | Doc[]> {
   _updateModifiedMetaValues() {
     this.modifiedBy = this.fyo.auth.session.user || DEFAULT_USER;
     this.modified = new Date();
+  }
+
+  async _refreshModifiedMetaValuesFromDb() {
+    if (this.notInserted || !this.name || this.schema.isSingle) {
+      return;
+    }
+
+    const dbValues = await this.fyo.db.get(this.schemaName, this.name, [
+      'modified',
+      'modifiedBy',
+    ]);
+
+    if (dbValues.modified) {
+      this.modified = dbValues.modified as Date;
+    }
+
+    if (dbValues.modifiedBy) {
+      this.modifiedBy = dbValues.modifiedBy as string;
+    }
   }
 
   async load() {

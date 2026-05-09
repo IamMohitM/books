@@ -2,6 +2,7 @@ import { Fyo, t } from 'fyo';
 import { Action } from 'fyo/model/types';
 import { ModelNameEnum } from 'models/types';
 import { Report } from 'reports/Report';
+import { filterRowsWithExistingReferences } from 'reports/ledgerReferenceFilter';
 import { GroupedMap, LedgerEntry, RawLedgerEntry } from 'reports/types';
 import { QueryFilter } from 'utils/db/types';
 import { safeParseFloat, safeParseInt } from 'utils/index';
@@ -92,7 +93,7 @@ export abstract class LedgerReport extends Report {
     ];
 
     const filters = await this._getQueryFilters();
-    const entries = (await this.fyo.db.getAllRaw(
+    const rawEntries = (await this.fyo.db.getAllRaw(
       ModelNameEnum.AccountingLedgerEntry,
       {
         fields,
@@ -101,6 +102,10 @@ export abstract class LedgerReport extends Report {
         order: this.ascending ? 'asc' : 'desc',
       }
     )) as RawLedgerEntry[];
+    const entries = await filterRowsWithExistingReferences(
+      this.fyo,
+      rawEntries
+    );
 
     const journalEntryNames = [
       ...new Set(

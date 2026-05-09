@@ -611,6 +611,7 @@ export class BespokeQueries {
       .select(
         'name',
         'date',
+        'referenceType',
         'referenceName',
         db.knex!.raw(
           `case
