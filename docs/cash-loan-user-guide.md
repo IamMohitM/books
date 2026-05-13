@@ -4,6 +4,8 @@
 
 Use Vaulta as a cash-first ledger with clear loan principal and interest tracking.
 
+This guide describes the fork-specific workflow. The branch intentionally moves away from invoice-driven bookkeeping and centers the app on cash movement, loan balances, and interest owed.
+
 ## Setup
 
 1. Go to `Common -> Loan Profiles`.
@@ -20,7 +22,10 @@ Use Vaulta as a cash-first ledger with clear loan principal and interest trackin
 
 ## Recording Transactions
 
-Use `Common -> Journal Entry`.
+Use `Common -> Journal Entry` for both cash movements and loan events.
+
+The dedicated loan cash receipt flow was removed in this branch, so borrowing and repayment should be captured in journal entries.
+
 In each loan row, select:
 
 - `Loan Account`
@@ -32,6 +37,7 @@ Rules:
 - `Principal` rows post to the loan’s liability account.
 - `Interest` rows post to the loan’s interest expense account.
 - Loan rows in one Journal Entry must use one loan profile.
+- Loan metadata is stored on the journal entry rows so Loan Register and Loan Ledger can reconstruct the loan view.
 
 ## Borrowing Example
 
@@ -52,6 +58,8 @@ Rules:
 
 1. Open `Reports -> Loan Register` for summary totals by loan account.
 2. Open `Reports -> Loan Ledger` to see each loan transaction and interest owed.
+3. Use the dashboard’s `Cash in Hand Summary` to compare opening, movement, expected closing, and recorded closing balances.
+4. Use `Reports -> General Ledger` with the saved column preferences to audit the underlying postings.
 
 ## Interest Method
 
@@ -70,3 +78,10 @@ If you already have an Opening Principal and want it to appear in the General Le
 3. Select the cash/bank account and save the Opening Entry.
 
 This creates an Opening Entry and resets `Opening Principal` to 0 so Loan Register stays accurate.
+
+## Related Docs
+
+- [README](../README.md)
+- [Loan architecture notes](loan-architecture.md)
+- [Loan migration playbook](loan-migration-playbook.md)
+- [Cash in hand requirements](cash-in-hand-summary-requirements.md)
