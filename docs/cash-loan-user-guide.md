@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use Frappe Cash Books as a cash-first ledger with clear loan principal and interest tracking.
+Use Vaulta as a cash-first ledger with clear loan principal and interest tracking.
 
 ## Setup
 

@@ -195,7 +195,7 @@ export default function AppShell({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Cash Books</Text>
+      <Text style={styles.header}>Vaulta</Text>
       <Text style={styles.profileHint}>Project: {activeProfileLabel}</Text>
       <Text style={styles.profileHint}>
         Signed in as: {session?.user?.email ?? 'Unknown user'}

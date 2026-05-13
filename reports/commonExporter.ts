@@ -122,7 +122,7 @@ function getJsonData(report: Report): string {
    */
   exportObject.timestamp = new Date().toISOString();
   exportObject.reportName = report.reportName;
-  exportObject.softwareName = 'Frappe Cash Books';
+  exportObject.softwareName = 'Vaulta';
   exportObject.softwareVersion = report.fyo.store.appVersion;
 
   return JSON.stringify(exportObject);

@@ -4,7 +4,7 @@ import os from 'os';
 import { execSync } from 'child_process';
 import fse from 'fs-extra';
 
-const productName = 'Frappe Cash Books';
+const productName = 'Vaulta';
 const projectRoot = path.resolve(process.cwd());
 const bundledDir = path.join(projectRoot, 'dist_electron', 'bundled');
 

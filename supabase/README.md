@@ -13,7 +13,7 @@ Run these in the SQL editor in order:
 Set environment variables and run the migration script.
 
 ```bash
-export SQLITE_PATH="/Users/mo/Developer/books/dbs/Frappe Cash Books/Pillr Test.books.db"
+export SQLITE_PATH="/Users/mo/Developer/books/dbs/Vaulta/Pillr Test.books.db"
 export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
 export SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
 export OWNER_EMAIL="you@example.com"

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Cash Books",
+    "name": "Vaulta",
     "slug": "cash-books-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -22,9 +22,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "name": "Cash Books",
-      "shortName": "CashBooks",
-      "description": "Cash Books web app",
+      "name": "Vaulta",
+      "shortName": "Vaulta",
+      "description": "Vaulta web app",
       "themeColor": "#141c2d",
       "backgroundColor": "#141c2d",
       "display": "standalone",

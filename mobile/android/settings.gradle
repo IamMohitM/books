@@ -1,4 +1,4 @@
-rootProject.name = 'Cash Books'
+rootProject.name = 'Vaulta'
 
 dependencyResolutionManagement {
   versionCatalogs {

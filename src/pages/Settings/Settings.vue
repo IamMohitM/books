@@ -1345,7 +1345,7 @@ export default defineComponent({
       await this.refreshCloudSyncStatus();
       this.update();
       await showDialog({
-        title: this.t`Reload Frappe Cash Books?`,
+        title: this.t`Reload Vaulta?`,
         detail: this.t`Changes made to settings will be visible on reload.`,
         type: 'info',
         buttons: [

@@ -365,7 +365,7 @@ export default function App() {
 
   const authContent = (
     <>
-      <Text style={styles.title}>Cash Books</Text>
+      <Text style={styles.title}>Vaulta</Text>
       {!hasProfiles && (
         <Text style={styles.emptyHint}>
           No project configured yet. Add a project profile to continue.

@@ -62,7 +62,7 @@ export default function registerIpcMainActionListeners(main: Main) {
         }
 
         const legacyAppName = 'Frappe Books';
-        const appName = 'Frappe Cash Books';
+        const appName = 'Vaulta';
         const legacyPath = path.join(root, legacyAppName);
         dbsPath = path.join(root, appName);
 
