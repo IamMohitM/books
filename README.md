@@ -27,7 +27,41 @@
 
 ## Vaulta
 
-Vaulta is an open-source accounting software aimed at simplifying financial management for businesses. With its clean and user-friendly interface, it streamlines accounting tasks for small and medium-sized enterprises, offering a seamless solution for modern businesses to manage their finances with ease.
+Vaulta builds on [Frappe Books](https://github.com/frappe/books), originally maintained by Frappe Technologies, and is focused on a narrower problem: tracking cash transactions, loans taken, and the interest owed on those loans.
+
+The upstream accounting engine stays in place, but the product direction changes. Vaulta is tuned for cash-led workflows, loan registers, loan ledgers, and reconciliation of the balance you expect to have versus the balance you actually have.
+
+### Purpose
+
+- Track cash inflows and outflows with a cash-first dashboard.
+- Track loan principal, opening balances, repayments, and accrued interest.
+- Keep loan posting and reporting simple enough to work from journal entries.
+- Reduce invoice-centric clutter that does not help a cash/loan workflow.
+
+### Highlights
+
+- Loan Profiles with lender metadata, opening principal, opening accrued interest, and automatic liability and interest accounts.
+- Loan Register and Loan Ledger reports with start dates, inferred interest, historical payment handling, and loan metadata on ledger rows.
+- A daily simple-interest accrual model for loan interest tracking.
+- An opening principal action that moves opening balances into the general ledger when needed.
+- A monthly cash close workflow with opening, debit, credit, closing, expected, and difference columns.
+- A refined Cash in Hand Summary, Cashflow view, and Loan Summary dashboard layout.
+- Persisted report column preferences, date-sorted general ledger views, loan sorting, and orphan-row filtering.
+- A mobile app baseline with quick add, transaction review, project switching, auth/session persistence, and sync tooling.
+- Cloud sync foundations, including remote setup, invitations, reconciliation, and submission-aware sync behavior.
+
+### Removed
+
+- The dedicated loan cash receipt flow was dropped. Loan borrowing and repayment should now be recorded through Journal Entries and reflected in the loan reports.
+- Unpaid-invoice blocks were removed from the default dashboard to keep the home screen focused on cash and loans.
+
+### Guides
+
+- [Cash and loan workflow guide](docs/cash-loan-user-guide.md)
+- [Loan architecture notes](docs/loan-architecture.md)
+- [Loan migration playbook](docs/loan-migration-playbook.md)
+- [Loan test matrix](docs/loan-test-matrix.md)
+- [Cash in hand requirements](docs/cash-in-hand-summary-requirements.md)
 
 <details>
 <summary>Screenshots</summary>
@@ -44,50 +78,28 @@ Vaulta is an open-source accounting software aimed at simplifying financial mana
 
 Vaulta addresses a market gap where small businesses face expensive, complex accounting tools. It offers an intuitive, open-source solution that combines simplicity with essential features, empowering businesses to manage finances effectively, even offline.
 
-### Key Features
+### Core Workflows
 
-- **Dashboard**: Provides an overview of key financial data and performance metrics.
-- **Point of Sale**: Simplifies retail transactions with an integrated POS system for easy sales processing.
-- **Works Offline**: Enables users to continue working without an internet connection and sync later.
-- **Double-entry accounting**: Ensures accurate financial tracking by recording each transaction in two accounts.
-- **Entries**
-  - **Invoicing**: Allows businesses to create and manage professional invoices effortlessly.
-  - **Billing**: Billing processes by generating bills and tracking payments.
-  - **Payments**: Records and tracks payments received and made.
-  - **Journal Entries**: Records financial transactions in the general ledger with detailed notes and adjustments.
-- **Financial Reports**
-  - **General Ledger**: Centralized record of all financial transactions, providing a comprehensive view of accounts.
-  - **Profit and Loss Statement**: Summarizes revenues, costs, and expenses to show business profitability.
-  - **Balance Sheet**: Displays a company’s assets, liabilities, and equity at a specific point in time.
-  - **Trial Balance**: Verifies the accuracy of accounting records by ensuring that debits and credits are balanced.
-    <br/>
+- **Cash-first dashboard**: Highlights cash in hand, cashflow, reconciliation status, and loan exposure instead of invoice-heavy bookkeeping.
+- **Loan tracking**: Records loan principal, accrued interest, opening balances, and repayments through Loan Profiles and journal entries.
+- **Loan reporting**: Uses Loan Register and Loan Ledger reports to surface what is owed, what was paid, and what remains outstanding.
+- **Cash close and reconciliation**: Provides a monthly close workflow that compares opening, expected, and recorded balances.
+- **Local-first operation**: Keeps the desktop app usable offline and syncs when the configured remote connection is available.
+- **Mobile companion**: Early-stage support exists for quick entry, review, and sync-aware access.
+
+Mobile support is intentionally conservative in scope right now. The desktop experience remains the primary surface, and future mobile development is still under consideration.
 
 ### Under the Hood
 
-- **Vue.js**: In Vaulta, Vue.js powers the front-end, enabling a reactive and component-based UI. It ensures seamless interactions and dynamic updates, giving users a modern, responsive experience.
-
-- **Electron**: Electron is used to package Vaulta as a standalone desktop application, allowing it to run offline and provide a native-like experience across Windows, macOS, and Linux.
-
-- **SQLite**: Vaulta uses SQLite as its local database. All financial data, transactions, and configurations are stored securely in an SQLite file on the user's machine.
+- **Vue.js** powers the desktop client UI.
+- **Electron** packages the desktop app for Windows, macOS, and Linux.
+- **Expo and React Native** power the mobile client.
+- **SQLite** remains the local database for primary storage.
+- **Supabase** supports the sync layer and mobile/desktop collaboration flows.
 
 ## Production Setup
 
-### Manual
-
-Download and install the latest release for your platform from the [releases
-page](https://github.com/frappe/books/releases) .
-
-### Using Homebrew (for MacOS and Linux)
-
-```zsh
-brew install --cask frappe-books
-```
-
-### Via Flatpak (Linux)
-
-<a href='https://flathub.org/apps/io.frappe.books'>
-    <img width='120' alt='Get it on Flathub' src='https://flathub.org/api/badge?locale=en'/>
-</a>
+Vaulta is not currently published through Homebrew or Flatpak. Installers are distributed through release artifacts when available, or you can build the app locally using the steps below.
 
 ## Development Setup
 
@@ -163,31 +175,3 @@ If you want to contribute to Vaulta, please check our [Contribution Guidelines](
 4. If you have accounting requirements, you can become an ardent user. 🙂
 
 If you want to contribute code then you can fork this repo, make changes and raise a PR. ([see how to](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork))
-
-## Translation Contributors
-
-| Language              | Contributors                                                                                                                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Arabic                | [taha2002](https://github.com/taha2002), [Faridget](https://github.com/faridget), [Osama Muhammed](https://github.com/osama1998H)                                                                                                                 |
-| Albanian              | [xoniks](https://github.com/xoniks)                                                                                                                                                                                                               |
-| Catalan               | Dídac E. Jiménez                                                                                                                                                                                                                                  |
-| Chinese - Simplified  | [wcxu21](https://github.com/wcxu21), [wolone](https://github.com/wolone), [Ji Qu](https://github.com/winkidney)                                                                                                                                   |
-| Chinese - Traditional | [Ethan Deng](https://github.com/ethandengs)                                                                                                                                                                                                       |
-| Danish                | [Tummas Joensen](https://github.com/slang123)                                                                                                                                                                                                     |
-| Dutch                 | [RijckAlex](https://github.com/RijckAlex), [Stan M](https://github.com/stxm)                                                                                                                                                                      |
-| French                | [DeepL](https://www.deepl.com/), [mael-chouteau](https://github.com/mael-chouteau), [joandreux](https://github.com/joandreux)                                                                                                                     |
-| German                | [DeepL](https://www.deepl.com/), [barredterra](https://github.com/barredterra), [promexio](https://github.com/promexio), [C2H6-383](https://github.com/C2H6-383), [0xflotus](https://github.com/0xflotus), [Tim](https://github.com/Rocket-Quack) |
-| Gujarati              | [dhruvilxcode](https://github.com/dhruvilxcode), [4silvertooth](https://github.com/4silvertooth)                                                                                                                                                  |
-| Hindi                 | [bnsinghgit](https://github.com/bnsinghgit)                                                                                                                                                                                                       |
-| Indonesian            | [Aji Prakoso](https://github.com/jipraks)                                                                                                                                                                                                         |
-| Korean                | [Isaac-Kwon](https://github.com/Isaac-Kwon)                                                                                                                                                                                                       |
-| Portuguese            | [DeepL](https://www.deepl.com/), [Valdir Amaral](https://github.com/valdir-amaral)                                                                                                                                                                |
-| Spanish               | [talmax1124](https://github.com/talmax1124), [delbertf](https://github.com/delbertf), [Ignacio Chemes](https://github.com/ignaciochemes)                                                                                                          |
-| Swedish               | [papplo](https://github.com/papplo), [Crims-on](https://github.com/Crims-on)                                                                                                                                                                      |
-| Turkish               | Eyuq, [XTechnology-TR](https://github.com/XTechnology-TR)                                                                                                                                                                                         |
-
-## Learn and connect
-
-- [Telegram Group](https://t.me/frappebooks): Used for discussions and decisions regarding everything Vaulta.
-- [GitHub Discussions](https://github.com/frappe/books/discussions): Used for discussions around a specific topic.
-- [Documentation](https://docs.frappe.io/books): Official documentation for more details.
