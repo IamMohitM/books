@@ -6,6 +6,7 @@ import {
   ColumnField,
   GroupedMap,
   LedgerEntry,
+  ReportCell,
   ReportData,
   ReportRow,
 } from 'reports/types';
@@ -156,14 +157,32 @@ export class GeneralLedger extends LedgerReport {
         value = this.fyo.schemaMap[value]?.label ?? value;
       }
 
-      row.cells.push({
+      const cell: ReportCell = {
         italics: entry.name === -1,
         bold: entry.name === -2,
         value,
         rawValue,
         align,
         width,
-      });
+      };
+
+      if (
+        fieldname === 'debit' &&
+        typeof rawValue === 'number' &&
+        rawValue > 0
+      ) {
+        cell.color = 'green';
+      }
+
+      if (
+        fieldname === 'credit' &&
+        typeof rawValue === 'number' &&
+        rawValue > 0
+      ) {
+        cell.color = 'red';
+      }
+
+      row.cells.push(cell);
     }
 
     return row;

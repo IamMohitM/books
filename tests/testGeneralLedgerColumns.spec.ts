@@ -59,6 +59,16 @@ test('general ledger shows journal entry remark and supports column filtering', 
   );
   t.ok(rowWithRemark, 'report data includes the journal entry remark');
 
+  const incomingRow = report.reportData.find((row) =>
+    row.cells.some((cell) => cell.rawValue === 250 && cell.color === 'green')
+  );
+  t.ok(incomingRow, 'incoming cash entries are colored green');
+
+  const outgoingRow = report.reportData.find((row) =>
+    row.cells.some((cell) => cell.rawValue === 250 && cell.color === 'red')
+  );
+  t.ok(outgoingRow, 'outgoing cash entries are colored red');
+
   await report.updateColumnSelection('party', false);
 
   t.equal(
