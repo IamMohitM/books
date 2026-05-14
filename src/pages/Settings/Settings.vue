@@ -1,9 +1,17 @@
 <template>
   <FormContainer>
     <template #header>
-      <Button v-if="canSave" type="primary" @click="sync">
-        {{ t`Save` }}
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button
+          v-if="activeTab === 'AccountingSettings'"
+          @click="openRenameCompanyModal"
+        >
+          {{ t`Rename Company` }}
+        </Button>
+        <Button v-if="canSave" type="primary" @click="sync">
+          {{ t`Save` }}
+        </Button>
+      </div>
     </template>
     <template #body>
       <FormHeader
@@ -777,6 +785,73 @@
       </div>
     </template>
   </FormContainer>
+
+  <Modal
+    :open-modal="renameCompany.open"
+    class="w-96 p-4"
+    @closemodal="closeRenameCompanyModal"
+  >
+    <div class="flex flex-col gap-4">
+      <div>
+        <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {{ t`Rename Company` }}
+        </div>
+        <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          {{
+            t`This updates the company name used across the app and print settings. The window will reload after saving.`
+          }}
+        </div>
+      </div>
+
+      <label class="flex flex-col gap-2 text-sm">
+        <span class="font-semibold text-gray-700 dark:text-gray-200">
+          {{ t`New Company Name` }}
+        </span>
+        <input
+          v-model="renameCompany.value"
+          type="text"
+          class="
+            w-full
+            px-3
+            py-2
+            rounded
+            border
+            bg-white
+            dark:bg-gray-890
+            border-gray-300
+            dark:border-gray-700
+            focus:outline-none focus:ring-2 focus:ring-gray-400
+            dark:focus:ring-gray-500
+          "
+          :disabled="renameCompany.saving"
+          @keydown.enter.prevent="confirmCompanyRename"
+        />
+      </label>
+
+      <div
+        v-if="renameCompany.error"
+        class="text-sm text-red-600 dark:text-red-300 break-words"
+      >
+        {{ renameCompany.error }}
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <Button
+          :disabled="renameCompany.saving"
+          @click="closeRenameCompanyModal"
+        >
+          {{ t`Cancel` }}
+        </Button>
+        <Button
+          type="primary"
+          :disabled="renameCompany.saving"
+          @click="confirmCompanyRename"
+        >
+          {{ renameCompany.saving ? t`Saving...` : t`Rename` }}
+        </Button>
+      </div>
+    </div>
+  </Modal>
 </template>
 <script lang="ts">
 import { DocValue } from 'fyo/core/types';
@@ -787,12 +862,13 @@ import { Field, Schema } from 'schemas/types';
 import Button from 'src/components/Button.vue';
 import FormContainer from 'src/components/FormContainer.vue';
 import FormHeader from 'src/components/FormHeader.vue';
+import Modal from 'src/components/Modal.vue';
 import { handleErrorWithDialog } from 'src/errorHandling';
 import { getErrorMessage } from 'src/utils';
 import { evaluateHidden } from 'src/utils/doc';
 import { shortcutsKey } from 'src/utils/injectionKeys';
 import { showDialog, showToast } from 'src/utils/interactive';
-import { docsPathMap } from 'src/utils/misc';
+import { docsPathMap, updateConfigFiles } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
 import { UIGroupedFields } from 'src/utils/types';
 import { getSavePath, showExportInFolder } from 'src/utils/ui';
@@ -829,7 +905,13 @@ const COMPONENT_NAME = 'Settings';
 const SYNC_TAB_KEY = '__cloud_sync__';
 
 export default defineComponent({
-  components: { FormContainer, Button, FormHeader, CommonFormSection },
+  components: {
+    FormContainer,
+    Button,
+    FormHeader,
+    CommonFormSection,
+    Modal,
+  },
   provide() {
     return { doc: computed(() => this.doc) };
   },
@@ -932,6 +1014,12 @@ export default defineComponent({
         confirmText: '',
         running: false,
       },
+      renameCompany: {
+        open: false,
+        value: '',
+        error: '',
+        saving: false,
+      },
     } as {
       errors: Record<string, string>;
       activeTab: string;
@@ -1024,6 +1112,12 @@ export default defineComponent({
         token: string;
         confirmText: string;
         running: boolean;
+      };
+      renameCompany: {
+        open: boolean;
+        value: string;
+        error: string;
+        saving: boolean;
       };
     };
   },
@@ -1425,6 +1519,87 @@ export default defineComponent({
       ) {
         await this.registerServiceRoleKeyNow();
         return;
+      }
+    },
+    openRenameCompanyModal(): void {
+      const currentName = String(
+        this.fyo.singles.AccountingSettings?.companyName ?? ''
+      ).trim();
+      this.renameCompany.open = true;
+      this.renameCompany.value = currentName;
+      this.renameCompany.error = '';
+    },
+    closeRenameCompanyModal(): void {
+      if (this.renameCompany.saving) {
+        return;
+      }
+
+      this.renameCompany.open = false;
+      this.renameCompany.error = '';
+    },
+    async confirmCompanyRename(): Promise<void> {
+      if (this.renameCompany.saving) {
+        return;
+      }
+
+      const nextName = String(this.renameCompany.value ?? '').trim();
+      const accountingSettings = this.fyo.singles.AccountingSettings as
+        | (Doc & { companyName?: string })
+        | undefined;
+      const printSettings = this.fyo.singles.PrintSettings as
+        | (Doc & { companyName?: string })
+        | undefined;
+      const currentName = String(accountingSettings?.companyName ?? '').trim();
+
+      if (!nextName) {
+        this.renameCompany.error = this.t`Company name cannot be empty.`;
+        return;
+      }
+
+      if (nextName === currentName) {
+        this.closeRenameCompanyModal();
+        return;
+      }
+
+      this.renameCompany.saving = true;
+      this.renameCompany.error = '';
+
+      try {
+        if (!accountingSettings || !printSettings) {
+          throw new Error(this.t`Company settings are not available.`);
+        }
+
+        await accountingSettings.set('companyName', nextName);
+        await printSettings.set('companyName', nextName);
+
+        const activeProfile = this.projectProfiles.rows.find(
+          (row) => row.id === this.projectProfiles.activeId
+        );
+        if (activeProfile) {
+          activeProfile.companyName = nextName;
+          if (
+            !activeProfile.label.trim() ||
+            activeProfile.label === currentName
+          ) {
+            activeProfile.label = nextName;
+          }
+        }
+        this.projectProfiles.labelInput = nextName;
+
+        updateConfigFiles(this.fyo);
+        this.renameCompany.open = false;
+        await this.sync();
+      } catch (err) {
+        this.renameCompany.open = true;
+        this.renameCompany.error =
+          err instanceof Error
+            ? getErrorMessage(err, accountingSettings ?? undefined)
+            : '';
+        if (!this.renameCompany.error) {
+          this.renameCompany.error = this.t`Failed to rename company.`;
+        }
+      } finally {
+        this.renameCompany.saving = false;
       }
     },
     getSystemSettingsDoc():
