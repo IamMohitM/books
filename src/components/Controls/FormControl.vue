@@ -14,6 +14,7 @@ import DynamicLink from './DynamicLink.vue';
 import Float from './Float.vue';
 import Int from './Int.vue';
 import Link from './Link.vue';
+import MultiLink from './MultiLink.vue';
 import Select from './Select.vue';
 import Text from './Text.vue';
 import Secret from './Secret.vue';
@@ -26,6 +27,7 @@ const components = {
   Color,
   Select,
   Link,
+  MultiLink,
   Date,
   Datetime,
   AutoComplete,

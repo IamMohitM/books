@@ -119,6 +119,11 @@ function getReportSidebar() {
     route: '/report/GeneralLedger',
     items: [
       {
+        label: t`Account Ledger`,
+        name: 'account-ledger',
+        route: '/report/AccountLedger',
+      },
+      {
         label: t`General Ledger`,
         name: 'general-ledger',
         route: '/report/GeneralLedger',

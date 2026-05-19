@@ -12,6 +12,12 @@ import {
 } from 'reports/types';
 import { Field, FieldTypeEnum } from 'schemas/types';
 import { QueryFilter } from 'utils/db/types';
+import { normalizeAccountParent } from 'src/utils/accountTree';
+
+type AccountSelectionDetails = {
+  selectedAccountNames: string[];
+  selectedGroupsByAccount: Map<string, string[]>;
+};
 
 type ReferenceType =
   | ModelNameEnum.SalesInvoice
@@ -37,6 +43,105 @@ export class GeneralLedger extends LedgerReport {
 
   constructor(fyo: Fyo) {
     super(fyo);
+  }
+
+  _getSelectedAccountNames(): string[] {
+    const selectedAccountNames: string[] = [];
+
+    const pushValues = (value?: string | null) => {
+      if (!value) {
+        return;
+      }
+
+      try {
+        const parsed: unknown = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const normalized = String(item).trim();
+            if (normalized) {
+              selectedAccountNames.push(normalized);
+            }
+          }
+          return;
+        }
+      } catch {
+        // Fall back to treating the value as a single account name.
+      }
+
+      const normalized = value.trim();
+      if (normalized) {
+        selectedAccountNames.push(normalized);
+      }
+    };
+
+    pushValues(this.accounts as string | undefined);
+    pushValues(this.account as string | undefined);
+
+    return [...new Set(selectedAccountNames)];
+  }
+
+  async _getAccountSelectionDetails(): Promise<AccountSelectionDetails> {
+    const selectedAccountNames = this._getSelectedAccountNames();
+    if (!selectedAccountNames.length) {
+      return {
+        selectedAccountNames,
+        selectedGroupsByAccount: new Map(),
+      };
+    }
+
+    const accounts = (await this.fyo.db.getAllRaw(ModelNameEnum.Account, {
+      fields: ['name', 'parentAccount', 'isGroup'],
+    })) as Array<{
+      name: string;
+      parentAccount?: string | null;
+      isGroup?: boolean | number;
+    }>;
+
+    const accountsByName = new Map(
+      accounts.map((account) => [account.name, account] as const)
+    );
+    const childrenByParent = new Map<string, string[]>();
+
+    for (const account of accounts) {
+      const parentAccount = normalizeAccountParent(account.parentAccount);
+      if (!parentAccount) {
+        continue;
+      }
+
+      const children = childrenByParent.get(parentAccount) ?? [];
+      children.push(account.name);
+      childrenByParent.set(parentAccount, children);
+    }
+
+    const selectedGroupsByAccount = new Map<string, string[]>();
+    const expandedAccountNames = new Set<string>();
+
+    for (const selectedAccountName of selectedAccountNames) {
+      const selectedAccount = accountsByName.get(selectedAccountName);
+      if (!selectedAccount?.isGroup) {
+        expandedAccountNames.add(selectedAccountName);
+        continue;
+      }
+
+      const queue = [selectedAccountName];
+      while (queue.length) {
+        const accountName = queue.shift()!;
+        expandedAccountNames.add(accountName);
+
+        const selectedGroups = selectedGroupsByAccount.get(accountName) ?? [];
+        if (!selectedGroups.includes(selectedAccountName)) {
+          selectedGroups.push(selectedAccountName);
+          selectedGroupsByAccount.set(accountName, selectedGroups);
+        }
+
+        queue.push(...(childrenByParent.get(accountName) ?? []));
+      }
+    }
+
+    return {
+      selectedAccountNames: [...expandedAccountNames],
+      selectedGroupsByAccount,
+    };
   }
 
   setDefaultFilters() {
@@ -269,9 +374,24 @@ export class GeneralLedger extends LedgerReport {
     return { totalDebit, totalCredit };
   }
 
-  _getQueryFilters(): QueryFilter {
+  async _getAccountFilterValue(): Promise<
+    string | [string, string[]] | undefined
+  > {
+    const { selectedAccountNames } = await this._getAccountSelectionDetails();
+    if (!selectedAccountNames.length) {
+      return;
+    }
+
+    if (selectedAccountNames.length === 1) {
+      return selectedAccountNames[0];
+    }
+
+    return ['in', selectedAccountNames];
+  }
+
+  async _getQueryFilters(): Promise<QueryFilter> {
     const filters: QueryFilter = {};
-    const stringFilters = ['account', 'party', 'referenceName'];
+    const stringFilters = ['party', 'referenceName'];
 
     for (const sf of stringFilters) {
       const value = this[sf];
@@ -280,6 +400,11 @@ export class GeneralLedger extends LedgerReport {
       }
 
       filters[sf] = value as string;
+    }
+
+    const accountFilter = await this._getAccountFilterValue();
+    if (accountFilter !== undefined) {
+      filters.account = accountFilter;
     }
 
     if (this.referenceType !== 'All') {

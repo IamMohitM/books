@@ -105,6 +105,7 @@ export const docsPathMap: Record<string, string | undefined> = {
   // Analytics
   Dashboard: 'books/dashboard',
   Reports: 'books/reports',
+  AccountLedger: 'books/general-ledger',
   GeneralLedger: 'books/general-ledger',
   ProfitAndLoss: 'books/profit-and-loss',
   BalanceSheet: 'books/balance-sheet',

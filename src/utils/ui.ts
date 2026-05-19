@@ -201,7 +201,7 @@ export function getActionsForDoc(doc?: Doc): Action[] {
     getCancelAction(doc),
   ];
 
-  if (doc?.schemaName === 'Party') {
+  if (['Party', 'Account'].includes(doc?.schemaName ?? '')) {
     const viewActions = getViewActions(doc);
     actions.push(...viewActions);
   }
@@ -246,6 +246,21 @@ export function getGroupedActionsForDoc(doc?: Doc): ActionGroup[] {
 
 function getViewActions(doc: Doc): Action[] {
   const actions: Action[] = [
+    {
+      label: t`Account Ledger`,
+      group: t`View`,
+      condition: (doc: Doc) => doc.schemaName === 'Account',
+      action: async () => {
+        await router.push({
+          path: '/report/AccountLedger',
+          query: {
+            defaultFilters: JSON.stringify({
+              accounts: JSON.stringify([doc.name]),
+            }),
+          },
+        });
+      },
+    },
     {
       label: t`General Ledger`,
       group: t`View`,

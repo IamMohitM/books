@@ -62,6 +62,7 @@ export interface LedgerEntry {
   index?: string;
   name: number;
   account: string;
+  selectedVia?: string;
   date: Date | null;
   debit: number | null;
   credit: number | null;

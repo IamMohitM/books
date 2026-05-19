@@ -4,6 +4,7 @@ export type FieldType =
   | 'Data'
   | 'Select'
   | 'Link'
+  | 'MultiLink'
   | 'Date'
   | 'Datetime'
   | 'Table'
@@ -23,6 +24,7 @@ export const FieldTypeEnum: PropertyEnum<Record<FieldType, FieldType>> = {
   Data: 'Data',
   Select: 'Select',
   Link: 'Link',
+  MultiLink: 'MultiLink',
   Date: 'Date',
   Datetime: 'Datetime',
   Table: 'Table',
@@ -40,7 +42,7 @@ export const FieldTypeEnum: PropertyEnum<Record<FieldType, FieldType>> = {
 };
 
 type OptionFieldType = 'Select' | 'AutoComplete' | 'Color';
-type TargetFieldType = 'Table' | 'Link';
+type TargetFieldType = 'Table' | 'Link' | 'MultiLink';
 type NumberFieldType = 'Int' | 'Float';
 type DynamicLinkFieldType = 'DynamicLink';
 type BaseFieldType = Exclude<

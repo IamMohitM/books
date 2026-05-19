@@ -91,6 +91,19 @@
                   dark:hover:text-gray-100
                   focus:outline-none
                 "
+                @click.stop="viewLedger(account)"
+              >
+                {{ t`View Entries` }}
+              </button>
+              <button
+                class="
+                  ms-3
+                  text-xs text-gray-800
+                  dark:text-gray-400
+                  hover:text-gray-900
+                  dark:hover:text-gray-100
+                  focus:outline-none
+                "
                 @click.stop="deleteAccount(account)"
               >
                 {{ account.isGroup ? t`Delete Group` : t`Delete Account` }}
@@ -186,11 +199,20 @@ import { isCredit } from 'models/helpers';
 import { ModelNameEnum } from 'models/types';
 import PageHeader from 'src/components/PageHeader.vue';
 import { fyo } from 'src/initFyo';
+import {
+  filterAccountsForChartParent,
+  normalizeAccountParent,
+} from 'src/utils/accountTree';
 import { languageDirectionKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
 import { docsPathRef } from 'src/utils/refs';
-import { commongDocDelete, openQuickEdit } from 'src/utils/ui';
-import { getSavePath, showExportInFolder } from 'src/utils/ui';
+import {
+  commongDocDelete,
+  getSavePath,
+  openQuickEdit,
+  routeTo,
+  showExportInFolder,
+} from 'src/utils/ui';
 import { getMapFromList, removeAtIndex } from 'utils/index';
 import { generateCSV, parseCSV } from 'utils/csvParser';
 import { defineComponent, nextTick } from 'vue';
@@ -538,6 +560,16 @@ export default defineComponent({
       this.setOpenAccountDocListener(doc, account);
       await openQuickEdit({ doc });
     },
+    async viewLedger(account: AccountItem) {
+      await routeTo({
+        path: '/report/AccountLedger',
+        query: {
+          defaultFilters: JSON.stringify({
+            accounts: JSON.stringify([account.name]),
+          }),
+        },
+      });
+    },
     setOpenAccountDocListener(
       doc: Doc,
       account?: AccountItem,
@@ -639,16 +671,21 @@ export default defineComponent({
       return !!account?.children?.length;
     },
     async getChildren(parent: null | string = null): Promise<AccountItem[]> {
-      const children = await fyo.db.getAll(ModelNameEnum.Account, {
-        filters: {
-          parentAccount: parent,
-        },
+      let children = await fyo.db.getAll(ModelNameEnum.Account, {
         fields: ['name', 'parentAccount', 'isGroup', 'rootType', 'accountType'],
         orderBy: 'name',
         order: 'asc',
       });
 
+      children = filterAccountsForChartParent(
+        children as AccountItem[],
+        parent
+      ) as unknown as AccountItem[];
+
       return children.map((d) => {
+        d.parentAccount = normalizeAccountParent(
+          d.parentAccount as string | null | undefined
+        );
         d.expanded = false;
         d.addingAccount = false;
         d.addingGroupAccount = false;

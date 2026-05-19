@@ -2490,10 +2490,11 @@ async function applyRemoteAccountChange(
     return;
   }
 
+  const parentAccount = String(data.parent_account ?? data.parentAccount ?? '');
   const valueMap = {
     name,
     rootType: String(data.root_type ?? data.rootType ?? ''),
-    parentAccount: String(data.parent_account ?? data.parentAccount ?? ''),
+    parentAccount: parentAccount || null,
     accountType: String(data.account_type ?? data.accountType ?? ''),
     isGroup: !!(data.is_group ?? data.isGroup ?? false),
     description: String(data.description ?? ''),
