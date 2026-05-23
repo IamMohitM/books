@@ -249,6 +249,7 @@ import { fyo } from 'src/initFyo';
 import { getBgTextColorClass } from 'src/utils/colors';
 import { searcherKey, shortcutsKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
+import { pageSearchAction } from 'src/utils/refs';
 import {
   SearchGroup,
   SearchItems,
@@ -270,6 +271,7 @@ export default defineComponent({
     return {
       searcher: inject(searcherKey),
       shortcuts: inject(shortcutsKey),
+      pageSearchAction,
     };
   },
   data() {
@@ -397,6 +399,10 @@ export default defineComponent({
       }
     },
     open(): void {
+      if (this.pageSearchAction?.()) {
+        return;
+      }
+
       this.openModal = true;
       this.searcher?.updateKeywords();
 

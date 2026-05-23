@@ -1,6 +1,23 @@
 <template>
   <div class="flex flex-col h-full">
     <PageHeader :title="t`Chart of Accounts`">
+      <input
+        ref="accountSearchInput"
+        v-model="accountSearch"
+        type="search"
+        class="
+          bg-gray-100
+          dark:bg-gray-850
+          text-sm
+          px-3
+          py-2
+          rounded
+          focus:outline-none
+          w-56
+          dark:text-gray-100
+        "
+        :placeholder="t`Search accounts...`"
+      />
       <Button v-if="!isAllExpanded" @click="expand">{{ t`Expand` }}</Button>
       <Button v-if="!isAllCollapsed" @click="collapse">{{
         t`Collapse`
@@ -21,7 +38,7 @@
       "
     >
       <!-- Chart of Accounts Indented List -->
-      <template v-for="account in allAccounts" :key="account.name">
+      <template v-for="account in displayAccounts" :key="account.name">
         <!-- Account List Item -->
         <div
           class="
@@ -203,9 +220,9 @@ import {
   filterAccountsForChartParent,
   normalizeAccountParent,
 } from 'src/utils/accountTree';
-import { languageDirectionKey } from 'src/utils/injectionKeys';
+import { languageDirectionKey, shortcutsKey } from 'src/utils/injectionKeys';
 import { docsPathMap } from 'src/utils/misc';
-import { docsPathRef } from 'src/utils/refs';
+import { docsPathRef, pageSearchAction } from 'src/utils/refs';
 import {
   commongDocDelete,
   getSavePath,
@@ -215,7 +232,7 @@ import {
 } from 'src/utils/ui';
 import { getMapFromList, removeAtIndex } from 'utils/index';
 import { generateCSV, parseCSV } from 'utils/csvParser';
-import { defineComponent, nextTick } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import Button from '../components/Button.vue';
 import { inject } from 'vue';
 import { handleErrorWithDialog } from '../errorHandling';
@@ -254,6 +271,8 @@ export default defineComponent({
   setup() {
     return {
       languageDirection: inject(languageDirectionKey),
+      shortcuts: inject(shortcutsKey),
+      accountSearchInput: ref<HTMLInputElement | null>(null),
     };
   },
   data() {
@@ -264,6 +283,7 @@ export default defineComponent({
       accounts: [] as AccountItem[],
       schemaName: 'Account',
       newAccountName: '',
+      accountSearch: '',
       insertingAccount: false,
       totals: {} as Record<string, { totalDebit: number; totalCredit: number }>,
       refetchTotals: false,
@@ -294,6 +314,43 @@ export default defineComponent({
 
       return allAccounts;
     },
+    displayAccounts() {
+      const searchTerm = this.accountSearch.trim().toLowerCase();
+      if (!searchTerm) {
+        return this.allAccounts;
+      }
+
+      const getMatches = (
+        accounts: AccountItem[],
+        level: number,
+        location: number[]
+      ): AccountItem[] => {
+        const matches: AccountItem[] = [];
+
+        for (let i = 0; i < accounts.length; i++) {
+          const account = accounts[i];
+          const accountLocation = [...location, i];
+          const childMatches = getMatches(
+            account.children ?? [],
+            level + 1,
+            accountLocation
+          );
+          const ownMatch = account.name.toLowerCase().includes(searchTerm);
+
+          if (!ownMatch && childMatches.length === 0) {
+            continue;
+          }
+
+          account.level = level;
+          account.location = accountLocation;
+          matches.push(account, ...childMatches);
+        }
+
+        return matches;
+      };
+
+      return getMatches(this.accounts, 0, []);
+    },
   },
   async mounted() {
     await this.setTotalDebitAndCredit();
@@ -309,6 +366,8 @@ export default defineComponent({
     }
 
     docsPathRef.value = docsPathMap.ChartOfAccounts!;
+    pageSearchAction.value = () => this.focusAccountSearch();
+    this.setShortcuts();
 
     if (this.refetchTotals) {
       await this.setTotalDebitAndCredit();
@@ -317,8 +376,27 @@ export default defineComponent({
   },
   deactivated() {
     docsPathRef.value = '';
+    if (pageSearchAction.value) {
+      pageSearchAction.value = null;
+    }
+    this.shortcuts?.delete('ChartOfAccounts');
   },
   methods: {
+    setShortcuts() {
+      this.shortcuts?.pmod.set('ChartOfAccounts', ['KeyF'], () =>
+        this.focusAccountSearch()
+      );
+    },
+    focusAccountSearch() {
+      const input = this.accountSearchInput as HTMLInputElement | null;
+      if (!input) {
+        return false;
+      }
+
+      input.focus();
+      input.select();
+      return true;
+    },
     async expand() {
       await this.toggleAll(this.accounts, true);
       this.isAllCollapsed = false;
@@ -369,6 +447,37 @@ export default defineComponent({
       const totals = await this.fyo.db.getTotalCreditAndDebit();
       this.totals = getMapFromList(totals, 'account');
     },
+    constructTree(
+      allAccounts: AccountItem[],
+      parent: string | null = null
+    ): AccountItem[] {
+      const rootAccounts = filterAccountsForChartParent(allAccounts, parent);
+      const childMap = new Map<string, AccountItem[]>();
+
+      allAccounts.forEach((acc) => {
+        const p = normalizeAccountParent(acc.parentAccount);
+        if (p) {
+          if (!childMap.has(p)) {
+            childMap.set(p, []);
+          }
+          childMap.get(p)!.push(acc);
+        }
+      });
+
+      const build = (accounts: AccountItem[]): AccountItem[] => {
+        return accounts.map((d) => {
+          d.parentAccount = normalizeAccountParent(d.parentAccount);
+          d.expanded = false;
+          d.addingAccount = false;
+          d.addingGroupAccount = false;
+          const children = childMap.get(d.name) || [];
+          d.children = !!d.isGroup ? build(children) : [];
+          return d;
+        });
+      };
+
+      return build(rootAccounts);
+    },
     async fetchAccounts() {
       this.settings =
         fyo.models[ModelNameEnum.Account]?.getTreeSettings(fyo) ?? null;
@@ -380,7 +489,13 @@ export default defineComponent({
         balance: 0,
         currency,
       };
-      this.accounts = await this.getChildren();
+
+      const allAccounts = await fyo.db.getAll(ModelNameEnum.Account, {
+        fields: ['name', 'parentAccount', 'isGroup', 'rootType', 'accountType'],
+        orderBy: 'name',
+        order: 'asc',
+      });
+      this.accounts = this.constructTree(allAccounts as AccountItem[]);
     },
     async exportAccountsForImport() {
       const exportChoice = (await showDialog({
@@ -677,21 +792,7 @@ export default defineComponent({
         order: 'asc',
       });
 
-      children = filterAccountsForChartParent(
-        children as AccountItem[],
-        parent
-      ) as unknown as AccountItem[];
-
-      return children.map((d) => {
-        d.parentAccount = normalizeAccountParent(
-          d.parentAccount as string | null | undefined
-        );
-        d.expanded = false;
-        d.addingAccount = false;
-        d.addingGroupAccount = false;
-
-        return d as unknown as AccountItem;
-      });
+      return this.constructTree(children as AccountItem[], parent);
     },
     async addAccount(parentAccount: AccountItem, key: AccKey) {
       if (!parentAccount.expanded) {
