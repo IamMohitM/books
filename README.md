@@ -1,7 +1,7 @@
 <div align="center" markdown="1">
 <br/>
 
-<img src="https://frappe.io/files/books.png" alt="Vaulta logo" width="80"/>
+<img src=".github/logo.png" alt="Vaulta logo" width="80"/>
 
 <br/>
 
