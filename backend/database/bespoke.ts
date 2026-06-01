@@ -604,8 +604,13 @@ export class BespokeQueries {
       .first()) as
       | { liabilityAccount?: string; interestExpenseAccount?: string }
       | undefined;
-    const liabilityAccount = loanProfileRow?.liabilityAccount;
-    const interestExpenseAccount = loanProfileRow?.interestExpenseAccount;
+
+    if (!loanProfileRow) {
+      return [];
+    }
+
+    const liabilityAccount = loanProfileRow.liabilityAccount ?? null;
+    const interestExpenseAccount = loanProfileRow.interestExpenseAccount ?? null;
 
     const query = db.knex!(ModelNameEnum.AccountingLedgerEntry)
       .select(
@@ -699,7 +704,8 @@ export class BespokeQueries {
         'openingPrincipal',
         'openingAccruedInterest',
         'historicalInterestPaid',
-        'includeHistoricalInterestPaid'
+        'includeHistoricalInterestPaid',
+        'loanType'
       )
       .where('name', loanProfileName)
       .first()) as
@@ -713,6 +719,7 @@ export class BespokeQueries {
           openingAccruedInterest: number | string;
           historicalInterestPaid?: number | string;
           includeHistoricalInterestPaid?: number | boolean | string;
+          loanType?: string;
         }
       | undefined;
 
@@ -754,7 +761,8 @@ export class BespokeQueries {
         'openingPrincipal',
         'openingAccruedInterest',
         'historicalInterestPaid',
-        'includeHistoricalInterestPaid'
+        'includeHistoricalInterestPaid',
+        'loanType'
       )
       .where('active', true)
       .andWhere('startDate', '<=', asOfDate)
@@ -767,6 +775,7 @@ export class BespokeQueries {
       openingAccruedInterest: number | string;
       historicalInterestPaid?: number | string;
       includeHistoricalInterestPaid?: number | boolean | string;
+      loanType?: string;
     }[];
 
     const snapshots: LoanSnapshot[] = [];
@@ -808,6 +817,7 @@ export class BespokeQueries {
       openingAccruedInterest: number | string;
       historicalInterestPaid?: number | string;
       includeHistoricalInterestPaid?: number | boolean | string;
+      loanType?: string;
     },
     ledgerRows: LoanLedgerRow[],
     asOfDate: string,
@@ -839,6 +849,7 @@ export class BespokeQueries {
       historicalInterestPaid + (preSystemTotals?.interestPaid ?? 0);
     const preSystemPrincipalPaid = preSystemTotals?.principalPaid ?? 0;
     const preSystemPrincipalCredited = preSystemTotals?.principalCredited ?? 0;
+    const loanType = loanProfile.loanType ?? 'Taken';
 
     if (asOf.getTime() < start.getTime()) {
       return {
@@ -856,6 +867,7 @@ export class BespokeQueries {
         accruedInterest: 0,
         interestOwed: 0,
         totalDue: 0,
+        loanType,
       };
     }
 
@@ -866,10 +878,19 @@ export class BespokeQueries {
 
     for (const row of ledgerRows) {
       if (row.loanComponent === 'Principal') {
-        principalOutstanding +=
-          Number(row.credit ?? 0) - Number(row.debit ?? 0);
+        if (loanType === 'Provided') {
+          principalOutstanding +=
+            Number(row.debit ?? 0) - Number(row.credit ?? 0);
+        } else {
+          principalOutstanding +=
+            Number(row.credit ?? 0) - Number(row.debit ?? 0);
+        }
       } else if (row.loanComponent === 'Interest') {
-        interestPaid += Number(row.debit ?? 0) - Number(row.credit ?? 0);
+        if (loanType === 'Provided') {
+          interestPaid += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+        } else {
+          interestPaid += Number(row.debit ?? 0) - Number(row.credit ?? 0);
+        }
       }
     }
 
@@ -878,7 +899,8 @@ export class BespokeQueries {
       openingPrincipal,
       loanProfile.startDate,
       asOfDate,
-      ledgerRows.filter((r) => r.loanComponent === 'Principal')
+      ledgerRows.filter((r) => r.loanComponent === 'Principal'),
+      loanType
     );
 
     const interestOwed =
@@ -899,6 +921,7 @@ export class BespokeQueries {
       accruedInterest,
       interestOwed,
       totalDue: principalOutstanding + interestOwed,
+      loanType,
     };
   }
 
@@ -940,7 +963,8 @@ export class BespokeQueries {
     openingPrincipal: number,
     startDate: string,
     asOfDate: string,
-    principalRows: LoanLedgerRow[]
+    principalRows: LoanLedgerRow[],
+    loanType: string = 'Taken'
   ): number {
     const annualRate = annualRatePercent / 100;
     const start = BespokeQueries.toUtcDate(startDate);
@@ -948,6 +972,7 @@ export class BespokeQueries {
       BespokeQueries.toUtcDate(asOfDate),
       1
     );
+
     if (start.getTime() >= endExclusive.getTime()) {
       return 0;
     }
@@ -978,7 +1003,11 @@ export class BespokeQueries {
         accrued += principal * annualRate * (daySpan / 365);
       }
 
-      principal += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+      if (loanType === 'Provided') {
+        principal += Number(row.debit ?? 0) - Number(row.credit ?? 0);
+      } else {
+        principal += Number(row.credit ?? 0) - Number(row.debit ?? 0);
+      }
       cursor = BespokeQueries.addDays(eventDate, 1);
     }
 

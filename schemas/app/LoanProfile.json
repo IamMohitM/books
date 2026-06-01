@@ -13,6 +13,23 @@
       "required": true
     },
     {
+      "fieldname": "loanType",
+      "label": "Loan Type",
+      "fieldtype": "Select",
+      "options": [
+        {
+          "value": "Taken",
+          "label": "Loan Taken"
+        },
+        {
+          "value": "Provided",
+          "label": "Loan Provided"
+        }
+      ],
+      "default": "Taken",
+      "required": true
+    },
+    {
       "fieldname": "lenderName",
       "label": "Lender Name",
       "fieldtype": "Data",
@@ -87,6 +104,7 @@
     }
   ],
   "quickEditFields": [
+    "loanType",
     "lenderName",
     "startDate",
     "liabilityAccount",

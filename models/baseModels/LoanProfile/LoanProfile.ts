@@ -37,10 +37,19 @@ export class LoanProfile extends Doc {
         this.fyo.getValue(ModelNameEnum.Account, value as string, 'rootType'),
       ])) as [string | undefined, AccountRootType | undefined];
 
-      if (accountType !== AccountTypeEnum.Payable && rootType !== 'Liability') {
-        throw new ValidationError(
-          this.fyo.t`Liability Account must be a Liability account.`
-        );
+      const loanType = (this.get('loanType') as string) ?? 'Taken';
+      if (loanType === 'Provided') {
+        if (accountType !== AccountTypeEnum.Receivable && rootType !== 'Asset') {
+          throw new ValidationError(
+            this.fyo.t`Receivable Account must be an Asset account.`
+          );
+        }
+      } else {
+        if (accountType !== AccountTypeEnum.Payable && rootType !== 'Liability') {
+          throw new ValidationError(
+            this.fyo.t`Liability Account must be a Liability account.`
+          );
+        }
       }
     },
     interestExpenseAccount: async (value: DocValue) => {
@@ -54,10 +63,19 @@ export class LoanProfile extends Doc {
         'rootType'
       )) as string;
 
-      if (rootType !== 'Expense') {
-        throw new ValidationError(
-          this.fyo.t`Interest Expense Account must have root type Expense.`
-        );
+      const loanType = (this.get('loanType') as string) ?? 'Taken';
+      if (loanType === 'Provided') {
+        if (rootType !== 'Income') {
+          throw new ValidationError(
+            this.fyo.t`Interest Income Account must have root type Income.`
+          );
+        }
+      } else {
+        if (rootType !== 'Expense') {
+          throw new ValidationError(
+            this.fyo.t`Interest Expense Account must have root type Expense.`
+          );
+        }
       }
     },
     openingPrincipal: (value: DocValue) => {
@@ -96,33 +114,64 @@ export class LoanProfile extends Doc {
         ? `${lenderName} (${loanId})`
         : lenderName || loanId || this.fyo.t`Loan`;
 
+    const loanType = (this.get('loanType') as string) ?? 'Taken';
+
     if (!this.liabilityAccount) {
-      const parent = await this.getPreferredAccountParent('Liability', [
-        this.fyo.t`Unsecured Loans`,
-        this.fyo.t`Secured Loans`,
-        this.fyo.t`Loans (Liabilities)`,
-      ]);
-      const accountName = await this.ensureAccount({
-        name: `${this.fyo.t`Loan`} - ${labelBase}`,
-        rootType: 'Liability',
-        accountType: AccountTypeEnum.Payable,
-        parentAccount: parent ?? undefined,
-      });
-      this.liabilityAccount = accountName;
+      if (loanType === 'Provided') {
+        const parent = await this.getPreferredAccountParent('Asset', [
+          this.fyo.t`Loans (Assets)`,
+          this.fyo.t`Loans and Advances`,
+          this.fyo.t`Current Assets`,
+        ]);
+        const accountName = await this.ensureAccount({
+          name: `${this.fyo.t`Loan Provided`} - ${labelBase}`,
+          rootType: 'Asset',
+          accountType: AccountTypeEnum.Receivable,
+          parentAccount: parent ?? undefined,
+        });
+        this.liabilityAccount = accountName;
+      } else {
+        const parent = await this.getPreferredAccountParent('Liability', [
+          this.fyo.t`Unsecured Loans`,
+          this.fyo.t`Secured Loans`,
+          this.fyo.t`Loans (Liabilities)`,
+        ]);
+        const accountName = await this.ensureAccount({
+          name: `${this.fyo.t`Loan`} - ${labelBase}`,
+          rootType: 'Liability',
+          accountType: AccountTypeEnum.Payable,
+          parentAccount: parent ?? undefined,
+        });
+        this.liabilityAccount = accountName;
+      }
     }
 
     if (!this.interestExpenseAccount) {
-      const parent = await this.getPreferredAccountParent('Expense', [
-        this.fyo.t`Indirect Expenses`,
-        this.fyo.t`Direct Expenses`,
-      ]);
-      const accountName = await this.ensureAccount({
-        name: `${this.fyo.t`Interest`} - ${labelBase}`,
-        rootType: 'Expense',
-        accountType: AccountTypeEnum['Expense Account'],
-        parentAccount: parent ?? undefined,
-      });
-      this.interestExpenseAccount = accountName;
+      if (loanType === 'Provided') {
+        const parent = await this.getPreferredAccountParent('Income', [
+          this.fyo.t`Other Income`,
+          this.fyo.t`Direct Income`,
+        ]);
+        const accountName = await this.ensureAccount({
+          name: `${this.fyo.t`Interest Received`} - ${labelBase}`,
+          rootType: 'Income',
+          accountType: AccountTypeEnum['Income Account'],
+          parentAccount: parent ?? undefined,
+        });
+        this.interestExpenseAccount = accountName;
+      } else {
+        const parent = await this.getPreferredAccountParent('Expense', [
+          this.fyo.t`Indirect Expenses`,
+          this.fyo.t`Direct Expenses`,
+        ]);
+        const accountName = await this.ensureAccount({
+          name: `${this.fyo.t`Interest`} - ${labelBase}`,
+          rootType: 'Expense',
+          accountType: AccountTypeEnum['Expense Account'],
+          parentAccount: parent ?? undefined,
+        });
+        this.interestExpenseAccount = accountName;
+      }
     }
   }
 
@@ -155,7 +204,8 @@ export class LoanProfile extends Doc {
       return null;
     }
 
-    const keyword = rootType === 'Liability' ? 'loan' : 'expense';
+    const keyword =
+      rootType === 'Liability' || rootType === 'Asset' ? 'loan' : rootType === 'Income' ? 'income' : 'expense';
     const preferred = groups.find((g) =>
       g.name.toLowerCase().includes(keyword)
     );

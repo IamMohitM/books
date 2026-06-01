@@ -108,6 +108,7 @@ export class JournalEntry extends Transactional {
     const interestExpenseAccount = loanProfile.get(
       'interestExpenseAccount'
     ) as string;
+    const loanType = (loanProfile.get('loanType') as string) ?? 'Taken';
 
     if (active === false) {
       throw new ValidationError(
@@ -125,14 +126,18 @@ export class JournalEntry extends Transactional {
 
       if (component === 'Principal') {
         if (row.account !== liabilityAccount) {
+          const accountNameLabel =
+            loanType === 'Provided' ? t`Receivable Account` : t`Liability Account`;
           throw new ValidationError(
-            t`Principal rows must use Liability Account ${liabilityAccount}.`
+            t`Principal rows must use ${accountNameLabel} ${liabilityAccount}.`
           );
         }
       } else if (component === 'Interest') {
         if (row.account !== interestExpenseAccount) {
+          const interestAccountLabel =
+            loanType === 'Provided' ? t`Interest Income Account` : t`Interest Expense Account`;
           throw new ValidationError(
-            t`Interest rows must use Interest Expense Account ${interestExpenseAccount}.`
+            t`Interest rows must use ${interestAccountLabel} ${interestExpenseAccount}.`
           );
         }
       }

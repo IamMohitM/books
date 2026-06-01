@@ -133,6 +133,7 @@ export type LoanSnapshot = {
   accruedInterest: number;
   interestOwed: number;
   totalDue: number;
+  loanType?: string;
 };
 
 export type CashInHand = { cashInHand: number };

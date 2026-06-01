@@ -88,7 +88,7 @@ export class LoanRegister extends Report {
         label: t`Sort By`,
         options: [
           { label: t`Start Date`, value: 'startDate' },
-          { label: t`Lender`, value: 'lenderName' },
+          { label: t`Lender / Borrower`, value: 'lenderName' },
         ],
       },
       {
@@ -107,7 +107,7 @@ export class LoanRegister extends Report {
     return [
       {
         fieldname: 'lenderName',
-        label: t`Lender`,
+        label: t`Lender / Borrower`,
         fieldtype: 'Data',
         width: 1.5,
       },
@@ -131,7 +131,7 @@ export class LoanRegister extends Report {
       },
       {
         fieldname: 'interestPaid',
-        label: t`Interest Paid`,
+        label: t`Interest Paid / Received`,
         fieldtype: 'Currency',
         align: 'right',
       },
@@ -155,7 +155,7 @@ export class LoanRegister extends Report {
       },
       {
         fieldname: 'liabilityAccount',
-        label: t`Liability Account`,
+        label: t`Loan Account`,
         fieldtype: 'Data',
         width: 1.5,
       },

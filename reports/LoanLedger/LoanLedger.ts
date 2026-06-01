@@ -116,7 +116,7 @@ export class LoanLedger extends Report {
       },
       {
         fieldname: 'interestPaid',
-        label: t`Interest Paid`,
+        label: t`Interest Paid / Received`,
         fieldtype: 'Currency',
         align: 'right',
       },
@@ -164,6 +164,7 @@ export class LoanLedger extends Report {
         'historicalInterestPaid',
         'includeHistoricalInterestPaid',
         'historicalPayments',
+        'loanType',
       ]
     )) as {
       name: string;
@@ -180,6 +181,7 @@ export class LoanLedger extends Report {
         amount?: number | string | Money;
         credit?: number | string | Money;
       }[];
+      loanType?: string;
     };
 
     const ledgerRows = await this.fyo.db.getLoanLedger(
@@ -212,6 +214,7 @@ export class LoanLedger extends Report {
         paymentType?: string;
         amount?: number | string | Money;
       }[];
+      loanType?: string;
     },
     ledgerRows: LoanLedgerRow[],
     asOfDate: string
@@ -234,15 +237,17 @@ export class LoanLedger extends Report {
     const historicalPayments = Array.isArray(profile.historicalPayments)
       ? profile.historicalPayments
       : [];
+    const loanType = profile.loanType ?? 'Taken';
+
     const preSystemRows = [
       ...(historicalInterestPaid > 0
         ? [
             {
               date: profile.startDate,
               paymentType: 'Interest',
-              debit: historicalInterestPaid,
-              credit: 0,
-              label: t`Interest Paid (Pre-System)`,
+              debit: loanType === 'Provided' ? 0 : historicalInterestPaid,
+              credit: loanType === 'Provided' ? historicalInterestPaid : 0,
+              label: loanType === 'Provided' ? t`Interest Received (Pre-System)` : t`Interest Paid (Pre-System)`,
             },
           ]
         : []),
@@ -267,26 +272,32 @@ export class LoanLedger extends Report {
           if (row.paymentType && amount) {
             const paymentType =
               row.paymentType === 'Principal' ? 'Principal' : 'Interest';
-            const label =
-              paymentType === 'Principal'
-                ? t`Principal Paid (Pre-System)`
-                : t`Interest Paid (Pre-System)`;
-            rows.push({
-              date,
-              paymentType,
-              debit: amount,
-              credit: 0,
-              label,
-            });
+            if (paymentType === 'Principal') {
+              rows.push({
+                date,
+                paymentType,
+                debit: loanType === 'Provided' ? 0 : amount,
+                credit: loanType === 'Provided' ? amount : 0,
+                label: loanType === 'Provided' ? t`Principal Repaid (Pre-System)` : t`Principal Paid (Pre-System)`,
+              });
+            } else {
+              rows.push({
+                date,
+                paymentType,
+                debit: loanType === 'Provided' ? 0 : amount,
+                credit: loanType === 'Provided' ? amount : 0,
+                label: loanType === 'Provided' ? t`Interest Received (Pre-System)` : t`Interest Paid (Pre-System)`,
+              });
+            }
           }
 
           if (credit) {
             rows.push({
               date,
               paymentType: 'Principal',
-              debit: 0,
-              credit,
-              label: t`Principal Added (Pre-System)`,
+              debit: loanType === 'Provided' ? credit : 0,
+              credit: loanType === 'Provided' ? 0 : credit,
+              label: loanType === 'Provided' ? t`Principal Provided (Pre-System)` : t`Principal Added (Pre-System)`,
             });
           }
 
@@ -440,9 +451,17 @@ export class LoanLedger extends Report {
       cursor = this.addDays(eventDate, 1);
 
       if (event.loanComponent === 'Principal') {
-        principal += event.credit - event.debit;
+        if (loanType === 'Provided') {
+          principal += event.debit - event.credit;
+        } else {
+          principal += event.credit - event.debit;
+        }
       } else if (event.loanComponent === 'Interest') {
-        interestPaid += event.debit - event.credit;
+        if (loanType === 'Provided') {
+          interestPaid += event.credit - event.debit;
+        } else {
+          interestPaid += event.debit - event.credit;
+        }
       }
 
       const interestOwed = openingAccruedInterest + accrued - interestPaid;
