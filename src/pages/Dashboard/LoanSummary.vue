@@ -15,35 +15,101 @@
       <!-- Loans Taken (Liabilities) -->
       <div v-if="takenSummary.hasData" class="flex flex-col">
         <div class="flex items-center gap-2 mb-3">
-          <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-0.5 rounded-full border border-amber-200/50 dark:border-amber-900/30">
+          <span
+            :class="
+              darkMode
+                ? 'text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border text-white bg-amber-600/90 border-amber-500/60'
+                : 'text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border text-amber-600 bg-amber-50 border-amber-200/50'
+            "
+          >
             {{ t`Liabilities` }}
           </span>
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <h4
+            :class="
+              darkMode
+                ? 'text-sm font-semibold text-gray-300'
+                : 'text-sm font-semibold text-gray-700'
+            "
+          >
             {{ t`Loans Taken` }}
           </h4>
         </div>
         <div class="grid grid-cols-3 gap-4">
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-amber-200 dark:hover:border-amber-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-amber-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-amber-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Principal Outstanding` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(takenSummary.principalOutstanding, 'Currency') }}
             </p>
           </div>
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-amber-200 dark:hover:border-amber-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-amber-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-amber-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Interest Owed` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(takenSummary.interestOwed, 'Currency') }}
             </p>
           </div>
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-amber-200 dark:hover:border-amber-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-amber-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-amber-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Total Due` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(takenSummary.totalDue, 'Currency') }}
             </p>
           </div>
@@ -53,35 +119,101 @@
       <!-- Loans Provided (Assets) -->
       <div v-if="providedSummary.hasData" class="flex flex-col">
         <div class="flex items-center gap-2 mb-3">
-          <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-900/30">
+          <span
+            :class="
+              darkMode
+                ? 'text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border text-white bg-emerald-600/90 border-emerald-500/60'
+                : 'text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border text-emerald-600 bg-emerald-50 border-emerald-200/50'
+            "
+          >
             {{ t`Assets` }}
           </span>
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <h4
+            :class="
+              darkMode
+                ? 'text-sm font-semibold text-gray-300'
+                : 'text-sm font-semibold text-gray-700'
+            "
+          >
             {{ t`Loans Provided` }}
           </h4>
         </div>
         <div class="grid grid-cols-3 gap-4">
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-emerald-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-emerald-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Principal Outstanding` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(providedSummary.principalOutstanding, 'Currency') }}
             </p>
           </div>
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-emerald-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-emerald-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Interest Receivable` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(providedSummary.interestOwed, 'Currency') }}
             </p>
           </div>
-          <div class="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all duration-300">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <div
+            :class="
+              darkMode
+                ? 'p-4 rounded-xl border border-gray-800 bg-gray-900/60 transition-all duration-300 hover:shadow-md hover:border-emerald-900/40'
+                : 'p-4 rounded-xl border border-gray-100 bg-white transition-all duration-300 hover:shadow-md hover:border-emerald-200'
+            "
+          >
+            <p
+              :class="
+                darkMode
+                  ? 'text-xs font-medium text-gray-400'
+                  : 'text-xs font-medium text-gray-500'
+              "
+            >
               {{ t`Total Receivable` }}
             </p>
-            <p class="text-lg font-bold mt-1 text-gray-900 dark:text-gray-50">
+            <p
+              :class="
+                darkMode
+                  ? 'text-lg font-bold mt-1 text-gray-50'
+                  : 'text-lg font-bold mt-1 text-gray-900'
+              "
+            >
               {{ fyo.format(providedSummary.totalDue, 'Currency') }}
             </p>
           </div>
