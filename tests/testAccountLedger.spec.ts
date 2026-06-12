@@ -142,6 +142,16 @@ test('account ledger includes descendant entries for group accounts and respects
     125,
     'in-range descendant entry is included'
   );
+  t.equal(
+    datedRows[0]?.referenceType,
+    ModelNameEnum.JournalEntry,
+    'row has correct referenceType'
+  );
+  t.equal(
+    datedRows[0]?.referenceName,
+    inRange.name,
+    'row has correct referenceName'
+  );
   t.notOk(
     report.reportData.some((row) => row.cells[debitIndex]?.rawValue === 225),
     'out-of-range descendant entry is excluded'

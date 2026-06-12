@@ -22,6 +22,8 @@ export interface ReportRow {
   isEmpty?: boolean;
   folded?: boolean;
   foldedBelow?: boolean;
+  referenceType?: string;
+  referenceName?: string;
 }
 export type ReportData = ReportRow[];
 export interface ColumnField extends Omit<BaseField, 'fieldtype'> {

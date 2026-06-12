@@ -58,6 +58,16 @@ test('general ledger shows journal entry remark and supports column filtering', 
     row.cells.some((cell) => cell.rawValue === 'Ledger remark test')
   );
   t.ok(rowWithRemark, 'report data includes the journal entry remark');
+  t.equal(
+    rowWithRemark?.referenceType,
+    ModelNameEnum.JournalEntry,
+    'row has correct referenceType'
+  );
+  t.equal(
+    rowWithRemark?.referenceName,
+    je.name,
+    'row has correct referenceName'
+  );
 
   const incomingRow = report.reportData.find((row) =>
     row.cells.some((cell) => cell.rawValue === 250 && cell.color === 'green')

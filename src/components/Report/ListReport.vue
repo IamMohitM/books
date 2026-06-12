@@ -54,7 +54,7 @@
             }"
             :class="[
               r !== pageEnd - 1 ? 'border-b dark:border-gray-800' : '',
-              row.isGroup
+              row.isGroup || (row.referenceType && row.referenceName)
                 ? 'hover:bg-gray-50 dark:hover:bg-gray-890 cursor-pointer'
                 : '',
             ]"
@@ -119,6 +119,7 @@ import { defineComponent } from 'vue';
 import Paginator from '../Paginator.vue';
 import WithScroll from '../WithScroll.vue';
 import { inject } from 'vue';
+import { getFormRoute, routeTo } from 'src/utils/ui';
 
 export default defineComponent({
   components: { Paginator, WithScroll },
@@ -155,20 +156,24 @@ export default defineComponent({
       this.pageStart = start;
       this.pageEnd = end;
     },
-    onRowClick(clickedRow, r) {
-      if (!clickedRow.isGroup) {
+    async onRowClick(clickedRow, r) {
+      if (clickedRow.isGroup) {
+        r += 1;
+        clickedRow.foldedBelow = !clickedRow.foldedBelow;
+        const folded = clickedRow.foldedBelow;
+        let row = this.dataSlice[r];
+
+        while (row && row.level > clickedRow.level) {
+          row.folded = folded;
+          r += 1;
+          row = this.dataSlice[r];
+        }
         return;
       }
 
-      r += 1;
-      clickedRow.foldedBelow = !clickedRow.foldedBelow;
-      const folded = clickedRow.foldedBelow;
-      let row = this.dataSlice[r];
-
-      while (row && row.level > clickedRow.level) {
-        row.folded = folded;
-        r += 1;
-        row = this.dataSlice[r];
+      if (clickedRow.referenceType && clickedRow.referenceName) {
+        const route = getFormRoute(clickedRow.referenceType, clickedRow.referenceName);
+        await routeTo(route);
       }
     },
     getCellStyle(cell, i) {

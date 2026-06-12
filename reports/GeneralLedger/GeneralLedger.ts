@@ -232,7 +232,11 @@ export class GeneralLedger extends LedgerReport {
       };
     }
 
-    const row: ReportRow = { cells: [] };
+    const row: ReportRow = {
+      cells: [],
+      referenceType: entry.referenceType,
+      referenceName: entry.referenceName,
+    };
     for (const col of columns) {
       const align = col.align ?? 'left';
       const width = col.width ?? 1;
